@@ -46,6 +46,8 @@ function buildSearchFilter(query?: string) {
 function buildSearchRank(query?: string) {
   const trimmed = query?.trim();
   if (!trimmed) {
+    // Return a constant that actually exists in the target list if needed, 
+    // or just return 0 to be used in select.
     return sql<number>`0`;
   }
 
@@ -72,9 +74,11 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
     buildSearchFilter(options.query),
     buildTagFilter(options.tags),
   );
+  
+  const isSearch = !!options.query?.trim();
   const rank = buildSearchRank(options.query);
 
-  const orderBy = options.query?.trim() 
+  const orderBy = isSearch
     ? [desc(rank), desc(documents.createdAt)]
     : [desc(documents.createdAt)];
 
@@ -90,7 +94,7 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
       createdAt: documents.createdAt,
       contentLength: sql<number>`char_length(${documents.content})`,
       totalCount: sql<number>`count(*) over()`,
-      rank,
+      rank: rank.as('search_rank'), // Give it an alias for clarity
     })
     .from(documents)
     .where(whereClause)

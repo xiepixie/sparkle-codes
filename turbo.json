@@ -1,12 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalEnv": ["DATABASE_URL", "NODE_ENV"],
+  "globalEnv": ["DATABASE_URL", "NODE_ENV", "NEXT_PUBLIC_DOCS_URL", "NEXT_PUBLIC_WEB_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["DATABASE_URL"]
+      "env": ["DATABASE_URL", "NEXT_PUBLIC_DOCS_URL", "NEXT_PUBLIC_WEB_URL"]
     },
     "type-check": {},
     "dev": {

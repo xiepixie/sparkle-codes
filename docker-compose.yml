@@ -4,6 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runner-web
     container_name: sparkle-next-web
     restart: unless-stopped
     ports:
@@ -24,7 +25,8 @@ services:
   docs:
     build:
       context: .
-      dockerfile: apps/docs/Dockerfile
+      dockerfile: Dockerfile
+      target: runner-docs
     container_name: sparkle-next-docs
     restart: unless-stopped
     ports:

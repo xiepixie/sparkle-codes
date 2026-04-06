@@ -18,7 +18,7 @@ WORKDIR /app
 
 # 优先安装依赖（利用 Docker 缓存）
 COPY --from=pruner /app/out/json/ ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # 复制源码并构建
 COPY --from=pruner /app/out/full/ ./

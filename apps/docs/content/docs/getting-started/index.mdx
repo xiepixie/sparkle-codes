@@ -1,0 +1,113 @@
+---
+title: Getting Started with Sparkle Codes
+description: Welcome to Sparkle Codes. This guide will walk you through the initial setup and our recommended Git workflow.
+slug: index
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { File, Folder, Files } from 'fumadocs-ui/components/files';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Welcome to **Sparkle Codes**. We are excited to have you here! This platform is designed to be your ultimate laboratory for tech writing and documentation.
+
+<Callout type="info">
+  This documentation is interactive. You can click on tabbed code blocks or copy snippets directly.
+</Callout>
+
+## Interactive Setup Guide
+
+Follow these steps to initialize your project and connect it to our cloud infrastructure.
+
+<Steps>
+<Step>
+### Initialize the repository
+
+Run the following command in your terminal to start a new project.
+
+```bash
+git init my-awesome-project
+cd my-awesome-project
+```
+</Step>
+
+<Step>
+### Configure Authentication
+
+Choose your preferred connection method. We recommend SSH for better security and convenience.
+
+<Tabs items={['SSH', 'HTTPS']}>
+  <Tab value="SSH">
+    ```bash
+    # Generate a new SSH key if you don't have one
+    ssh-keygen -t ed25519 -C "your_email@example.com"
+    
+    # Add your public key to Sparkle Codes
+    cat ~/.ssh/id_ed25519.pub | pbcopy
+    ```
+  </Tab>
+  <Tab value="HTTPS">
+    ```bash
+    # You will be prompted for your username and Personal Access Token
+    git remote add origin https://sparkle-codes.com/your-repo.git
+    ```
+  </Tab>
+</Tabs>
+</Step>
+
+<Step>
+### Initial Commit and Push
+
+Stage your files and push to the server.
+
+```bash
+git add .
+git commit -m "feat: initial commit from sparkle-codes template"
+git push -u origin main
+```
+</Step>
+</Steps>
+
+## Complex Git Workflows
+
+Our platform supports advanced Git features like line-specific annotations and file diffs.
+
+### Branch Protection & Merge Strategies
+
+When working in a team, we recommend the following branching strategy:
+
+```bash title="git-flow.sh" {1,4-6}
+git checkout -b feature/starry-night # [!code highlight]
+
+# Make your changes...
+git add .
+git commit -m "style: implement aurora lighting effects" # [!code focus]
+
+# Rebase instead of merge to keep history clean
+git fetch origin
+git rebase origin/main # [!code ++]
+git merge --no-ff feature/starry-night # [!code --]
+```
+
+### Repository Structure
+
+Here is how your project should look after initialization:
+
+<Files>
+  <Folder name="apps" defaultOpen>
+    <Folder name="web" defaultOpen>
+      <File name="layout.tsx" />
+      <File name="page.tsx" />
+    </Folder>
+  </Folder>
+  <Folder name="content">
+    <File name="index.mdx" />
+  </Folder>
+  <File name="package.json" />
+  <File name="pnpm-workspace.yaml" />
+</Files>
+
+## Next Steps
+
+Now that you've set up your project, check out our [Architecture Guide](/docs/architecture) or jump straight into [UI Components](/docs/ui).
+

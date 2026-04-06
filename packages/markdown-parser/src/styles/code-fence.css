@@ -1,0 +1,311 @@
+/* IDE-Grade Code Block Rendering - @layer components */
+@layer components {
+    /* --- Code Fence Wrapper --- */
+    .code-fence-container {
+        position: relative;
+        background: color-mix(in srgb, var(--background), transparent 30%);
+        border: 1px solid color-mix(in srgb, var(--primary), transparent 85%);
+        border-radius: var(--radius-lg, 8px); /* Adhere to AGENTS.md rule */
+        margin: 2.5rem 0;
+        overflow: hidden;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        contain: layout paint;
+        /* Subtle box shadow for depth */
+        box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05);
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+        .code-fence-container {
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            touch-action: pan-x;
+        }
+
+        .code-fence-container:active {
+            transform: scale(0.995);
+            border-color: color-mix(in srgb, var(--primary), transparent 60%);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary), transparent 82%),
+                        0 10px 24px -16px color-mix(in srgb, var(--primary), transparent 70%);
+        }
+    }
+
+    /* AGENTS.md rule: Dark theme for optimal readability + inset shadows */
+    .dark .code-fence-container {
+        background: rgba(12, 12, 17, 0.6); /* Very dark, slate-blue tinted */
+        border: 1px solid rgba(255, 255, 255, 0.08); /* 1px border */
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), /* Inset shadow for depth */
+                    0 10px 40px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    .code-fence-container:hover {
+        border-color: color-mix(in srgb, var(--primary), transparent 50%);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary), transparent 80%),
+                    0 10px 30px -10px color-mix(in srgb, var(--primary), transparent 80%);
+    }
+
+    .dark .code-fence-container:hover {
+        border-color: color-mix(in srgb, var(--primary), transparent 40%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 
+                    0 0 0 1px color-mix(in srgb, var(--primary), transparent 70%),
+                    0 15px 40px -10px color-mix(in srgb, var(--primary), transparent 85%);
+    }
+
+    /* Override DaisyUI's mockup-code which is interfering in globals.css */
+    .code-fence-container .mockup-code {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+        backdrop-filter: none !important;
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+
+    /* Custom thin scrollbar for code and math */
+    .code-fence.mockup-code::-webkit-scrollbar,
+    .math-block::-webkit-scrollbar {
+        height: 6px;
+        width: 6px;
+    }
+
+    .code-fence.mockup-code::-webkit-scrollbar-thumb,
+    .math-block::-webkit-scrollbar-thumb {
+        background: transparent;
+        border-radius: 10px;
+    }
+
+    .code-fence-container:hover .code-fence.mockup-code::-webkit-scrollbar-thumb,
+    .math-block:hover::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--md-border), transparent 40%);
+    }
+
+    /* Sticky Header */
+    .code-fence-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 16px;
+        background: color-mix(in srgb, var(--md-card-header), transparent 60%);
+        border-bottom: 1px solid color-mix(in srgb, var(--md-border), transparent 50%);
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--md-muted);
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        user-select: none;
+    }
+
+    @media (max-width: 768px) {
+        .code-fence-header {
+            gap: 0.75rem;
+            padding: 0.75rem 0.9rem;
+        }
+
+        .code-header-right {
+            gap: 0.5rem;
+            min-width: 0;
+        }
+
+        .code-lang-text {
+            font-size: 9px;
+            letter-spacing: 0.04em;
+        }
+
+        .code-fence.mockup-code {
+            max-height: min(70vh, 700px);
+        }
+
+        .code-fence.mockup-code pre {
+            padding: 0 1rem 0 3rem;
+            font-size: 0.8rem;
+            line-height: 1.65;
+        }
+
+        .code-fence.mockup-code pre[data-prefix]::before {
+            width: 2.2rem;
+            padding-right: 0.5rem;
+            font-size: 0.7rem;
+        }
+    }
+
+    .dark .code-fence-header {
+        background: rgba(20, 20, 26, 0.8);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    /* Mac-style window dots */
+    .code-dots {
+        display: flex;
+        gap: 6px;
+        opacity: 0.5;
+        transition: opacity 0.3s ease;
+    }
+
+    .code-fence-container:hover .code-dots {
+        opacity: 1;
+    }
+
+    .code-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+    }
+    .dark .code-dot { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+
+    .code-dot-red { background: #ff5f56; }
+    .code-dot-amber { background: #ffbd2e; }
+    .code-dot-green { background: #27c93f; }
+
+    .code-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .code-header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    /* Language text, moved to the right */
+    .code-lang-text {
+        font-family: var(--font-mono, 'JetBrains Mono', monospace);
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        color: var(--md-muted);
+        text-transform: uppercase;
+        opacity: 0.7;
+    }
+
+    .code-fence-container:hover .code-lang-text {
+        opacity: 1;
+        color: var(--md-foreground);
+    }
+
+    .code-filename {
+        font-family: var(--font-mono, 'JetBrains Mono', monospace);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--md-muted);
+    }
+
+
+    .code-fence.mockup-code {
+        overflow-x: auto;
+        overflow-y: auto;
+        max-height: min(85vh, 1000px);
+        scrollbar-gutter: stable;
+        padding: 1.25rem 0;
+        position: relative;
+    }
+
+    /* Code Typography & Lines */
+    .code-fence.mockup-code pre {
+        padding: 0 1.5rem 0 3.5rem; /* Allow more space for the gutter */
+        position: relative;
+        margin: 0;
+        min-height: 1.5rem;
+        line-height: 1.7;
+        transition: background 0.15s ease;
+        cursor: text;
+        /* Optimized typography stack with ligatures enabled */
+        font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+        font-variant-ligatures: contextual common-ligatures;
+        font-size: 0.85rem; 
+        color: var(--md-foreground);
+    }
+    
+    .dark .code-fence.mockup-code pre {
+        color: #e5e7eb; /* Soft white/gray for high contrast readability */
+    }
+
+    /* Row hover selection */
+    .code-fence.mockup-code pre:hover {
+        background: color-mix(in srgb, var(--md-foreground), transparent 97%);
+    }
+
+    .dark .code-fence.mockup-code pre:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .code-fence.mockup-code pre.is-selected {
+        background: color-mix(in srgb, var(--primary), transparent 88%) !important;
+    }
+    .dark .code-fence.mockup-code pre.is-selected {
+        background: color-mix(in srgb, var(--primary), transparent 80%) !important;
+    }
+
+    /* Highlight accent bar */
+    .code-fence.mockup-code pre::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: var(--primary);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+
+    .code-fence.mockup-code pre.is-selected::after {
+        opacity: 1;
+    }
+
+    /* Line Numbers (Gutter) */
+    .code-fence.mockup-code pre[data-prefix]::before {
+        content: attr(data-prefix);
+        position: absolute;
+        left: 0;
+        width: 2.5rem; /* Fixed precise width for gutter alignment */
+        text-align: right;
+        color: var(--md-muted);
+        opacity: 0.4;
+        user-select: none;
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding-right: 0.75rem;
+        border-right: 1px solid transparent; 
+        transition: opacity 0.2s, border-color 0.2s;
+    }
+
+    .code-fence.mockup-code pre:hover[data-prefix]::before {
+        opacity: 0.8;
+        border-right-color: color-mix(in srgb, var(--md-border), transparent 50%);
+    }
+
+    /* Copied Animation */
+    @keyframes code-copied-pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.01); border-color: #22c55e; }
+        100% { transform: scale(1); }
+    }
+
+    .code-fence-container.is-copied {
+        animation: code-copied-pulse 0.5s var(--ease-spring);
+    }
+
+    /* ==========================================
+       Premium Syntax Highlighting (Shiki Dual Themes)
+       ========================================== */
+    .code-fence.mockup-code span {
+        color: var(--shiki-light);
+        font-style: var(--shiki-light-font-style, normal);
+        font-weight: var(--shiki-light-font-weight, normal);
+        text-decoration: var(--shiki-light-text-decoration, none);
+        transition: color 0.4s ease;
+    }
+
+    .dark .code-fence.mockup-code span {
+        color: var(--shiki-dark);
+        font-style: var(--shiki-dark-font-style, normal);
+        font-weight: var(--shiki-dark-font-weight, normal);
+        text-decoration: var(--shiki-dark-text-decoration, none);
+    }
+}

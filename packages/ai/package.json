@@ -1,0 +1,12 @@
+{
+  "name": "@repo/ai",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "dependencies": {
+    "ai": "^6.0.143",
+    "@ai-sdk/google": "^1.1.18",
+    "zod": "^3.23.0"
+  }
+}

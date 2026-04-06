@@ -1,0 +1,108 @@
+@layer tokens, theme, base, markdown, components, utilities, overrides;
+
+@import '@repo/tailwind-config/theme.css';
+@import 'fumadocs-ui/css/shadcn.css';
+@import 'fumadocs-ui/css/preset.css';
+@import '../../../packages/markdown-parser/src/markdown.css';
+/* Centralized Cursor & Background logic moved to @repo/ui */
+
+
+@source "./**/*.{ts,tsx,mdx}";
+@source "../../node_modules/fumadocs-ui/dist/**/*.js";
+@source "../../../packages/ui/components";
+
+@utility shadow-glow {
+	box-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 12px 40px color-mix(in oklab, var(--primary) 25%, transparent);
+}
+
+@layer utilities {
+	.light-only { display: inline-block !important; }
+	.dark-only { display: none !important; }
+	.dark .light-only { display: none !important; }
+	.dark .dark-only { display: inline-block !important; }
+}
+
+
+@layer base {
+	:root {
+		/* 控制所有 Fumadocs UI 默认的边框和圆角，映射至我们的 4-8-12 体系 */
+		--sidebar-border: var(--border);
+		--fd-radius: var(--radius-lg); /* 文章卡片、侧边栏容器等使用 8px 基准 */
+		
+		/* 统一映射 FumaDocs 的核心背景架构至当前项目的星空系色值 */
+		--fd-background: var(--background);
+		--fd-foreground: var(--foreground);
+		--fd-card: var(--card);
+		--fd-card-foreground: var(--card-foreground);
+		--fd-popover: var(--popover);
+		--fd-popover-foreground: var(--popover-foreground);
+		
+		/* 亮色模式下，稍微加深一下背景色以提高代码块与页面的对比度 */
+		--fd-muted: color-mix(in oklab, var(--muted), black 2%);
+		--fd-muted-foreground: var(--muted-foreground);
+		--fd-secondary: color-mix(in oklab, var(--secondary), black 3%);
+		--fd-secondary-foreground: var(--secondary-foreground);
+		
+		--fd-border: color-mix(in oklab, var(--border), black 4%);
+		--fd-input: var(--input);
+		--fd-ring: var(--ring);
+
+		--fd-primary: var(--primary);
+		--fd-primary-foreground: var(--primary-foreground);
+	}
+	
+	.dark {
+		/* 暗色模式下无缝衔接星空宇宙，保持深色系的原汁原味 */
+		--fd-muted: var(--muted);
+		--fd-secondary: var(--secondary);
+		--fd-border: var(--border);
+		--fd-background: transparent; /* 重要：让背景星空穿透 */
+	}
+
+
+	#nd-docs-layout,
+	[data-sidebar-collapsed],
+	[data-sidebar-container],
+	[data-page-root] {
+		position: relative;
+		z-index: 1;
+	}
+}
+
+@layer components {
+	button, .button {
+		transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	button:active {
+		transform: scale(0.96);
+	}
+}
+
+/* 
+ * 强制覆盖与补丁：Fumadocs 兼容层
+ */
+@layer overrides {
+	/* 代码块专项精致化设计 (基于 VS Code / Cursor 质感) */
+	.fd-codeblock {
+		border-radius: var(--radius-lg) !important;
+		border: 1px solid color-mix(in oklab, var(--fd-border), transparent 50%) !important;
+		overflow: hidden;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05); /* 顶部微弱内发光 */
+	}
+
+	/* 自定义极细滚动条 */
+	.fd-codeblock *::-webkit-scrollbar {
+		width: 4px;
+		height: 4px;
+	}
+	.fd-codeblock *::-webkit-scrollbar-thumb {
+		background: var(--fd-muted-foreground);
+		border-radius: 10px;
+		opacity: 0.5;
+	}
+
+	/* 侧边栏选中态：从圆润药丸回归干练矩形 */
+	.fd-sidebar-item-active {
+		border-radius: var(--radius-md) !important;
+	}
+}

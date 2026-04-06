@@ -1,0 +1,148 @@
+---
+title: "导师信息与研究规划"
+slug: "学习领域-项目-导师"
+area: "LEARN"
+date: "2026-04-04T07:59:14Z"
+updatedAt: "2026-04-04T12:49:14Z"
+tags: ["导师", "研究规划", "世界模型", "强化学习", "System 2"]
+published: true
+---
+
+# 导师信息
+
+| **姓名** | **职位** | **研究方向** | **推荐度** | **备注** |
+|----------|----------|--------------|------------|----------|
+| **董豪** | 助理教授，前沿计算研究中心 | 深度强化学习、具身大模型 | ⭐⭐⭐⭐⭐ | ManipLLM（CVPR 2024），让 LLM 直接操控机械臂理解物理交互。**最贴合世界模型方向**。年轻 PI，助 |
+| **朱松纯** | 院长 | 通用人工智能、计算机视觉、认知 | ⭐⭐⭐ | 大佬级别，方向完美匹配，但院长级导师几乎不可能通过统考进组 |
+| **王韫博** | 计算机学院副教授 | **世界模型**、Model-based RL、高维时序预测 | ⭐⭐⭐⭐⭐ | **最匹配**。ICML 2025 + ICLR 2025 Oral（Video-Enhanced Offline RL, Open-World RL over Long Short-Term Imagination）。组织 NeurIPS 具身世界模型 Workshop。**直接做你想做的方向** |
+| **李永露** | AI 学院副教授 | 具身智能、物理推理、行为理解 | ⭐⭐⭐⭐ | ICRA 2025 最佳论文（人机交互），NeurIPS 2024/2025 Area Chair。**物理推理直接关联世界模型** |
+| **赵海** | 长聘教授，AGI 研究所所长 | 脑启发大语言模型（BriLLM） | ⭐⭐⭐ | 做 Transformer 替代架构，模拟人脑机制。方向前沿但风险高 |
+| **温睦宁** | AI 学院助理研究员 | 强化学习、大模型智能体 | ⭐⭐⭐ | NeurIPS/ICML/ICLR 均有发文。但 2025 年刚毕业，组可能还在建设中 |
+
+## 第一阶段：打基础（Month 1-3）
+
+**目标**：补齐深度学习和强化学习的理论基础，能读懂前沿论文。
+
+### 必修公开课
+
+| 课程 | 学校 | 内容 | 优先级 | 资源 |
+|------|------|------|--------|------|
+| **CS231n** | Stanford | 深度学习与计算机视觉。CNN、Transformer、Diffusion、VLM 全覆盖 | ⭐⭐⭐⭐⭐ | 2025 Spring 讲义在 GitHub 开源，YouTube 有视频 |
+| **6.S191** | MIT | 深度学习速成（5 天集训）。含 DL 基础、LLM、生成式 AI、深度 RL | ⭐⭐⭐⭐⭐ | 全部开源（MIT License），introtodeeplearning.com |
+| **李宏毅 ML+DL** | 台大 | 中文最好的机器学习课程，覆盖 Transformer、自监督学习、RL 基础 | ⭐⭐⭐⭐⭐ | YouTube 免费，每年更新 |
+| **Dive into Deep Learning** | 李沐 | 交互式教科书，PyTorch 实现，有 RL 章节 | ⭐⭐⭐⭐ | d2l.ai 免费 |
+
+### 数学补强（你有优势，查缺补漏即可）
+
+| 主题 | 为什么需要 | 推荐资源 |
+|------|------------|----------|
+| 概率图模型 / 变分推断 | 世界模型的核心数学工具 | Stanford CS228 笔记 |
+| 信息论基础 | JEPA 的理论基础 | Cover & Thomas《信息论基础》 |
+| 随机过程 / 动力系统 | 理解时序预测和状态空间模型 | 你数学专业应该学过，复习即可 |
+
+---
+
+## 第二阶段：进入强化学习（Month 3-5）
+
+**目标**：掌握 RL 核心算法，理解 model-based 和 model-free 的区别。
+
+### 必修公开课
+
+| 课程 | 学校 | 内容 | 优先级 | 资源 |
+|------|------|------|--------|------|
+| **CS 285** | UC Berkeley | **深度强化学习**。Model-based RL、离线 RL、世界模型都有覆盖 | ⭐⭐⭐⭐⭐ | Fall 2023 录播在 YouTube，rail.eecs.berkeley.edu |
+| **XCS234** | Stanford | 强化学习。奖励函数学习、迁移学习、元学习 | ⭐⭐⭐⭐ | 2025 Spring 开放选课 |
+| **HuggingFace Deep RL** | HuggingFace | 从零到精通深度 RL，动手编码，用 Stable Baselines3 | ⭐⭐⭐⭐ | 完全免费开源，有证书 |
+| **David Silver RL** | DeepMind/UCL | 经典 RL 入门，涵盖基础 MDP/TD/MC/Policy Gradient | ⭐⭐⭐ | YouTube（较老但基础扎实） |
+
+### 配套阅读
+
+| 书 | 定位 |
+|----|------|
+| Sutton & Barto《Reinforcement Learning: An Introduction》| RL 圣经，必读前 13 章 |
+| 《深度强化学习：基础、研究和应用》（北大董豪参编）| 中文，含机器人控制等实际应用 |
+
+---
+
+## 第三阶段：世界模型 + System 2 专项（Month 5-8）
+
+**目标**：深入读论文、跑代码、做复现。
+
+### 核心论文路线图（按顺序读）
+
+**世界模型线：**
+
+| 序号 | 论文 | 年份 | 核心贡献 |
+|------|------|------|----------|
+| 1 | Ha & Schmidhuber, "World Models" | 2018 | 奠基之作。学习环境的压缩表征，在"梦"中训练策略 |
+| 2 | Hafner et al., "DreamerV3" | 2023 | 通用世界模型算法，跨 150+ Atari/DM Control/Minecraft 任务 |
+| 3 | LeCun, "A Path Towards Autonomous Machine Intelligence" | 2022 | JEPA 架构的理论蓝图。必读 |
+| 4 | Assran et al., "I-JEPA" | 2023 | 图像 JEPA 实现 |
+| 5 | Bardes et al., "V-JEPA" | 2024 | 视频 JEPA，自监督视觉表征学习 |
+| 6 | Meta, "V-JEPA 2 / V-JEPA 2-AC" | 2025-2026 | 最新版，含 action-conditioned 世界模型，用于机器人操控 |
+| 7 | 王韫博 et al., "Open-World RL over Long Short-Term Imagination" | 2025 (ICLR Oral) | 上交教授的最新工作，直接相关 |
+
+**System 2 / 形式推理线：**
+
+| 序号 | 论文 | 年份 | 核心贡献 |
+|------|------|------|----------|
+| 1 | Trinh et al., "AlphaGeometry" | 2024 | DeepMind，神经网络 + 符号演绎做几何推理 |
+| 2 | AlphaProof team, "IMO Gold Medal Level" | 2024 | LLM + Lean 证明器，IMO 金牌水平 |
+| 3 | Xu et al., "Meta-CoT" | 2025 | 建模推理过程本身的底层机制 |
+| 4 | Safe (ACL 2025) | 2025 | 用 Lean 4 形式验证 LLM 的数学推理 |
+| 5 | PEIRCE (ACL 2025) | 2025 | LLM 驱动的模块化神经符号推理框架 |
+
+---
+
+### 必须动手的开源项目
+
+| 项目 | GitHub | 做什么 | 复现难度 |
+|------|--------|--------|----------|
+| **DreamerV3 PyTorch** | `NM512/dreamerv3-torch` | 复现世界模型 + RL，在 Atari/DMC 上训练 | ⭐⭐⭐ 中等 |
+| **V-JEPA 2** | `facebookresearch/vjepa` | 跑 Meta 官方视频 JEPA 代码，理解表征学习 | ⭐⭐⭐ 中等 |
+| **eb_jepa** | `facebookresearch/eb_jepa` | 通用 JEPA 库，覆盖图像/视频/action-conditioned | ⭐⭐ 入门 |
+| **Lean Copilot** | `lean-dojo/LeanCopilot` | LLM 辅助 Lean 定理证明。体验 System 2 路线 | ⭐⭐⭐⭐ 较难 |
+| **LeanAide** | `siddhartha-gadgil/LeanAide` | 自然语言→形式化证明。自动形式化 | ⭐⭐⭐ 中等 |
+| **IBM NSTK** | `IBM/neuro-symbolic-ai/toolkit` | 逻辑神经网络、神经符号 Agent | ⭐⭐⭐ 中等 |
+| **R2-Dreamer** | `r2dreamer` (更新中) | DreamerV3 加速版 + R2-Dreamer (ICLR 2026)，最前沿 | ⭐⭐⭐⭐ 较难 |
+| **Awesome World Models** | `nik-55/world-models` | 综述列表，追踪所有最新论文和项目 | 阅读 |
+| **Awesome MBRL** | GitHub 搜索 | Model-based RL 论文列表，含 ICML/ICLR/NeurIPS 2025 | 阅读 |
+
+---
+
+## 第四阶段：输出作品集（Month 8-10）
+
+**目标**：为考研复试或联系导师准备**可展示的技术成果**。
+
+### 建议做的 2 个项目
+
+**项目 1：DreamerV3 复现 + 改进实验（世界模型方向）**
+
+- 复现 DreamerV3 在标准 benchmark（Atari 或 DMControl）上的结果
+- 做 1-2 个改进实验（如换不同的表征学习方法、加 JEPA 式的 latent prediction）
+- 写一份技术报告放 GitHub
+- **联系导师时附上这个作为"我已经开始做了"的证据**
+
+**项目 2：Lean + LLM 的数学定理自动证明（System 2 方向）**
+
+- 用 Lean Copilot 或 LeanAide 跑通基础流程
+- 挑一个本科数学中你熟悉的定理（如泰勒展开的收敛性）尝试形式化
+- 体验"神经网络 + 形式验证"的完整链路
+- 这个项目你的数学背景会成为独特优势
+
+---
+
+## 学习建议
+
+**第一阶段，先学"经典世界模型"。**
+
+从 **World Models → DreamerV3 → MuZero** 这条线走，重点吃透 latent state、dynamics model、reward/value prediction、planning / imagination rollout 这些核心概念。这个阶段你的机器绰绰有余。
+
+**第二阶段，做"小而完整"的复现。**
+
+优先选 **CartPole、Pendulum、CarRacing、Atari 小规模实验** 这类环境，目标不是把分数刷到论文水平，而是把训练管线跑通、把 ablation 做明白。DreamerV3 本身就强调跨任务鲁棒和较低的调参门槛，这正适合个人学习。
+
+**第三阶段，再碰"更现代的世界模型"。**
+
+到那时你可以把重点放在 **视频预测、action-conditioned generation、embodied/world simulator** 这些方向，但更适合做 **读论文 + 跑预训练模型 + 小数据微调/裁剪版实验**。
+

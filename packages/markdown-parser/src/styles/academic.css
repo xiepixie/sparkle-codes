@@ -1,0 +1,114 @@
+/* Academic Features (Sidenotes & Wikilinks) - @layer components */
+@layer components {
+    /* Sidenote: Desktop only callout */
+    @media (min-width: 1440px) {
+        .md-sidenote {
+            position: absolute;
+            left: calc(100% + 3rem);
+            width: 280px;
+            font-size: 0.85rem;
+            color: var(--md-muted);
+            line-height: 1.6;
+            border-left: 2px solid var(--md-border);
+            padding-left: 1.5rem;
+            transition: all 0.4s var(--ease-spring);
+            opacity: 0.7;
+            pointer-events: auto;
+        }
+
+        .md-sidenote:hover {
+            opacity: 1;
+            color: var(--md-foreground);
+            border-left-color: var(--md-primary);
+            transform: translateX(5px);
+        }
+    }
+
+    /* Mobile & Tablet fallback */
+    @media (max-width: 1439px) {
+        .md-sidenote {
+            display: block;
+            margin: 2rem 0;
+            font-size: 0.9rem;
+            color: var(--md-muted);
+            padding: 1.25rem 1.5rem;
+            background: color-mix(in srgb, var(--md-foreground), transparent 96%);
+            border-radius: var(--radius-xl);
+            border-left: 4px solid var(--md-primary);
+            box-shadow: var(--shadow-premium-sm);
+        }
+    }
+
+    /* WikiEmbeds (Obsidian Transclusion Style) - Only for Notes */
+    .wiki-embed:not([data-embed-kind="image"]) {
+        display: block;
+        margin: 3rem 0;
+        border-left: 5px solid var(--md-border);
+        background: color-mix(in srgb, var(--md-foreground), transparent 97%);
+        border-radius: 0 20px 20px 0;
+        transition: all 0.4s var(--ease-spring);
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow-premium-sm);
+        counter-increment: wiki-embed;
+    }
+
+    .wiki-embed:not([data-embed-kind="image"]):hover {
+        border-left-color: var(--md-primary);
+        background: color-mix(in srgb, var(--md-foreground), transparent 95%);
+        transform: translateX(4px);
+        box-shadow: var(--shadow-premium-md);
+    }
+
+    /* Reset .wiki-embed for Images to be transparent and natural */
+    .wiki-embed[data-embed-kind="image"] {
+        display: block;
+        margin: 0;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .wiki-embed-header {
+        background: var(--md-card-header);
+        padding: 10px 18px;
+        font-size: 0.65rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--md-muted);
+        border-bottom: 1px solid var(--md-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .wiki-embed-header::after {
+        content: "Ref #" counter(wiki-embed);
+        opacity: 0.5;
+    }
+
+    .wiki-embed-content {
+        padding: 2rem;
+    }
+
+    /* Wiki Links */
+    .wiki-link {
+        color: var(--md-primary);
+        text-decoration: none;
+        border-bottom: 2px dashed color-mix(in srgb, var(--md-primary), transparent 65%);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        font-weight: 800;
+        padding: 0 2px;
+    }
+
+    .wiki-link:hover {
+        border-bottom-style: solid;
+        background: color-mix(in srgb, var(--md-primary), transparent 88%);
+        border-bottom-color: var(--md-primary);
+        border-radius: 4px;
+    }
+}

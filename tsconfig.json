@@ -1,0 +1,18 @@
+{
+  "extends": "./tooling/typescript/base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@repo/database": ["./packages/database/index.ts"],
+      "@repo/database/*": ["./packages/database/*"],
+      "@repo/markdown-parser": ["./packages/markdown-parser/index.ts"],
+      "@repo/markdown-parser/*": ["./packages/markdown-parser/*"]
+    }
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "packages/**/*.ts",
+    "apps/**/*.ts"
+  ],
+  "exclude": ["node_modules", "**/dist", "**/.next"]
+}

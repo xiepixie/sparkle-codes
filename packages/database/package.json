@@ -1,0 +1,23 @@
+{
+    "name": "@repo/database",
+    "version": "0.0.0",
+    "main": "./index.ts",
+    "dependencies": {
+        "@neondatabase/serverless": "^1.0.2",
+        "@paralleldrive/cuid2": "^3.3.0",
+        "drizzle-orm": "^0.44.7",
+        "drizzle-zod": "0.8.3",
+        "pg": "^8.16.0",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "@repo/tsconfig": "workspace:*",
+        "@types/node": "^24.10.1",
+        "drizzle-kit": "^0.31.7"
+    },
+    "scripts": {
+        "db:generate": "drizzle-kit generate",
+        "db:push": "drizzle-kit push",
+        "db:studio": "drizzle-kit studio"
+    }
+}

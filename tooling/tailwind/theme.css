@@ -1,0 +1,221 @@
+/* src/styles/theme.css */
+@import "tailwindcss";
+@import "./tailwind-animate.css";
+/* 引入下方的动画文件 */
+
+@layer tokens {
+@theme {
+	/* =========================================
+     Color Tokens (映射为 bg-primary, text-muted 等)
+     ========================================= */
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+
+	/* 品牌特有光效 Token */
+	--color-aurora: var(--aurora);
+	--color-starlight: var(--starlight);
+	--color-glow: var(--glow);
+	--color-nebula: var(--nebula);
+	--color-glass: var(--glass);
+	--color-laser: var(--laser);
+
+	/* =========================================
+     Radii Tokens (采用 4-8-12-16 比例，极致工程感)
+     ========================================= */
+	--radius-sm: 0.25rem;  /* 4px */
+	--radius-md: 0.375rem; /* 6px */
+	--radius-lg: 0.5rem;   /* 8px */
+	--radius-xl: 0.75rem;  /* 12px */
+	--radius-2xl: 1rem;    /* 16px */
+
+	/* =========================================
+     Typography Tokens
+     ========================================= */
+	--font-sans: "Poppins", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+	--font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+	--font-serif: "Playfair Display", ui-serif, serif;
+
+	/* =========================================
+     Shadow Tokens
+     ========================================= */
+	--shadow-card: 0 4px 12px rgb(0 0 0 / 0.03), 0 8px 24px rgb(0 0 0 / 0.03);
+	--shadow-glow: 0 0 0 1px color-mix(in oklab, var(--primary) 15%, transparent), 0 12px 40px color-mix(in oklab, var(--primary) 25%, transparent);
+	/* Inset shadow for professional depth, as required by AGENTS.md code block standards */
+	--shadow-inner-glow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+	/* Layered shadow for a premium 'Starry' feel in light mode */
+	--shadow-ambient: 
+        0 2px 4px color-mix(in oklab, var(--primary) 4%, transparent),
+        0 12px 32px -4px color-mix(in oklab, var(--primary) 8%, transparent),
+        0 20px 48px -8px color-mix(in oklab, var(--primary) 4%, transparent);
+}
+}
+
+/* =========================================
+   Theme Semantic Variables (日夜模式调色板)
+   ========================================= */
+@layer theme {
+	:root {
+		color-scheme: light;
+
+		/* Background: 极致干净的冷白 */
+		--background: oklch(0.995 0.002 255);
+		--foreground: oklch(0.20 0.02 260);
+		/* 深灰偏一点蓝，代替纯黑 */
+
+		--card: oklch(1 0 0);
+		--card-foreground: var(--foreground);
+		--popover: oklch(1 0 0);
+		--popover-foreground: var(--foreground);
+
+		/* Primary: 你指定的沉稳皇家紫 */
+		--primary: #513bb2;
+		--primary-rgb: 81, 59, 178;
+		--primary-foreground: oklch(1 0 0);
+
+		/* Secondary / Muted: 柔和的浅灰色背景，用于次要区域和代码块 */
+		--secondary: oklch(0.96 0.005 255);
+		--secondary-foreground: oklch(0.30 0.03 260);
+		--muted: oklch(0.96 0.005 255);
+		--muted-foreground: oklch(0.55 0.01 255);
+
+		/* Accent: 鼠标 Hover 时的淡紫色高光 */
+		--accent: color-mix(in oklab, var(--primary) 8%, white);
+		--accent-foreground: var(--primary);
+
+		--destructive: oklch(0.60 0.20 25);
+		--destructive-foreground: oklch(1 0 0);
+
+		--border: oklch(0.90 0.01 255);
+		--input: var(--border);
+		--ring: color-mix(in oklab, var(--primary) 40%, transparent);
+		/* 聚焦环颜色 */
+
+		/* 品牌氛围光 */
+		--aurora: oklch(0.70 0.12 230);
+		/* 浅色下的极光青 */
+		--starlight: oklch(0.75 0.15 315);
+		/* 浅色下的星光粉 */
+		--glow: color-mix(in oklab, var(--primary) 10%, transparent);
+		--ambient: color-mix(in oklab, var(--primary) 3%, transparent);
+		
+		--nebula: oklch(0.25 0.05 270); /* 深邃底色 */
+		--glass: rgba(255, 255, 255, 0.7);
+		--laser: oklch(0.60 0.22 295); /* 激光紫色 */
+
+		/* Pure CSS Ambient Background for Light Mode (Zero JS Overhead) */
+		--sky-spot-1: radial-gradient(circle at 20% 30%, color-mix(in oklch, var(--primary) 3%, transparent) 0%, transparent 50%);
+		--sky-spot-2: radial-gradient(circle at 80% 70%, color-mix(in oklch, var(--aurora) 3%, transparent) 0%, transparent 40%);
+		--sky-spot-3: radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--starlight) 2%, transparent) 0%, transparent 60%);
+		--sky-gradient: var(--sky-spot-1), var(--sky-spot-2), var(--sky-spot-3);
+
+		/* Atomic Tokens for StarryBackground (Clouds) */
+		--cloud-primary: 186, 230, 253;    /* Sky-200 level */
+		--cloud-secondary: 205, 180, 255;  /* Violet-200 level */
+
+		/* Atomic Tokens for TiltWrapper (Glass Physics) */
+		--glass-surface: rgba(255, 255, 255, 0.03);
+		--glass-edge-light: rgba(0, 0, 0, 0.04);
+		--glass-rim-light: rgba(255, 255, 255, 0.8);
+	}
+
+	.dark {
+		color-scheme: dark;
+
+		/* Background: 深邃的午夜蓝宇宙 */
+		--background: oklch(0.13 0.015 265);
+		--foreground: oklch(0.88 0.01 265);
+
+		/* 微微透光的玻璃拟态卡片底色 */
+		--card: oklch(0.16 0.02 270);
+		--card-foreground: var(--foreground);
+		--popover: var(--card);
+		--popover-foreground: var(--foreground);
+
+		/* Primary: 暗色模式下需要高明度、高饱和的霓虹紫发光 */
+		--primary: oklch(0.75 0.22 295);
+		--primary-rgb: 191, 123, 255; /* Neon Purple Approx */
+		/* #9b5de5 的极佳等效值 */
+		--primary-foreground: oklch(0.15 0.02 270);
+
+		--secondary: oklch(0.20 0.03 275);
+		--secondary-foreground: var(--foreground);
+		--muted: oklch(0.18 0.02 270);
+		--muted-foreground: oklch(0.70 0.015 265);
+
+		--accent: oklch(0.22 0.04 285);
+		--accent-foreground: oklch(0.96 0.01 280);
+
+		--destructive: oklch(0.65 0.20 25);
+		--destructive-foreground: oklch(0.96 0.01 265);
+
+		--border: oklch(0.22 0.02 270);
+		--input: var(--border);
+		--ring: var(--primary);
+
+		--aurora: oklch(0.78 0.16 220);
+		--starlight: oklch(0.80 0.18 320);
+		--glow: color-mix(in oklab, var(--primary) 25%, transparent);
+		--ambient: color-mix(in oklab, var(--primary) 10%, transparent);
+
+		--nebula: oklch(0.15 0.04 275);
+		--glass: rgba(0, 0, 0, 0.4);
+		--laser: var(--primary);
+	}
+}
+
+/* =========================================
+   Base Resets & Global Styles
+   ========================================= */
+@layer base {
+	/* 强制全局继承边框颜色，避免无处不在的 border-gray-200 */
+	* {
+		border-color: var(--border);
+	}
+
+	body, 
+	.bg-background, 
+	.bg-card, 
+	.bg-muted, 
+	.bg-secondary,
+	.border-border {
+		transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
+	}
+
+	body {
+		background-color: var(--background);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+		text-rendering: optimizeLegibility;
+	}
+
+	::selection {
+		background: color-mix(in oklab, var(--primary) 20%, transparent);
+		color: var(--foreground);
+	}
+}

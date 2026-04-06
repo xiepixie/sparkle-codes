@@ -1,0 +1,214 @@
+@layer typography {
+  @scope (.markdown-body) {
+    /* --- 1. Global Container & Typography Tokens --- */
+    :scope {
+      --md-leading: 1.85;
+      --md-leading-compact: 1.6;
+      --md-p-space: 1.75rem;
+      --md-max-width: 78ch;
+
+      font-size: 0.92rem;
+      line-height: var(--md-leading);
+      color: var(--md-foreground);
+      max-width: var(--md-max-width);
+      margin: 0 auto;
+      font-family: var(--font-sans, system-ui);
+      hyphens: auto;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      counter-reset: theorem example proof math-eq-counter wiki-embed;
+      position: relative;
+    }
+
+    &[data-density="compact"] {
+      --md-leading: var(--md-leading-compact);
+      font-size: 0.98rem;
+    }
+
+    &[data-density="compact"] :where(p, ul, ol, blockquote) {
+      margin-bottom: 1.5rem;
+    }
+
+    /* --- 2. Headings --- */
+    :where(h1, h2, h3, h4, h5, h6) {
+      color: var(--md-foreground);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin: 5rem 0 2.25rem;
+      line-height: 1.15;
+      position: relative;
+      scroll-margin-top: 100px;
+    }
+
+    :where(h1) {
+      font-size: 2.75rem;
+      margin-top: 0;
+    }
+    :where(h2) {
+      font-size: 2.15rem;
+      border-bottom: 1px solid var(--md-border);
+      padding-bottom: 0.75rem;
+    }
+    :where(h3) {
+      font-size: 1.75rem;
+    }
+    :where(h4) {
+      font-size: 1.35rem;
+    }
+
+    :where(p) {
+      margin: 0 0 var(--md-p-space);
+      opacity: 0.92;
+      text-align: justify;
+      hyphens: auto;
+    }
+
+  } /* End @scope (.markdown-body) */
+
+  /* --- 3. Interactive Elements (Badges/Tags) - Global Availability --- */
+  :where(.tag-badge, .premium-tag, .md-hashtag) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 2px 10px;
+    border-radius: 99px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    font-family: var(--font-mono, monospace);
+    color: var(--md-primary);
+    background: color-mix(in srgb, var(--md-primary), transparent 94%);
+    border: 1px solid color-mix(in srgb, var(--md-primary), transparent 75%);
+    
+    margin: 4px 0.2rem;
+    transition: all 0.3s var(--ease-spring);
+    user-select: none;
+    position: relative;
+    text-decoration: none !important;
+  }
+
+  :where(.tag-badge:hover, .premium-tag:hover, .md-hashtag:hover) {
+    background: color-mix(in srgb, var(--md-primary), transparent 85%);
+    box-shadow: 0 4px 15px color-mix(in srgb, var(--md-primary), transparent 80%);
+    transform: translateY(-1.5px);
+    color: var(--md-primary) !important;
+  }
+
+  :where(.md-hashtag) {
+      vertical-align: middle;
+      margin-top: -2px;
+  }
+
+  :where(.badge-primary) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 2.5px 12px;
+    border-radius: 99px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    font-family: var(--font-mono, monospace);
+    background: var(--md-primary);
+    color: white;
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--md-primary), transparent 80%);
+    transition: all 0.2s ease;
+  }
+
+  :where(.badge-primary:hover) {
+      transform: scale(1.02) translateY(-1px);
+      box-shadow: 0 4px 15px color-mix(in srgb, var(--md-primary), transparent 60%);
+  }
+
+  :where(.badge-outline) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 2.5px 12px;
+    border-radius: 99px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    font-family: var(--font-mono, monospace);
+    border: 1px solid var(--md-border);
+    color: var(--md-foreground);
+    opacity: 0.6;
+    transition: all 0.2s ease;
+  }
+
+  @scope (.markdown-body) {
+    /* --- 4. Lists & Tables --- */
+    :where(ul, ol) {
+      margin: 2.5rem 0;
+      padding-left: 2.5rem;
+    }
+
+    :where(ul) {
+      list-style-type: "✦ ";
+    }
+    :where(ul) li::marker {
+      color: var(--md-primary);
+      font-size: 0.9rem;
+      text-shadow: 0 0 10px color-mix(in srgb, var(--md-primary), transparent 50%);
+    }
+
+    :where(ol) {
+      list-style-type: decimal;
+    }
+    :where(ol) li::marker {
+      color: var(--md-primary);
+      font-weight: 900;
+      font-family: var(--font-mono, monospace);
+    }
+
+    :where(li) {
+      margin-bottom: 1.25rem;
+      line-height: 1.8;
+      opacity: 0.95;
+      padding-left: 0.5rem;
+    }
+
+    :where(ul) ul {
+      list-style-type: "✧ ";
+    }
+    :where(ul) ul ul {
+      list-style-type: "◦ ";
+    }
+
+    :where(td) {
+      border-bottom: 1px solid color-mix(in srgb, var(--md-foreground), transparent 95%) !important;
+      padding: 1.25rem 1.5rem !important;
+    }
+
+    /* --- 5. Inline Prose & Quotes --- */
+    :where(strong) {
+      color: var(--md-foreground);
+      font-weight: 900;
+    }
+
+    :where(code):not(pre code, .math-source-content, .language-math, .math-inline, .math-block) {
+      background: color-mix(in srgb, var(--md-primary), transparent 92%);
+      color: var(--md-primary);
+      padding: 0.2rem 0.45rem;
+      border-radius: 6px;
+      font-size: 0.85em;
+      font-family: var(--font-mono, monospace);
+      font-weight: 600;
+      border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%);
+    }
+
+    :where(blockquote) {
+      border-left: 8px solid var(--md-primary);
+      padding: 0.75rem 1.5rem;
+      margin: 1.5rem 0;
+      font-style: italic;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--md-primary), transparent 94%), transparent);
+      border-radius: 4px;
+      position: relative;
+      opacity: 0.95;
+      line-height: var(--md-leading-compact);
+    }
+
+    :where(blockquote) > :first-child { margin-top: 0 !important; }
+    :where(blockquote) > :last-child { margin-bottom: 0 !important; }
+  }
+}

@@ -1,0 +1,42 @@
+@import "./styles/typography.css";
+@import "./styles/code-fence.css";
+@import "./styles/math-block.css";
+@import "./styles/callout.css";
+@import "./styles/tasks.css";
+@import "./styles/academic.css";
+@import "./styles/tables.css";
+@import "./styles/wiki-embed.css";
+@import "./styles/preview.css";
+
+/* Shared Markdown Theme Tokens */
+@layer theme {
+    .starry-night-theme {
+        /* Map directly to the global theme.css tokens */
+        --md-primary: var(--primary, #513bb2);
+        --md-bg: var(--background, #fff);
+        --md-foreground: var(--foreground, #222);
+        --md-muted: var(--muted-foreground, #666);
+        --md-border: var(--border, rgba(0,0,0,0.1));
+        --md-card: var(--card, #f9f9f9);
+        --md-card-header: var(--muted, #f0f0f0);
+        
+        /* Fallbacks & Effects */
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --shadow-premium-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        --shadow-premium-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        --primary-glow: color-mix(in srgb, var(--md-primary), transparent 85%);
+
+        /* --- Interactive Constants --- */
+        --dur-smooth: 0.2s;
+        --ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1.1);
+        --code-gutter: 3.5rem;
+    }
+
+    .dark .starry-night-theme {
+        --md-border: var(--border, rgba(255,255,255,0.1));
+        --md-card: var(--card, oklch(0.16 0.02 270));
+        --md-card-header: oklch(0.13 0.015 265);
+        --shadow-premium-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+        --shadow-premium-md: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+    }
+}

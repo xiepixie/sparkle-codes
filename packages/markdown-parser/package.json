@@ -1,0 +1,46 @@
+{
+  "name": "@v2/markdown-parser",
+  "version": "0.2.0",
+  "description": "Pure Rust-core Markdown engine with React hydration support",
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "src",
+    "index.ts",
+    "markdown.css"
+  ],
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf .cache .turbo dist node_modules pkg"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "dependencies": {
+    "clsx": "^2.1.0",
+    "dompurify": "^3.0.0",
+    "katex": "^0.16.0",
+    "@repo/utils": "workspace:*",
+    "lucide-react": "^0.300.0",
+    "morphdom": "^2.7.0",
+    "shiki": "^4.0.2",
+    "tailwind-merge": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "markdown",
+    "parser",
+    "rust",
+    "math",
+    "react"
+  ],
+  "license": "MIT"
+}

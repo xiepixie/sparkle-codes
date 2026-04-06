@@ -1,0 +1,12 @@
+/* Markdown Preview & Effect Utilities - @layer utilities */
+@layer utilities {
+    @keyframes preview-fade-in {
+        from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .mask-fade-bottom {
+        mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+        -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+    }
+}

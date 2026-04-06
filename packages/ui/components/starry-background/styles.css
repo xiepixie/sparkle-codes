@@ -1,0 +1,20 @@
+.starry-background-layer {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 0;
+	background-color: white;
+	overflow: hidden;
+	width: 100vw;
+	height: 100vh;
+}
+
+.dark .starry-background-layer {
+	background-color: transparent;
+}
+
+canvas.starry-canvas {
+	width: 100%;
+	height: 100%;
+	display: block;
+}

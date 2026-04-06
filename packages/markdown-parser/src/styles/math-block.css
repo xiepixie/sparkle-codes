@@ -1,0 +1,384 @@
+/* Math Rendering (KaTeX & Numbering) - @layer components */
+@layer components {
+    /* Global counter initialization if not already handled */
+    :where(.markdown-body) {
+        counter-reset: math-eq-counter;
+    }
+
+    .math-block, .math-display {
+        display: block !important;
+        width: 100% !important;
+        overflow-x: auto !important;
+        margin: 2rem 0 !important; 
+        padding: 2rem 0;
+        font-size: 1.1rem !important; 
+        text-align: left !important;
+        position: relative;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 12px;
+        counter-increment: math-eq-counter;
+        background: transparent;
+        border: none !important;
+        cursor: pointer;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y pinch-zoom;
+    }
+
+    .math-block:hover {
+        background-color: color-mix(in srgb, var(--md-primary), transparent 97%);
+        box-shadow: inset 0 0 60px color-mix(in srgb, var(--md-primary), transparent 98%);
+    }
+
+    .math-block .katex-display {
+        margin: 0 !important;
+        padding: 0.75rem 0 !important;
+    }
+
+    /* Target display math inside containers to prevent "too tall" look */
+    :where(blockquote, .md-callout, .md-quote, ul, ol, li) .math-block,
+    :where(blockquote, .md-callout, .md-quote, ul, ol, li) .math-display {
+        margin: 1rem 0 !important;
+        padding: 0.5rem !important;
+        font-size: 1.1rem !important;
+    }
+
+    :where(blockquote, .md-callout, .md-quote, ul, ol, li) .math-block .katex-display {
+        padding: 0.25rem 0 !important;
+    }
+
+    /* Math Controls & Badges (Premium) */
+    .math-controls .math-copy-btn {
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--md-primary), transparent 90%);
+    }
+
+    .math-badge {
+        text-shadow: 0 0 10px color-mix(in srgb, var(--md-primary), transparent 80%);
+    }
+
+    /* Ensure large formulas don't get cut off but still center */
+    .math-block .katex {
+        white-space: nowrap;
+        color: inherit !important;
+    }
+
+    .math-block .katex-html {
+        color: inherit !important;
+    }
+
+
+    .math-inline {
+        display: inline-block;
+        vertical-align: middle;
+        margin: 0 0.125rem;
+        padding: 2px 4px;
+        border-radius: 4px;
+        transition: all 0.2s;
+        cursor: pointer;
+        background: transparent !important;
+        border: none !important;
+        color: inherit;
+    }
+
+    .math-inline:hover {
+        background: color-mix(in srgb, var(--md-primary, #6366f1), transparent 92%);
+        color: var(--md-primary);
+    }
+
+    /* KaTeX Double-margin fix */
+    .math-block .katex-display {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Long/complex math formula box */
+    .math-block-long {
+        background: transparent !important;
+        border: 1px solid transparent;
+        border-radius: var(--radius-xl, 14px);
+        padding: 2rem 1.5rem;
+        margin: 3rem 0;
+        transition: all 0.3s ease;
+    }
+
+    .math-block-long:hover {
+        box-shadow: var(--shadow-premium-md);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 40%);
+        background: color-mix(in srgb, var(--md-card), transparent 3%) !important;
+    }
+
+    /* Equation numbering */
+    .math-block::after {
+        content: "(" counter(math-eq-counter) ")";
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.8rem;
+        opacity: 0.2;
+        color: var(--md-muted);
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .math-block:hover::after {
+        opacity: 0.6;
+        right: 1rem;
+        color: var(--md-primary);
+    }
+
+    /* Mobile numbering hide */
+    @media (max-width: 768px) {
+        .math-block::after {
+            display: none;
+        }
+    }
+
+    .math-highlight {
+        background: color-mix(in srgb, var(--md-primary), transparent 94%);
+        box-shadow: 0 0 10px color-mix(in srgb, var(--md-primary), transparent 90%);
+        border-radius: 4px;
+        padding: 2px 4px;
+        transition: all 0.3s ease;
+        border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%);
+        color: var(--md-primary);
+    }
+
+    /* LaTeX Source Highlighting (Premium Mode) */
+    .latex-source {
+        border: 1.5px solid color-mix(in srgb, var(--md-primary), transparent 70%) !important;
+        box-shadow: 0 20px 50px -12px color-mix(in srgb, var(--md-primary), transparent 75%);
+        background: color-mix(in srgb, var(--md-primary), transparent 92%) !important;
+        border-radius: var(--radius-xl, 16px);
+        margin: 2rem 0 !important;
+    }
+
+    .latex-source .code-fence-header {
+        background: color-mix(in oklab, var(--md-primary) 16%, white 84%);
+        border-bottom: 1px solid color-mix(in srgb, var(--md-primary), transparent 52%);
+        color: color-mix(in oklab, var(--md-primary) 58%, black 42%);
+    }
+
+    .latex-header-actions {
+        min-width: 0;
+    }
+
+    .latex-header-label {
+        padding-inline: 0.5rem;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: color-mix(in oklab, var(--md-primary) 42%, black 58%);
+        opacity: 0.72;
+    }
+
+    .latex-source .format-toggle-btn,
+    .latex-source .code-copy-btn-math,
+    .latex-source .code-close-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2rem;
+        padding: 0.35rem 0.7rem;
+        border-radius: 0.55rem;
+        border: 1px solid transparent;
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .latex-source .format-toggle-btn {
+        color: color-mix(in oklab, var(--md-primary) 48%, black 52%);
+        background: color-mix(in oklab, var(--md-primary) 10%, white 90%);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 82%);
+    }
+
+    .latex-source .format-toggle-btn[data-active="true"] {
+        color: white;
+        background: color-mix(in oklab, var(--md-primary) 84%, black 16%);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 24%);
+        box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--md-primary), transparent 22%);
+    }
+
+    .latex-source .format-toggle-btn[data-active="false"]:hover,
+    .latex-source .code-copy-btn-math:hover,
+    .latex-source .code-close-btn:hover {
+        background: color-mix(in oklab, var(--md-primary) 14%, white 86%);
+        color: color-mix(in oklab, var(--md-primary) 72%, black 28%);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 68%);
+    }
+
+    .latex-source .code-copy-btn-math {
+        color: color-mix(in oklab, var(--md-primary) 80%, black 20%);
+        background: color-mix(in oklab, var(--md-primary) 14%, white 86%);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 70%);
+    }
+
+    .latex-source .code-close-btn {
+        color: color-mix(in oklab, var(--md-primary) 44%, black 56%);
+        background: rgba(255, 255, 255, 0.42);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 84%);
+    }
+
+    .latex-source .code-dots {
+        opacity: 0.9;
+    }
+
+    .dark .latex-source .code-fence-header {
+        background: color-mix(in srgb, var(--md-primary), transparent 80%);
+        border-bottom: 1px solid color-mix(in srgb, var(--md-primary), transparent 60%);
+        color: white;
+    }
+
+    .dark .latex-header-label {
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .dark .latex-source .format-toggle-btn,
+    .dark .latex-source .code-copy-btn-math,
+    .dark .latex-source .code-close-btn {
+        border-color: transparent;
+    }
+
+    .dark .latex-source .format-toggle-btn {
+        color: rgba(255, 255, 255, 0.42);
+        background: transparent;
+    }
+
+    .dark .latex-source .format-toggle-btn[data-active="true"] {
+        color: var(--md-primary);
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    .dark .latex-source .format-toggle-btn[data-active="false"]:hover,
+    .dark .latex-source .code-copy-btn-math:hover,
+    .dark .latex-source .code-close-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.9);
+        border-color: transparent;
+    }
+
+    .dark .latex-source .code-copy-btn-math {
+        color: var(--md-primary);
+        background: transparent;
+    }
+
+    .dark .latex-source .code-close-btn {
+        color: rgba(255, 255, 255, 0.5);
+        background: transparent;
+    }
+
+    .latex-source .mockup-code pre,
+    .latex-source .mockup-code pre code {
+        font-family: var(--font-mono, 'JetBrains Mono', 'Fira Code', monospace) !important;
+        font-variant-ligatures: contextual;
+    }
+
+    .latex-source .mockup-code pre {
+        font-size: 0.85rem !important;
+        line-height: 2 !important; /* Generous line height for clarity */
+        color: var(--md-primary) !important;
+    }
+
+    .math-source-content {
+        font-family: var(--font-mono, 'JetBrains Mono', monospace);
+        font-size: 0.9em;
+        padding: 0.3rem 0.6rem;
+        background: color-mix(in srgb, var(--md-primary), transparent 94%);
+        color: var(--md-primary);
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid color-mix(in srgb, var(--md-primary), transparent 80%);
+        white-space: nowrap;
+        line-height: 1.5;
+    }
+
+    .math-block.source-mode {
+        padding: 0;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .math-block.math-transitioning,
+    .math-display.math-transitioning {
+        transition: height 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+        will-change: height;
+    }
+
+    .math-block.source-mode::after {
+        display: none;
+    }
+
+    @media (max-width: 768px) {
+        .math-block, .math-display {
+            margin: 1.5rem 0 !important;
+            padding: 1rem 0 0.5rem;
+            font-size: 1rem !important;
+        }
+
+        .math-block .katex {
+            min-width: max-content;
+        }
+
+        .math-block .katex-display {
+            padding-inline: 0.25rem !important;
+        }
+
+        .latex-source {
+            margin: 1.25rem 0 !important;
+            border-radius: var(--radius-xl, 14px);
+        }
+
+        .latex-source .code-fence-header {
+            align-items: flex-start;
+            padding: 0.75rem 0.9rem;
+        }
+
+        .latex-source .code-header-right {
+            flex: 1;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.4rem;
+        }
+
+        .latex-source .latex-header-actions {
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.25rem;
+            opacity: 1 !important;
+        }
+
+        .latex-source .latex-header-actions .format-toggle-btn,
+        .latex-source .latex-header-actions .code-copy-btn-math,
+        .latex-source .latex-header-actions .code-close-btn {
+            min-height: 2rem;
+            padding-inline: 0.55rem;
+            font-size: 8px;
+            letter-spacing: 0.08em;
+        }
+
+        .latex-source .code-dots {
+            gap: 5px;
+        }
+
+        .latex-source .code-dot {
+            width: 8px;
+            height: 8px;
+        }
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+        .math-block:active,
+        .math-inline:active {
+            background-color: color-mix(in srgb, var(--md-primary), transparent 94%);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 82%);
+        }
+    }
+}

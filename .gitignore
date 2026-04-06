@@ -1,0 +1,44 @@
+node_modules/
+.next/
+.turbo/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secret Environment variables
+.env
+.env.local
+.env.production
+.env.development
+.env.*
+!.env.example
+!.env.*.example
+!.env.production.example
+
+# Build artifacts
+.next/
+.turbo/
+dist/
+coverage/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Cache files
+.content-collections/
+.eslintcache
+.stylelintcache
+.parcel-cache
+.cache/
+pnpm-debug.log*
+.pnpm-debug.log*
+node_modules/.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+.vercel
+*.pem

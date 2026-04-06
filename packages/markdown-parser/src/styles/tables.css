@@ -1,0 +1,63 @@
+/* High-Fidelity Table Rendering - @layer components */
+@layer components {
+    .md-table-wrap {
+        overflow-x: auto;
+        border-radius: var(--radius-xl, 16px);
+        border: none;
+        margin: 3.5rem 0 !important;
+        background: transparent;
+        position: relative;
+        display: flow-root;
+        width: 100%;
+    }
+
+    .md-table-wrap table {
+        font-size: 1.0rem;
+        width: 100%;
+        margin-top: 3.5rem !important;
+        margin-bottom: 3.5rem !important;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-bottom: 3.5rem !important;
+    }
+
+    th {
+        font-weight: 700;
+        color: var(--md-primary);
+        background: color-mix(in srgb, var(--md-primary), transparent 94%);
+        padding: 1.125rem 1.25rem !important;
+        font-size: 1.15rem;
+        text-transform: uppercase;
+        letter-spacing: -0.01em;
+        border: none !important;
+        text-align: left;
+        border-bottom: 2px solid color-mix(in srgb, var(--md-primary), transparent 90%) !important;
+    }
+
+    td {
+        padding: 1rem 1.25rem !important;
+        border-bottom: 1px solid color-mix(in srgb, var(--md-foreground, #000), transparent 95%);
+        font-size: 1rem;
+        line-height: 1.6;
+        transition: background var(--dur-smooth, 0.2s) ease;
+        color: var(--md-fg, inherit);
+    }
+
+    /* Zebra Striping */
+    tr:nth-child(even) td {
+        background: color-mix(in srgb, var(--md-foreground, #000), transparent 99%);
+    }
+
+    tr:hover td { 
+        background: color-mix(in srgb, var(--md-foreground, #000), transparent 96%); 
+        color: var(--md-foreground);
+        opacity: 1;
+    }
+
+
+    tr:last-child td { border-bottom: none; }
+}

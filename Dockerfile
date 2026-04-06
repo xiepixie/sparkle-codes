@@ -24,7 +24,8 @@ RUN pnpm install --frozen-lockfile
 COPY --from=pruner /app/out/full/ ./
 # 注入 dummy 变量以通过 Next.js 的构建检录阶段 (Build-time only)
 ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/build-time-dummy
-RUN DATABASE_URL=$DATABASE_URL pnpm turbo run build --filter=web
+ARG NEXT_PUBLIC_DOCS_URL=https://sparkle.codes/docs
+RUN DATABASE_URL=$DATABASE_URL NEXT_PUBLIC_DOCS_URL=$NEXT_PUBLIC_DOCS_URL pnpm turbo run build --filter=web
 
 # --- Runner ---
 FROM base AS runner

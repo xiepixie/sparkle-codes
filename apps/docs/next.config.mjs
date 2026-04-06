@@ -4,6 +4,7 @@ import { createMDX } from "fumadocs-mdx/next";
 const nextConfig = {
 	basePath: "/docs",
 	reactStrictMode: true,
+	output: 'standalone',
 };
 
 const withMDX = createMDX();

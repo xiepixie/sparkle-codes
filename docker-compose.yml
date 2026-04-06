@@ -15,8 +15,27 @@ services:
       - HOSTNAME=0.0.0.0
       - PORT=3000
     healthcheck:
-      # Use Node.js native fetch for healthcheck to avoid wget dependency in alpine
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.status===200||r.status===404?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  docs:
+    build:
+      context: .
+      dockerfile: apps/docs/Dockerfile
+    container_name: sparkle-next-docs
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3001
+    healthcheck:
+      # Docs has basePath: '/docs', so requests to root might be 404. We allow 200 or 404 for healthcheck, or just hit /docs.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/docs').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

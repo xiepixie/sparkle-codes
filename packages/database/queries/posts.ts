@@ -74,6 +74,10 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
   );
   const rank = buildSearchRank(options.query);
 
+  const orderBy = options.query?.trim() 
+    ? [desc(rank), desc(documents.createdAt)]
+    : [desc(documents.createdAt)];
+
   return await db
     .select({
       id: documents.id,
@@ -90,7 +94,7 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
     })
     .from(documents)
     .where(whereClause)
-    .orderBy(desc(rank), desc(documents.createdAt))
+    .orderBy(...orderBy)
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 }

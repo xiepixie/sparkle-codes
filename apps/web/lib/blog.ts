@@ -1,4 +1,5 @@
 import {
+  hasUsableDatabaseUrl,
   getAllPostSummariesQuery,
   getPostsPageQuery,
   getPostBySlugQuery,
@@ -362,6 +363,10 @@ export async function getPostsPage(page = 1, pageSize = 5, query?: string): Prom
   posts: BlogPostSummary[];
   totalCount: number;
 }> {
+  if (!hasUsableDatabaseUrl()) {
+    return { posts: [], totalCount: 0 };
+  }
+
   const results = await getPostsPageQuery(page, pageSize, query);
   const totalCount = results.length > 0 ? Number(results[0].totalCount) : 0;
   const posts = results.map(mapDocumentToSummary);
@@ -374,6 +379,21 @@ export async function queryBlogPostFeed(params: BlogPostFeedParams = {}): Promis
   const pageSize = Math.max(1, Math.min(50, params.pageSize || 5));
   const query = params.query?.trim() || "";
   const tags = [...new Set((params.tags || []).map((tag) => tag.trim()).filter(Boolean))];
+
+  if (!hasUsableDatabaseUrl()) {
+    return {
+      posts: [],
+      totalCount: 0,
+      page,
+      pageSize,
+      totalPages: 0,
+      hasNextPage: false,
+      hasPreviousPage: false,
+      query,
+      tags,
+    };
+  }
+
   const results = await queryPostSummariesQuery({
     page,
     pageSize,
@@ -421,6 +441,10 @@ export async function getAllPostSummaries(): Promise<BlogPostSummary[]> {
   cacheLife("hours");
   cacheTag("posts", "post-summaries");
 
+  if (!hasUsableDatabaseUrl()) {
+    return [];
+  }
+
   const results = await getAllPostSummariesQuery();
   return results.map(mapDocumentToSummary);
 }
@@ -433,6 +457,10 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
   "use cache";
   cacheLife("hours");
   cacheTag("posts", `post-${slug}`);
+
+  if (!hasUsableDatabaseUrl()) {
+    return null;
+  }
 
   // Fetch the raw document from DB
   const doc = await getPostBySlugQuery(slug);
@@ -567,6 +595,10 @@ function renderSearchSnippet(text: string, query: string, hitKind: "title" | "de
 }
 
 export async function searchBlogPosts(query: string, limit = 8): Promise<BlogSearchResult[]> {
+  if (!hasUsableDatabaseUrl()) {
+    return [];
+  }
+
   const results = await searchPostsQuery(query, limit);
 
   return results.map((doc) => {

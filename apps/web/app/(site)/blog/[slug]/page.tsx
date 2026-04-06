@@ -11,6 +11,8 @@ import { ReadingHeader } from "@/components/ReadingHeader";
 
 import { MarkdownInteractivity } from "@/components/markdown-interactivity";
 
+const BUILD_PLACEHOLDER_SLUG = "__build-placeholder__";
+
 interface PostPageProps {
   params: Promise<{
     slug: string;
@@ -20,7 +22,10 @@ interface PostPageProps {
 export default async function PostPage({ params }: PostPageProps) {
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug);
-  
+
+  if (slug === BUILD_PLACEHOLDER_SLUG) {
+    notFound();
+  }
 
   // 🚀 Fetch post from DB
   const post = await getPostBySlug(slug);
@@ -134,6 +139,13 @@ export default async function PostPage({ params }: PostPageProps) {
 export async function generateMetadata({ params }: PostPageProps) {
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug);
+
+  if (slug === BUILD_PLACEHOLDER_SLUG) {
+    return {
+      title: "Post Not Found | Sparkle Insights",
+    };
+  }
+
   const post = await getPostBySlug(slug);
 
   if (!post) {
@@ -167,7 +179,11 @@ export async function generateMetadata({ params }: PostPageProps) {
  */
 export async function generateStaticParams() {
    const allPosts = await getAllPostSummaries();
-   
+
+   if (allPosts.length === 0) {
+     return [{ slug: BUILD_PLACEHOLDER_SLUG }];
+   }
+
    return allPosts.map((post) => ({
      slug: post.path,
    }));

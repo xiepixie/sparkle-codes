@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # --- Base ---
 FROM node:20-alpine AS base
 ENV PNPM_HOME="/pnpm"
@@ -25,7 +23,7 @@ RUN pnpm install --frozen-lockfile
 # 复制源码并构建
 COPY --from=pruner /app/out/full/ ./
 # 注入 dummy 变量以通过 Next.js 的构建检录阶段 (Build-time only)
-ARG DATABASE_URL=postgres://localhost/build-time-dummy
+ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/build-time-dummy
 RUN DATABASE_URL=$DATABASE_URL pnpm turbo run build --filter=web
 
 # --- Runner ---

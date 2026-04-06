@@ -153,7 +153,7 @@ export async function getPostBySlugQuery(slug: string) {
 
   if (!post) {
       post = await db.query.documents.findFirst({
-          where: (docs, { and, or }) => and(
+          where: (docs, { eq, and, or }) => and(
               or(
                   eq(docs.slug, slug),
                   sql`${docs.slug} LIKE ${'%-' + slug}`,

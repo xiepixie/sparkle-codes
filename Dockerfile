@@ -61,7 +61,6 @@ ENV HOSTNAME="0.0.0.0"
 
 COPY --from=builder-docs /app/apps/docs/.next/standalone ./
 COPY --from=builder-docs /app/apps/docs/.next/static ./apps/docs/.next/static
-COPY --from=builder-docs /app/apps/docs/public ./apps/docs/public
 
 EXPOSE 3001
 CMD ["node", "apps/docs/server.js"]

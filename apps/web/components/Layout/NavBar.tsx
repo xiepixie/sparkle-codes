@@ -92,7 +92,15 @@ export function NavBar() {
                         <Comp
                           key={item.href}
                           href={item.href}
-                          onClick={() => handleSheetOpenChange(false)}
+                          {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                          onClick={() => {
+                            if (isExternal) {
+                              // Use a small delay for external links to ensure the browser opens the tab first
+                              setTimeout(() => handleSheetOpenChange(false), 10);
+                            } else {
+                              handleSheetOpenChange(false);
+                            }
+                          }}
                           style={{ transitionDelay: `${idx * 40}ms` }}
                           {...(!isExternal && pathname === item.href ? { "aria-current": "page" as const } : {})}
                           className={cn(
@@ -134,7 +142,14 @@ export function NavBar() {
                   <Comp
                     key={item.href}
                     href={item.href}
-                    onClick={() => handleSheetOpenChange(false)}
+                    {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    onClick={() => {
+                      if (isExternal) {
+                        setTimeout(() => handleSheetOpenChange(false), 10);
+                      } else {
+                        handleSheetOpenChange(false);
+                      }
+                    }}
                     {...(!isExternal && pathname === item.href ? { "aria-current": "page" as const } : {})}
                     className={cn(
                       "rounded-2xl px-2 py-2 text-lg font-semibold transition-all hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:text-xl",

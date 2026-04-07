@@ -1344,6 +1344,7 @@ dependencies = [
  "markdown-parser",
  "notify",
  "notify-debouncer-mini",
+ "once_cell",
  "regex",
  "serde",
  "serde_json",

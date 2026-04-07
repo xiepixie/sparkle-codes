@@ -1,9 +1,11 @@
 "use client";
 
 import { getAppUrl } from "@repo/utils";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useTransition } from "react";
 import { motion, AnimatePresence, useScroll, useSpring, useTransform } from "framer-motion";
-import { Search, Hash, ChevronRight, FileText, Menu } from "lucide-react";
+import { Search, Hash, FileText, Menu, Folder, Loader2 } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn, Logo, Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger, ThemeToggle } from "@repo/ui";
 import katex from "katex";
@@ -90,6 +92,28 @@ export function ReadingHeader({
 	const lastScrollY = useRef(0);
 	const isGuarding = useRef(false);
 
+	const [isNavigating, startNavTransition] = useTransition();
+	const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+	const router = useRouter();
+	const pathname = usePathname();
+
+	// "油画" UX for the header itself: 
+	// Sync navigation state to show feedback on interactive triggers.
+	// We clear the loading state immediately when the target page is reached.
+	useEffect(() => {
+		if (!pendingUrl) {
+			return;
+		}
+
+		const normalize = (url: string) => url.split("#")[0].split("?")[0].replace(/\/$/, "");
+		const current = normalize(pathname);
+		const target = normalize(pendingUrl);
+
+		// Cleanup: URL matches destination OR transition finished
+		if (current === target || target.endsWith(current) || !isNavigating) {
+			setPendingUrl(null);
+		}
+	}, [pathname, pendingUrl, isNavigating]);
 
 	useEffect(() => {
 		segmentsRef.current = segments;
@@ -328,9 +352,10 @@ export function ReadingHeader({
 		setIsMenuOpen(nextOpen);
 	};
 
-	const openReadingJump = () => {
+	const openReadingJump = (jumpTo?: "sections" | "history") => {
 		openCommandCenter({
 			mode: "jump",
+			jumpTo,
 			reading: {
 				title: displayTitle,
 				slug,
@@ -396,30 +421,23 @@ export function ReadingHeader({
 								</span>
 							</Link>
 
+							{/* Navigator Group: Context & Recent History */}
 							<div
 								className={cn(
-									"relative hidden h-full min-w-0 items-center gap-1.5 pl-3 lg:flex lg:min-w-[10rem] lg:max-w-[18rem] xl:max-w-[22rem]",
+									"relative hidden h-full min-w-0 items-center gap-2 pl-3 lg:flex lg:min-w-[10rem] lg:max-w-[18rem] xl:max-w-[22rem]",
 									!isLongDisplayTitle && "border-l border-border/20",
 									isLongDisplayTitle && "xl:max-w-[26rem] xl:pl-0",
 								)}
 							>
-								<button 
-									type="button"
-									onClick={(e) => {
-										e.preventDefault();
-										e.stopPropagation();
-										openReadingSearch();
-									}}
-									aria-label="Open reading search"
-									className="group/path flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition-all hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-								>
-									<FileText size={10} className="shrink-0 text-primary/70 transition-transform group-hover/path:rotate-3" />
-									<span className="ml-1 max-w-[96px] truncate text-[10px] font-bold text-muted-foreground transition-colors group-hover/path:text-primary xl:max-w-[132px]">
+								{/* Path: Pure Metadata (Non-interactive) */}
+								<div className="flex shrink-0 cursor-default items-center gap-1.5 px-1 py-0.5 opacity-40">
+									<Folder size={11} className="shrink-0 text-primary" />
+									<span className="max-w-[80px] truncate text-[10px] font-bold tracking-wider text-muted-foreground uppercase xl:max-w-[110px]">
 										{cleanPath}
 									</span>
-								</button>
+								</div>
 
-								<div className="mx-2 h-3 w-px shrink-0 bg-border/40" />
+								<div className="h-3 w-px shrink-0 bg-border/20" />
 								
 								<div className="relative min-w-0 flex-1">
 									<button 
@@ -427,29 +445,28 @@ export function ReadingHeader({
 										onClick={(e) => { 
 											e.preventDefault();
 											e.stopPropagation(); 
-											openReadingJump();
+											openReadingJump("history");
 										}}
-										aria-label="Open heading jump menu"
+										aria-label="Open reading history"
 										className={cn(
 											"group/filename relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1 transition-all min-w-0 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-											"hover:bg-accent/40"
+											"hover:bg-primary/[0.08]"
 										)}
 									>
+										<FileText size={10} className="shrink-0 text-primary/60 transition-transform group-hover/filename:rotate-3" />
 										<TrustedInlineHtml
-											className="min-w-0 truncate text-[11px] font-black tracking-tight text-foreground transition-colors duration-300"
+											className="min-w-0 truncate text-[11px] font-black tracking-tight text-foreground transition-colors duration-300 group-hover/filename:text-primary"
 											html={renderKatex(displayTitle)}
 										/>
-										<motion.div className="opacity-20 transition-opacity group-hover/filename:opacity-50">
-											<ChevronRight size={8} className="rotate-90" />
-										</motion.div>
 									</button>
 								</div>
 							</div>
                         </div>
- 
+
+						{/* Segment Group: Progress & Sections */}
                         <button 
                             type="button"
-                            onClick={openReadingJump}
+                            onClick={() => openReadingJump("sections")}
                             aria-label={activeSegment ? `Jump to section ${activeSegment.title}` : "Open reading navigation"}
                             className="group/nav relative flex h-full min-w-0 flex-1 items-center justify-center overflow-hidden rounded-[1.1rem] px-3 transition-colors hover:bg-accent/40 active:scale-[0.98] interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:px-4"
                         >
@@ -469,14 +486,14 @@ export function ReadingHeader({
                                             ))}
                                         </div>
                                         <TrustedInlineHtml
-                                            className="max-w-full truncate text-[11px] font-bold tracking-tight text-foreground/80 sm:text-[12px]"
+                                            className="max-w-full truncate text-[11px] font-bold tracking-tight text-foreground/80 sm:text-[12px] group-hover/nav:text-primary transition-colors"
                                             html={activeSegment.renderedTitle}
                                         />
                                     </motion.div>
                                 ) : (
                                     <TrustedInlineHtml
                                         key={displayTitle}
-                                        className="max-w-full truncate text-[10px] font-bold tracking-tight text-foreground/55 sm:text-[12px]"
+                                        className="max-w-full truncate text-[10px] font-bold tracking-tight text-foreground/55 sm:text-[12px] group-hover/nav:text-foreground transition-colors"
                                         html={centerLabel}
                                     />
                                 )}
@@ -520,20 +537,46 @@ export function ReadingHeader({
 										/>
 									</div>
 
-									<div className="flex flex-col gap-3 sm:gap-4">
+									<div className="flex flex-col gap-2 sm:gap-3">
 										{readingMenuItems.map((item) => {
 											const isExternal = item.href.startsWith("http");
 											const Comp = isExternal ? "a" : (Link as any);
+											const isActive = pathname === item.href;
 
 											return (
 												<Comp
 													key={item.href}
 													href={item.href}
 													{...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-													onClick={() => handleMenuOpenChange(false)}
-													className="rounded-2xl px-2 py-2 text-lg font-semibold text-muted-foreground transition-all hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:text-xl"
+													onClick={() => {
+														if (!isExternal) {
+															setPendingUrl(item.href);
+															startNavTransition(() => {
+																handleMenuOpenChange(false);
+																router.push(item.href);
+															});
+														} else {
+															// For external links, close the menu asynchronously 
+															// to ensure the browser prioritizes opening the new tab/url.
+															setTimeout(() => {
+																handleMenuOpenChange(false);
+															}, 10);
+														}
+													}}
+													className={cn(
+														"group relative flex items-center justify-between rounded-2xl px-4 py-3 text-lg font-semibold transition-all sm:text-xl",
+														isActive 
+															? "bg-primary/10 text-primary" 
+															: "text-muted-foreground hover:bg-primary/5 hover:text-primary",
+														pendingUrl === item.href && "opacity-70 grayscale-[0.5]"
+													)}
 												>
-													{item.label}
+													<span>{item.label}</span>
+													{pendingUrl === item.href ? (
+														<Loader2 size={18} className="animate-spin" />
+													) : (
+														isActive && <div className="h-1.5 w-1.5 rounded-full bg-primary ring-4 ring-primary/20" />
+													)}
 												</Comp>
 											);
 										})}

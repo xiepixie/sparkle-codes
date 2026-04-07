@@ -16,7 +16,7 @@ export interface QueryPostSummariesOptions {
 }
 
 function normalizeTags(tags?: string[]) {
-  return [...new Set((tags || []).map((tag) => tag.trim()).filter(Boolean))];
+  return [...new Set((tags || []).map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
 }
 
 function buildTagFilter(tags?: string[]) {

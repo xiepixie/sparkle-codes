@@ -26,7 +26,7 @@ static HTML_TAG_RE: Lazy<Regex> = Lazy::new(|| {
 static OBSIDIAN_TASK_RE: Lazy<Regex> = Lazy::new(|| {
     // Matches Obsidian-style extended task markers at the start of a list item.
     // Handles markers like [>], [!], [-], [/], [?], [x], and HTML entities like &gt;.
-    Regex::new(r#"(?i)<li>\s*\[([>!xX\-/?]|&gt;)\]"#).unwrap()
+    Regex::new(r#"(?i)<li>\s*\[([ >!xX\-/?]|&gt;)\]"#).unwrap()
 });
 static ADMONITION_BLOCK_RE: Lazy<Regex> = Lazy::new(|| {
     // Matches Obsidian Admonition code block syntax: ```ad-type \n content \n ```
@@ -55,10 +55,13 @@ pub struct ParseResult {
     pub has_wiki_embeds: bool,
     pub has_hashtags: bool,
     pub links: Vec<WikiLink>,
+    pub hashtags: Vec<String>,
 }
 fn parse_tag(bytes: &[u8], i: usize) -> (usize, Option<u8>, bool, bool) {
     let mut j = i + 1;
     let len = bytes.len();
+    
+    // Check if closing tag
     if j < len && bytes[j] == b'/' {
         j += 1;
         let mut kind = None;
@@ -70,8 +73,17 @@ fn parse_tag(bytes: &[u8], i: usize) -> (usize, Option<u8>, bool, bool) {
     let mut kind = None;
     if j < len { kind = Some(bytes[j]); }
     let mut is_self_closing = false;
-    while j < len && bytes[j] != b'>' {
-        if bytes[j] == b'/' && j + 1 < len && bytes[j + 1] == b'>' {
+    let mut in_quotes = None;
+
+    while j < len {
+        let b = bytes[j];
+        if let Some(q) = in_quotes {
+            if b == q { in_quotes = None; }
+        } else if b == b'"' || b == b'\'' {
+            in_quotes = Some(b);
+        } else if b == b'>' {
+            break;
+        } else if b == b'/' && j + 1 < len && bytes[j + 1] == b'>' {
             is_self_closing = true;
             break;
         }
@@ -82,7 +94,6 @@ fn parse_tag(bytes: &[u8], i: usize) -> (usize, Option<u8>, bool, bool) {
 
 struct ParsedWikiLink<'a> {
     raw_target: &'a str,
-    full_target: String,
     page: &'a str,
     fragment: &'a str,
     label: &'a str,
@@ -120,7 +131,6 @@ fn parse_wikilink_at<'a>(html: &'a str, bytes: &[u8], i: usize) -> Option<(usize
             
             return Some((end, ParsedWikiLink {
                 raw_target,
-                full_target: raw_target.to_string(),
                 page,
                 fragment,
                 label,
@@ -177,14 +187,15 @@ fn push_default_display(out: &mut String, page: &str, fragment: &str) {
     }
 }
 
-fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bool) {
+fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bool, Vec<String>) {
     let bytes = html.as_bytes();
     let len = bytes.len();
     let mut out = String::with_capacity(len + 1024);
     let mut has_wiki_links = false;
     let mut has_wiki_embeds = false;
     let mut has_hashtags = false;
-    let mut extracted_links = Vec::new();
+    let mut extracted_hashtags = std::collections::HashSet::new();
+    let mut extracted_links = Vec::with_capacity(16);
     let mut last = 0;
     let mut skip_depth: i32 = 0;
     let mut i = 0;
@@ -202,14 +213,17 @@ fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bo
                              tag_html.contains("language-math");
 
                 if !is_self_closing {
-                    let tag_name = if is_closing {
-                        tag_html.trim_start_matches("</").trim_end_matches('>').trim().to_lowercase()
+                    let tag_name_raw = if is_closing {
+                        tag_html.trim_start_matches("</").trim_end_matches('>').trim()
                     } else {
                         tag_html.trim_start_matches('<').trim_end_matches('>').trim_end_matches('/').trim()
-                            .split_whitespace().next().unwrap_or("").to_lowercase()
+                            .split_whitespace().next().unwrap_or("")
                     };
 
-                    let should_skip = tag_name == "a" || tag_name == "code" || tag_name == "pre" || is_math;
+                    let should_skip = tag_name_raw.eq_ignore_ascii_case("a") || 
+                                     tag_name_raw.eq_ignore_ascii_case("code") || 
+                                     tag_name_raw.eq_ignore_ascii_case("pre") || 
+                                     is_math;
 
                     if should_skip {
                         if is_closing {
@@ -233,13 +247,13 @@ fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bo
                         if last < start_idx { out.push_str(&html[last..start_idx]); }
 
                         let is_image = is_image_ext(parts.page);
-                        let escaped_full = escape_html_attr(&parts.full_target);
+                        let escaped_full = escape_html_attr(parts.raw_target);
                         let escaped_page = escape_html_attr(parts.page);
-                        let escaped_frag = escape_html_attr(&parts.fragment);
+                        let escaped_frag = escape_html_attr(parts.fragment);
                         
                         extracted_links.push(WikiLink {
                             raw_target: parts.raw_target.to_string(),
-                            normalized_target: parts.full_target.to_lowercase(),
+                            normalized_target: parts.raw_target.to_lowercase(),
                             page: parts.page.to_string(),
                             fragment: parts.fragment.to_string(),
                             label: parts.label.to_string(),
@@ -319,21 +333,23 @@ fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bo
 
                     if is_start {
                         let start = i + 1;
-                        let mut j = start;
-                        while j < len {
-                            let b = bytes[j];
-                            if b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'/' {
-                                j += 1;
+                        let remaining = &html[start..];
+                        let mut end_offset = 0;
+                        for c in remaining.chars() {
+                            if c.is_alphanumeric() || c == '_' || c == '-' || c == '/' {
+                                end_offset += c.len_utf8();
                             } else {
                                 break;
                             }
                         }
+                        let j = start + end_offset;
 
                         if j > start {
                             let tag_name = &html[start..j];
-                            let has_alpha = tag_name.bytes().any(|b| b.is_ascii_alphabetic() || b == b'_' || b == b'-' || b == b'/');
+                            // In Obsidian, tags must contain at least one non-digit character
+                            let is_valid = tag_name.chars().any(|c| !c.is_numeric() || c == '_' || c == '-' || c == '/');
                             
-                            if has_alpha {
+                            if is_valid {
                                 if last < i { out.push_str(&html[last..i]); }
                                 out.push_str("<span class=\"premium-tag md-hashtag\">#");
                                 out.push_str(&escape_html_text(tag_name));
@@ -341,6 +357,7 @@ fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bo
                                 i = j;
                                 last = i;
                                 has_hashtags = true;
+                                extracted_hashtags.insert(tag_name.to_string());
                                 continue;
                             }
                         }
@@ -348,12 +365,16 @@ fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bo
                 }
                 i += 1;
             }
-            _ => { i += 1; }
+            _ => i += 1,
         }
     }
 
-    if last < len { out.push_str(&html[last..len]); }
-    (out, has_wiki_links, has_wiki_embeds, extracted_links, has_hashtags)
+    if last < len { out.push_str(&html[last..]); }
+    
+    let mut tags: Vec<String> = extracted_hashtags.into_iter().collect();
+    tags.sort();
+
+    (out, has_wiki_links, has_wiki_embeds, extracted_links, has_hashtags, tags)
 }
 
 fn convert_admonition_blocks(input: &str) -> String {
@@ -526,6 +547,7 @@ pub fn parse_content_native(input: &str) -> Result<ParseResult, String> {
                 math_text: false, // Disable built-in math to avoid escaping placeholders
                 math_flow: false,
                 frontmatter: false,
+                gfm_task_list_item: false,
                 ..markdown::Constructs::gfm()
             },
             ..markdown::ParseOptions::gfm()
@@ -557,7 +579,7 @@ pub fn parse_content_native(input: &str) -> Result<ParseResult, String> {
         let closing_tag = &caps[4];
 
         // Ensure the opening and closing tags match (h1-h6)
-        if tag.to_lowercase() != closing_tag.to_lowercase() {
+        if !tag.eq_ignore_ascii_case(closing_tag) {
             return caps[0].to_string();
         }
         
@@ -565,11 +587,12 @@ pub fn parse_content_native(input: &str) -> Result<ParseResult, String> {
             return caps[0].to_string();
         }
 
-        let clean_text = HTML_TAG_RE.replace_all(content, "").trim().to_lowercase();
-        let mut slug = String::with_capacity(clean_text.len());
-        for c in clean_text.chars() {
+        let clean_text = HTML_TAG_RE.replace_all(content, "");
+        let clean_text_trimmed = clean_text.trim();
+        let mut slug = String::with_capacity(clean_text_trimmed.len());
+        for c in clean_text_trimmed.chars() {
             if c.is_alphanumeric() {
-                slug.push(c);
+                slug.push(c.to_ascii_lowercase());
             } else if c.is_whitespace() || c == '-' || c == '_' {
                 if !slug.ends_with('-') && !slug.is_empty() {
                     slug.push('-');
@@ -597,6 +620,7 @@ pub fn parse_content_native(input: &str) -> Result<ParseResult, String> {
             "/" => ("task-incomplete", false),
             "?" => ("task-question", false),
             "x" | "X" => ("task-completed", true),
+            " " => ("task-incomplete", false),
             _ => ("task-custom", false),
         };
         format!(
@@ -701,34 +725,49 @@ pub fn parse_content_native(input: &str) -> Result<ParseResult, String> {
     }).to_string();
 
     // Pass 3: Wiki Links, Hashtags & Math Re-injection
-    let (mut html, has_wiki_links, has_wiki_embeds, links, has_hashtags) = process_inline_entities(&html);
+    let (html, has_wiki_links, has_wiki_embeds, links, has_hashtags, hashtags) = process_inline_entities(&html);
 
-    for (idx, (formula, is_block)) in math_store.iter().enumerate() {
-        let placeholder = format!("SPARKLE_MATH_PLACEHOLDER_{}X", idx);
-        let element = if *is_block {
-            format!(
-                r#"<span class="sparkle-math math-block sentinel-math-block not-prose" data-tex="{}"></span>"#,
-                escape_html_attr(formula)
-            )
-        } else {
-            format!(
-                r#"<span class="sparkle-math math-inline sentinel-math-inline" data-tex="{}"></span>"#,
-                escape_html_attr(formula)
-            )
-        };
-        html = html.replace(&placeholder, &element);
+    // Optimized Single-Pass Math Re-injection
+    let mut final_html = String::with_capacity(html.len() + math_store.len() * 128);
+    let mut last_pos = 0;
+    while let Some(pos) = html[last_pos..].find("SPARKLE_MATH_PLACEHOLDER_") {
+        let absolute_pos = last_pos + pos;
+        final_html.push_str(&html[last_pos..absolute_pos]);
+        
+        let tail = &html[absolute_pos + "SPARKLE_MATH_PLACEHOLDER_".len()..];
+        if let Some(x_pos) = tail.find('X') {
+            if let Ok(idx) = tail[..x_pos].parse::<usize>() {
+                if let Some((formula, is_block)) = math_store.get(idx) {
+                    if *is_block {
+                        final_html.push_str(r#"<span class="sparkle-math math-block sentinel-math-block not-prose" data-tex=""#);
+                        final_html.push_str(&escape_html_attr(formula));
+                        final_html.push_str(r#""></span>"#);
+                    } else {
+                        final_html.push_str(r#"<span class="sparkle-math math-inline sentinel-math-inline" data-tex=""#);
+                        final_html.push_str(&escape_html_attr(formula));
+                        final_html.push_str(r#""></span>"#);
+                    }
+                }
+                last_pos = absolute_pos + "SPARKLE_MATH_PLACEHOLDER_".len() + x_pos + 1;
+                continue;
+            }
+        }
+        // Fallback for malformed placeholders
+        final_html.push_str("SPARKLE_MATH_PLACEHOLDER_");
+        last_pos = absolute_pos + "SPARKLE_MATH_PLACEHOLDER_".len();
     }
+    final_html.push_str(&html[last_pos..]);
     
     // Pass 4: Restore escaped hashtags
-    html = html.replace(ESCAPED_HASH_PLACEHOLDER, r#"<span class="not-a-tag">#</span>"#);
+    let final_html = final_html.replace(ESCAPED_HASH_PLACEHOLDER, r#"<span class="not-a-tag">#</span>"#);
 
     let has_math = !math_store.is_empty();
-    let has_code = CODE_TAG_RE.is_match(&html);
-    let has_table = TABLE_TAG_RE.is_match(&html);
-    let hash = simple_hash(&html);
+    let has_code = CODE_TAG_RE.is_match(&final_html);
+    let has_table = TABLE_TAG_RE.is_match(&final_html);
+    let hash = simple_hash(&final_html);
 
     Ok(ParseResult {
-        html,
+        html: final_html,
         hash,
         has_math,
         has_code,
@@ -737,6 +776,7 @@ pub fn parse_content_native(input: &str) -> Result<ParseResult, String> {
         has_wiki_embeds,
         has_hashtags,
         links,
+        hashtags,
     })
 }
 

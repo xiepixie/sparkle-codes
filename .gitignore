@@ -15,18 +15,17 @@ coverage/
 !.env.*.example
 !.env.production.example
 
-# Build artifacts
-.next/
-.turbo/
-dist/
-coverage/
-out/
-build/
-*.tsbuildinfo
-next-env.d.ts
-
-# Cache files
-.content-collections/
+# Cache & Build Artifacts
+**/.content-collections/
+**/.source/
+**/.next/
+**/.turbo/
+**/dist/
+**/coverage/
+**/out/
+**/build/
+**/*.tsbuildinfo
+**/next-env.d.ts
 .eslintcache
 .stylelintcache
 .parcel-cache
@@ -35,11 +34,19 @@ pnpm-debug.log*
 .pnpm-debug.log*
 node_modules/.cache/
 
-# OS files
+# Temporary and OS files
 .DS_Store
 Thumbs.db
+*.swp
+*.log
+.temp/
+.tmp/
 
 # Misc
 .vercel
 *.pem
 .impeccable.md
+
+# Rust/Cargo Build Artifacts
+target/
+.cargo-target/

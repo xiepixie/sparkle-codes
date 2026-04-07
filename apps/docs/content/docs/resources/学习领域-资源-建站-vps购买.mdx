@@ -105,7 +105,7 @@ ssh -L 8888:127.0.0.1:28443 root@154.36.155.185
 
 源站 1Panel 证书配置完毕后，需执行最终的 CDN 安全策略：
 
-* 进入 Cloudflare 控制台 -> `SSL/TLS` -> `概述 (Overview)`。
+* 进入 Cloudflare 控制台 -&gt; `SSL/TLS` -&gt; `概述 (Overview)`。
 * 将加密模式由灵活/完全，提升为 **完全 (严格) / Full (Strict)**。
 * 此模式下，Cloudflare 将强制验证源站证书的合法性，彻底杜绝中间人攻击。
 

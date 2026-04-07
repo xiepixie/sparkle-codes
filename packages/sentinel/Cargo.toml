@@ -28,6 +28,7 @@ hex = "0.4"
 yaml-rust2 = "0.9"
 urlencoding = "2.1"
 cuid2 = "0.1"
+once_cell = "1.19"
 
 
 # Serialization

@@ -41,8 +41,15 @@ ARG DATABASE_URL
 ARG NEXT_PUBLIC_DOCS_URL
 ARG NEXT_PUBLIC_WEB_URL
 
-# 使用缓存挂载加速 Turbo 构建
+# 使用全链路缓存阵容：
+# 1. node_modules/.cache (编译器缓存)
+# 2. apps/web/.next/cache (Web 增量生成缓存)
+# 3. apps/docs/.next/cache (Docs 增量生成缓存)
+# 4. .turbo (Turbo 任务指纹缓存)
 RUN --mount=type=cache,target=/app/node_modules/.cache \
+    --mount=type=cache,target=/app/apps/web/.next/cache \
+    --mount=type=cache,target=/app/apps/docs/.next/cache \
+    --mount=type=cache,target=/app/.turbo \
     DATABASE_URL=$DATABASE_URL \
     NEXT_PUBLIC_DOCS_URL=$NEXT_PUBLIC_DOCS_URL \
     NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \

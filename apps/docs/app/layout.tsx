@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import { StarCursorWrapper } from "./StarCursorWrapper";
 import { getAppUrl } from "@repo/utils";
 import { source } from "@/lib/source";
+import { ExternalLink } from "lucide-react";
 
 const serif = Playfair_Display({
 	subsets: ["latin"],
@@ -53,14 +54,21 @@ export default async function Layout({ children }: { children: React.ReactNode }
 								</span>
 							),
 						}}
-						links={[
-							{ 
-								text: "Main Site", 
-								url: getAppUrl('web'), 
-								// @ts-ignore
-								external: true,
-							},
-						]}
+						sidebar={{
+							footer: (
+								<div key="sidebar-footer-link" className="flex items-center justify-end">
+									<a
+										href={getAppUrl("web")}
+										target="_blank"
+										rel="noreferrer"
+										className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-muted-foreground transition-all hover:text-foreground bg-secondary/50 border border-border rounded-full hover:bg-secondary hover:border-border/80 group"
+									>
+										<ExternalLink className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 opacity-70 group-hover:opacity-100" />
+										<span>Main Site</span>
+									</a>
+								</div>
+							),
+						}}
 					>
 						{children}
 					</DocsLayout>

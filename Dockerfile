@@ -5,62 +5,74 @@ ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 RUN apk add --no-cache libc6-compat
 
-# --- Installer ---
-FROM base AS installer
+# --- Pruner ---
+# 提取构建特定应用所需的最小依赖树
+FROM base AS pruner
 WORKDIR /app
 COPY . .
-# 1. 安装全量依赖。如果你发现某些组件（如 Prisma/esbuild）缺少二进制文件，
-# 请考虑移除 --ignore-scripts 或者专门 rebuild。
-RUN pnpm install --frozen-lockfile --ignore-scripts
-# 2. 生成必要的文档映射文件等
+RUN npx turbo prune --scope=web --scope=docs --docker
+
+# --- Installer ---
+# 仅在协议文件（package.json/lockfile）变化时安装依赖
+FROM base AS installer
+WORKDIR /app
+
+# 复制 pruned 后的 json 与 lockfile
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./
+
+# 使用 BuildKit 缓存挂载 pnpm store，极大加速增量下载
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
+
+# --- Builder ---
+FROM base AS builder
+WORKDIR /app
+
+# 继承依赖与全量源码
+COPY --from=installer /app/ .
+COPY --from=pruner /app/out/full/ .
+COPY .gitignore .gitignore
+
+# 预生成文档映射（如果 docs 有变动）
 RUN pnpm --filter docs run postinstall
 
-# 环境变量声明，供构建使用
-ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/build-time-dummy
-ARG NEXT_PUBLIC_DOCS_URL=https://docs.sparkle.codes
-ARG NEXT_PUBLIC_WEB_URL=https://sparkle.codes
+# 注入构建参数
+ARG DATABASE_URL
+ARG NEXT_PUBLIC_DOCS_URL
+ARG NEXT_PUBLIC_WEB_URL
 
-# --- Builder Web ---
-FROM installer AS builder-web
-# 注入环境变量并单独构建 web
-RUN DATABASE_URL=$DATABASE_URL \
+# 使用缓存挂载加速 Turbo 构建
+RUN --mount=type=cache,target=/app/node_modules/.cache \
+    DATABASE_URL=$DATABASE_URL \
     NEXT_PUBLIC_DOCS_URL=$NEXT_PUBLIC_DOCS_URL \
     NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
-    pnpm turbo run build --filter=web
-
-# --- Builder Docs ---
-FROM installer AS builder-docs
-# 注入环境变量并单独构建 docs
-RUN DATABASE_URL=$DATABASE_URL \
-    NEXT_PUBLIC_DOCS_URL=$NEXT_PUBLIC_DOCS_URL \
-    NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
-    pnpm turbo run build --filter=docs
+    npx turbo run build --filter=web --filter=docs
 
 # --- Web Runner ---
-# 这里不再继承 base（不需要 corepack 和 pnpm），保持最纯净小巧
 FROM node:20-alpine AS runner-web
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-COPY --from=builder-web /app/apps/web/.next/standalone ./
-COPY --from=builder-web /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder-web /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
 
 # --- Docs Runner ---
-# 同样不继承 base
 FROM node:20-alpine AS runner-docs
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
 
-COPY --from=builder-docs /app/apps/docs/.next/standalone ./
-COPY --from=builder-docs /app/apps/docs/.next/static ./apps/docs/.next/static
+COPY --from=builder /app/apps/docs/.next/standalone ./
+COPY --from=builder /app/apps/docs/.next/static ./apps/docs/.next/static
+COPY --from=builder /app/apps/docs/public ./apps/docs/public
 
 EXPOSE 3001
 CMD ["node", "apps/docs/server.js"]
+

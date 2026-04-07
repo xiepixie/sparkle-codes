@@ -49,6 +49,9 @@
 
 		--fd-primary: var(--primary);
 		--fd-primary-foreground: var(--primary-foreground);
+
+		/* 侧边栏宽度优化：240px 更加紧致，解决项与边框间距过大的问题 */
+		--fd-sidebar-width: 240px;
 	}
 	
 	.dark {
@@ -101,8 +104,47 @@
 		opacity: 0.5;
 	}
 
-	/* 侧边栏选中态：从圆润药丸回归干练矩形 */
+	/* 侧边栏选中态：保持标准风格 */
 	.fd-sidebar-item-active {
 		border-radius: var(--radius-md) !important;
+	}
+
+	/* 侧边栏底部容器：改为水平同行并列排列，添加上边框增强结构感 */
+	aside .flex.flex-col.p-4.pt-2 {
+		flex-direction: row !important;
+		align-items: center !important;
+		justify-content: space-between !important;
+		gap: 0.5rem !important;
+		padding: 1rem !important; /* 让四周更加均匀 */
+		border-top: 1px solid color-mix(in oklab, var(--fd-border), transparent 50%) !important;
+	}
+
+	/* 精致地优化主题切换器，取消意外的长条满宽状态 */
+	aside .flex.flex-col.p-4.pt-2 > div:has([data-theme-toggle]) {
+		width: fit-content !important; 
+		margin: 0 !important;     /* 移除之前的强制居中 */
+		border-radius: 9999px !important; 
+		background: color-mix(in oklab, var(--fd-secondary), transparent 60%) !important;
+		padding: 2px !important; 
+		min-width: unset !important;
+	}
+
+	/* 隐藏长条容器左侧可能存在的多余占位元素（搜索占位、垂直分割线等） */
+	aside .flex.flex-col.p-4.pt-2 > div:has([data-theme-toggle]) > :not([data-theme-toggle]) {
+		display: none !important;
+	}
+
+	/* 主题切换器内部的微调，让它更符合卡片质感 */
+	aside .flex.flex-col.p-4.pt-2 [data-theme-toggle] {
+		background: transparent !important;
+		border: none !important;
+		box-shadow: none !important;
+		margin: 0 !important;
+	}
+	
+	/* 优化 Main Site 按钮外层包裹，防止其本身带多余边距 */
+	aside .flex.flex-col.p-4.pt-2 > div:not(:has([data-theme-toggle])) {
+		margin: 0 !important;
+		padding: 0 !important;
 	}
 }

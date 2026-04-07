@@ -420,3 +420,28 @@
         }
     }
 }
+
+/* Math Interaction */
+.math-block, .math-inline, .math-display {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: opacity 0.2s ease;
+}
+
+.math-block:hover, .math-inline:hover {
+    opacity: 0.85;
+}
+
+.math-transitioning {
+    transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+
+/* Thin LaTeX Source Editor Header - Delegated to code-fence.css @layer overrides */
+/* Keep only specific functional triggers if needed, but remove all aesthetic !importants */
+
+/* =========================================
+   End of Global Styles
+   ========================================= */

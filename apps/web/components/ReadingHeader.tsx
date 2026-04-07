@@ -1,5 +1,6 @@
 "use client";
 
+import { getAppUrl } from "@repo/utils";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence, useScroll, useSpring, useTransform } from "framer-motion";
 import { Search, Hash, ChevronRight, FileText, Menu } from "lucide-react";
@@ -69,7 +70,7 @@ function TrustedInlineHtml({ className, html }: { className?: string; html: stri
 const readingMenuItems = [
 	{ label: "Home", href: "/" },
 	{ label: "Blog", href: "/blog" },
-	{ label: "Docs", href: "/docs", external: true },
+	{ label: "Docs", href: getAppUrl('docs') },
 ];
 
 export function ReadingHeader({ 
@@ -521,13 +522,14 @@ export function ReadingHeader({
 
 									<div className="flex flex-col gap-3 sm:gap-4">
 										{readingMenuItems.map((item) => {
-											const Comp = item.external ? "a" : (Link as any);
+											const isExternal = item.href.startsWith("http");
+											const Comp = isExternal ? "a" : (Link as any);
 
 											return (
 												<Comp
 													key={item.href}
 													href={item.href}
-													{...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+													{...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
 													onClick={() => handleMenuOpenChange(false)}
 													className="rounded-2xl px-2 py-2 text-lg font-semibold text-muted-foreground transition-all hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:text-xl"
 												>

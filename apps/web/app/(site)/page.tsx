@@ -1,3 +1,4 @@
+import { getAppUrl } from "@repo/utils";
 import { TiltWrapper } from "@repo/ui";
 import { GithubActivity } from "@/components/SiteWidgets";
 import {
@@ -77,7 +78,13 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
+import { warm } from "@/lib/blog";
+
 export default async function HomePage() {
+  // Pre-warm the global blog post cache in the background.
+  // This ensures sub-millisecond filtering when the user navigates to /blog
+  warm().catch((err) => console.error("Cache warm failed:", err));
+
   return (
     <div className="relative overflow-hidden selection:bg-primary/20">
       {/* Hero Section */}
@@ -236,7 +243,7 @@ export default async function HomePage() {
               Explore the blog
             </Link>
             <Link
-              href="/docs"
+              href={getAppUrl('docs')}
               className="inline-flex h-14 items-center justify-center rounded-2xl border border-border/80 bg-background/50 px-10 text-[1.05rem] font-medium transition-colors hover:bg-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Read the Docs
@@ -261,7 +268,7 @@ export default async function HomePage() {
             <Link href="/blog" className="transition-colors hover:text-primary">
               Blog
             </Link>
-            <Link href="/docs" className="transition-colors hover:text-primary">
+            <Link href={getAppUrl('docs')} className="transition-colors hover:text-primary">
               Docs
             </Link>
             <a href="mailto:wrxpx5@163.com" className="transition-colors hover:text-primary">

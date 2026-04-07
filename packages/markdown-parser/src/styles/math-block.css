@@ -146,17 +146,41 @@
 
     /* LaTeX Source Highlighting (Premium Mode) */
     .latex-source {
-        border: 1.5px solid color-mix(in srgb, var(--md-primary), transparent 70%) !important;
-        box-shadow: 0 20px 50px -12px color-mix(in srgb, var(--md-primary), transparent 75%);
-        background: color-mix(in srgb, var(--md-primary), transparent 92%) !important;
+        border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%) !important;
+        box-shadow: 0 10px 40px -10px color-mix(in srgb, var(--md-primary), transparent 90%),
+                    0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 95%);
+        background: color-mix(in srgb, var(--background), transparent 10%) !important;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         border-radius: var(--radius-xl, 16px);
-        margin: 2rem 0 !important;
+        margin-top: -2rem !important; /* 'Lift' the editor to occupy the container's padding zone */
+        margin-bottom: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    .latex-source:hover {
+        border-color: color-mix(in srgb, var(--md-primary), transparent 70%) !important;
+        box-shadow: 0 15px 40px -10px color-mix(in srgb, var(--md-primary), transparent 85%),
+                    0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 85%);
     }
 
     .latex-source .code-fence-header {
-        background: color-mix(in oklab, var(--md-primary) 16%, white 84%);
-        border-bottom: 1px solid color-mix(in srgb, var(--md-primary), transparent 52%);
-        color: color-mix(in oklab, var(--md-primary) 58%, black 42%);
+        background: transparent;
+        padding: 6px 12px;
+        min-height: 30px;
+        border-bottom: 1px solid color-mix(in srgb, var(--md-border), transparent 60%);
+        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
+    }
+
+    .latex-source .code-dots {
+        gap: 6px;
+    }
+
+    .latex-source .code-dot {
+        width: 10px;
+        height: 10px;
     }
 
     .latex-header-actions {
@@ -165,12 +189,12 @@
 
     .latex-header-label {
         padding-inline: 0.5rem;
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.16em;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: color-mix(in oklab, var(--md-primary) 42%, black 58%);
-        opacity: 0.72;
+        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
+        opacity: 0.8;
     }
 
     .latex-source .format-toggle-btn,
@@ -179,57 +203,70 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 2rem;
-        padding: 0.35rem 0.7rem;
-        border-radius: 0.55rem;
+        min-height: 1.75rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 0.4rem;
         border: 1px solid transparent;
-        font-size: 9px;
-        font-weight: 900;
-        letter-spacing: 0.12em;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
     }
 
     .latex-source .format-toggle-btn {
-        color: color-mix(in oklab, var(--md-primary) 48%, black 52%);
-        background: color-mix(in oklab, var(--md-primary) 10%, white 90%);
-        border-color: color-mix(in srgb, var(--md-primary), transparent 82%);
+        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
+        background: transparent;
+        border-color: transparent;
     }
 
     .latex-source .format-toggle-btn[data-active="true"] {
-        color: white;
-        background: color-mix(in oklab, var(--md-primary) 84%, black 16%);
-        border-color: color-mix(in srgb, var(--md-primary), transparent 24%);
-        box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--md-primary), transparent 22%);
+        color: var(--md-primary);
+        background: color-mix(in srgb, var(--md-primary), transparent 92%);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 80%);
+        box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--md-primary), transparent 85%);
     }
 
     .latex-source .format-toggle-btn[data-active="false"]:hover,
     .latex-source .code-copy-btn-math:hover,
     .latex-source .code-close-btn:hover {
-        background: color-mix(in oklab, var(--md-primary) 14%, white 86%);
-        color: color-mix(in oklab, var(--md-primary) 72%, black 28%);
-        border-color: color-mix(in srgb, var(--md-primary), transparent 68%);
+        background: color-mix(in srgb, var(--md-foreground), transparent 94%);
+        color: var(--md-foreground);
     }
 
-    .latex-source .code-copy-btn-math {
-        color: color-mix(in oklab, var(--md-primary) 80%, black 20%);
-        background: color-mix(in oklab, var(--md-primary) 14%, white 86%);
-        border-color: color-mix(in srgb, var(--md-primary), transparent 70%);
-    }
-
+    .latex-source .code-copy-btn-math,
     .latex-source .code-close-btn {
-        color: color-mix(in oklab, var(--md-primary) 44%, black 56%);
-        background: rgba(255, 255, 255, 0.42);
-        border-color: color-mix(in srgb, var(--md-primary), transparent 84%);
+        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
+        background: transparent;
+        border-color: transparent;
     }
 
     .latex-source .code-dots {
         opacity: 0.9;
     }
 
+    .dark .latex-source {
+        background: rgba(12, 12, 17, 0.6) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                    0 10px 40px -10px rgba(0, 0, 0, 0.5);
+    }
+
     .dark .latex-source .code-fence-header {
-        background: color-mix(in srgb, var(--md-primary), transparent 80%);
-        border-bottom: 1px solid color-mix(in srgb, var(--md-primary), transparent 60%);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
+    }
+
+    .dark .latex-source:hover {
+        border-color: color-mix(in srgb, var(--md-primary), transparent 50%) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 
+                    0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 80%),
+                    0 15px 40px -10px color-mix(in srgb, var(--md-primary), transparent 90%);
+    }
+
+    .dark .latex-source .code-fence-header {
+        background: color-mix(in srgb, var(--md-card-header), transparent 60%);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         color: white;
     }
 
@@ -300,7 +337,7 @@
     }
 
     .math-block.source-mode {
-        padding: 0;
+        padding: 2rem 0; /* Restored: Maintain original box model for alignment anchor */
         border: none;
         background: transparent;
         box-shadow: none;
@@ -332,7 +369,8 @@
         }
 
         .latex-source {
-            margin: 1.25rem 0 !important;
+            margin-top: -1rem !important; /* Mobile lift matches 1rem padding */
+            margin-bottom: 0.5rem !important;
             border-radius: var(--radius-xl, 14px);
         }
 

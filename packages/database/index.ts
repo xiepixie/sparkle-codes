@@ -27,18 +27,26 @@ export function isBuildTimeDatabaseStub(url = getDatabaseUrl()) {
 	return url?.includes("build-time-dummy") ?? false;
 }
 
-export function hasUsableDatabaseUrl(url = getDatabaseUrl()) {
-	if (!url || isBuildTimeDatabaseStub(url)) {
+export const hasUsableDatabaseUrl = (url = getDatabaseUrl()) => {
+	const isDummy = isBuildTimeDatabaseStub(url);
+
+	if (!url || isDummy) {
 		return false;
 	}
 
 	try {
-		const parsed = new URL(url);
-		return parsed.protocol === "postgresql:" && Boolean(parsed.hostname) && parsed.pathname.length > 1;
+		const urlObj = new URL(url);
+		return (
+			(urlObj.protocol === "postgresql:" || urlObj.protocol === "postgres:") &&
+			Boolean(urlObj.hostname) &&
+			urlObj.pathname.length > 1
+		);
 	} catch {
 		return false;
 	}
-}
+};
+
+
 
 function createDb() {
 	const url = getDatabaseUrl();

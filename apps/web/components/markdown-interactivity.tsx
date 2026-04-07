@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { generateContentHash } from "@repo/utils";
+import DOMPurify from "dompurify";
 import katex from "katex";
 import "katex/dist/katex.min.css";
-import DOMPurify from "dompurify";
 import mermaid from "mermaid";
-import { ChevronRight, Anchor } from "lucide-react";
 import { useTheme } from "next-themes";
-import { generateContentHash } from "@repo/utils";
+import Image from "next/image";
+import React, { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 /**
  * --- UTILITIES START ---
@@ -20,11 +20,11 @@ const LATEX_SYMBOLS = new Set(['\\sum', '\\int', '\\prod', '\\partial', '\\nabla
 
 function escapeHtml(str: string): string {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function highlightLatex(tex: string): string {
@@ -44,24 +44,24 @@ function highlightLatex(tex: string): string {
   };
 
   source = source.replace(/\\\\/g, m => createToken(m, 'text-muted-foreground opacity-50'));
-  source = source.replace(/(\\begin\{[^\}]+\})|(\\end\{[^\}]+\})/g, m => createToken(m, 'text-primary font-bold'));
+  source = source.replace(/(\\begin\{[^}]+\})|(\\end\{[^}]+\})/g, m => createToken(m, 'text-primary font-bold'));
   
-  source = source.replace(/(\\text\{)([^\}]+)(\})/g, (_match, p1, p2, p3) => {
+  source = source.replace(/(\\text\{)([^}]+)(\})/g, (_match, p1, p2, p3) => {
     return createToken(p1, 'text-primary font-bold') + p2 + createToken(p3, 'text-primary font-bold');
   });
 
   source = source.replace(/(\\[a-zA-Z]+)/g, (match) => {
-    if (LATEX_GREEK.has(match)) return createToken(match, 'text-amber-500 font-bold');
-    if (LATEX_FUNCTIONS.has(match)) return createToken(match, 'text-blue-500 italic font-bold');
-    if (LATEX_SYMBOLS.has(match)) return createToken(match, 'text-primary font-bold');
+    if (LATEX_GREEK.has(match)) { return createToken(match, 'text-amber-500 font-bold'); }
+    if (LATEX_FUNCTIONS.has(match)) { return createToken(match, 'text-blue-500 italic font-bold'); }
+    if (LATEX_SYMBOLS.has(match)) { return createToken(match, 'text-primary font-bold'); }
     return createToken(match, 'text-primary font-medium');
   });
 
-  source = source.replace(/(\{)([a-zA-Z\*]+)(\})/g, (_match, p1, p2, p3) => {
+  source = source.replace(/(\{)([a-zA-Z*]+)(\})/g, (_match, p1, p2, p3) => {
     return createToken(p1, 'opacity-50') + createToken(p2, 'text-blue-400') + createToken(p3, 'opacity-50');
   });
-  source = source.replace(/[\{\}\[\]\(\)]/g, m => createToken(m, 'opacity-50 font-bold'));
-  source = source.replace(/[&_^=+\-*\/<>]|\\pm|\\mp|\\to|\\approx/g, m => createToken(m, 'text-amber-500 font-bold'));
+  source = source.replace(/[{}[\]()]/g, m => createToken(m, 'opacity-50 font-bold'));
+  source = source.replace(/[&_^=+\-*/<>]|\\pm|\\mp|\\to|\\approx/g, m => createToken(m, 'text-amber-500 font-bold'));
 
   source = escapeHtml(source);
   for (const token of tokens) {
@@ -81,14 +81,14 @@ function formatLatexSource(tex: string): string[] {
     .replace(/\r/g, '\n');
 
   // Insert logical line breaks for high-fidelity source viewing
-  source = source.replace(/(\\begin\{[^\}]+\})/g, '\n$1\n');
-  source = source.replace(/(\\end\{[^\}]+\})/g, '\n$1\n');
+  source = source.replace(/(\\begin\{[^}]+\})/g, '\n$1\n');
+  source = source.replace(/(\\end\{[^}]+\})/g, '\n$1\n');
   source = source.replace(/\\\\/g, '\\\\\n');
   
   // Clean up excessive newlines and whitespace
   source = source.replace(/\n\s*\n/g, '\n');
 
-  let rawLines = source.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const rawLines = source.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const nestingEnvs = new Set(['aligned', 'align', 'align*', 'cases', 'matrix', 'pmatrix', 'bmatrix', 'array', 'equation', 'gather', 'split']);
 
   const result: string[] = [];
@@ -96,8 +96,8 @@ function formatLatexSource(tex: string): string[] {
   const INDENT = '    '; // Premium 4-space indent
 
   for (const line of rawLines) {
-    const endMatch = line.match(/^\\end\{([\w\*]+)\}/);
-    if (endMatch && nestingEnvs.has(endMatch[1])) depth = Math.max(0, depth - 1);
+    const endMatch = line.match(/^\\end\{([\w*]+)\}/);
+    if (endMatch && nestingEnvs.has(endMatch[1])) { depth = Math.max(0, depth - 1); }
     
     // Space out alignment symbols (&) for premium visual structure
     // Special handling for double alignment symbols (&&) common in some environments
@@ -106,14 +106,14 @@ function formatLatexSource(tex: string): string[] {
     
     result.push(INDENT.repeat(depth) + formattedLine);
     
-    const beginMatch = line.match(/^\\begin\{([\w\*]+)\}/);
-    if (beginMatch && nestingEnvs.has(beginMatch[1]) && !line.includes('\\end{' + beginMatch[1] + '}')) depth++;
+    const beginMatch = line.match(/^\\begin\{([\w*]+)\}/);
+    if (beginMatch && nestingEnvs.has(beginMatch[1]) && !line.includes(`\\end{${beginMatch[1]}}`)) { depth++; }
   }
-  return result.length > 0 ? result : [''];
+  return result.length > 0 ? result : [""];
 }
 
 function cleanMathSource(tex: string): string {
-  if (!tex) return "";
+  if (!tex) { return ""; }
   let cleaned = tex
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -142,9 +142,9 @@ function getLatexCopyContent(tex: string, isBlock: boolean, format: 'dollar' | '
 }
 
 function renderMathElement(el: HTMLElement) {
-  if (el.dataset.renderedKey) return;
+  if (el.dataset.renderedKey) { return; }
   const tex = cleanMathSource(el.dataset.tex || el.textContent || "");
-  if (!tex) return;
+  if (!tex) { return; }
 
   const isDisplay = el.classList.contains("math-block") || el.classList.contains("math-display") || el.classList.contains("math-block-long");
   const complexityScore = tex.length 
@@ -174,9 +174,10 @@ function renderMathElement(el: HTMLElement) {
   }
 }
 
-const ric = typeof window !== 'undefined' 
-  ? (window.requestIdleCallback || ((cb: any) => setTimeout(cb, 1))) 
-  : ((cb: any) => setTimeout(cb, 1));
+const ric = (typeof window !== 'undefined' && window.requestIdleCallback)
+  ? window.requestIdleCallback.bind(window)
+  : (cb: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void, _options?: { timeout?: number }) => 
+      setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 10 }), 1);
 
 class MathRenderHub {
   private observer: IntersectionObserver;
@@ -195,7 +196,7 @@ class MathRenderHub {
         if (entry.isIntersecting) {
           const el = entry.target as HTMLElement;
           this.observer.unobserve(el);
-          if (!el.dataset.renderedKey) toRender.push(el);
+          if (!el.dataset.renderedKey) { toRender.push(el); }
         }
       });
       if (toRender.length > 0) {
@@ -208,42 +209,42 @@ class MathRenderHub {
   }
 
   public register(el: HTMLElement) {
-    if (el.dataset.renderedKey) return;
+    if (el.dataset.renderedKey) { return; }
     this.observer.observe(el);
     this.queue.add(el);
     this.startIdleSweep();
   }
 
   public unregister(el: HTMLElement) {
-    if (this.observer.unobserve) this.observer.unobserve(el);
+    if (this.observer.unobserve) { this.observer.unobserve(el); }
     this.queue.delete(el);
   }
 
   private startIdleSweep() {
-    if (this.isSweepRunning || this.queue.size === 0) return;
+    if (this.isSweepRunning || this.queue.size === 0) { return; }
     this.isSweepRunning = true;
-    ric((deadline: any) => this.sweep(deadline), { timeout: 2000 });
+    ric((deadline: IdleDeadline) => this.sweep(deadline), { timeout: 2000 });
   }
 
-  private sweep(deadline: any) {
+  private sweep(deadline: IdleDeadline) {
     const items = Array.from(this.queue);
     let processed = 0;
     while (processed < items.length && (deadline.timeRemaining() > 1 || deadline.didTimeout)) {
       const el = items[processed];
-      if (el && !el.dataset.rendered) renderMathElement(el);
+      if (el && !el.dataset.rendered) { renderMathElement(el); }
       this.queue.delete(el);
       processed++;
-      if (processed >= 8) break;
+      if (processed >= 8) { break; }
     }
     this.isSweepRunning = false;
-    if (this.queue.size > 0) this.startIdleSweep();
+    if (this.queue.size > 0) { this.startIdleSweep(); }
   }
 }
 
 const mathHub = typeof window !== 'undefined' ? new MathRenderHub() : null;
 
 function supportsFinePointer() {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") { return false; }
   return window.matchMedia("(pointer: fine)").matches && !window.matchMedia("(hover: none)").matches;
 }
 
@@ -270,47 +271,57 @@ function extractSection(html: string, fragment: string): string {
 
   for (const f of fragments) {
     let candidates: Element[] = [];
-    if (!startNode) candidates = Array.from(temp.querySelectorAll('h1, h2, h3, h4, h5, h6'));
-    else {
+    if (!startNode) {
+        candidates = Array.from(temp.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+    } else {
       let curr = startNode.nextElementSibling;
       while (curr) {
         if (/^H[1-6]$/.test(curr.tagName)) {
-          const level = parseInt(curr.tagName[1]);
-          if (level <= currentLevel) break;
+          const level = Number.parseInt(curr.tagName[1], 10);
+          if (level <= currentLevel) { break; }
           candidates.push(curr);
         }
         curr = curr.nextElementSibling;
       }
     }
     const found = candidates.find(h => norm(h.textContent || '') === f);
-    if (!found) return '';
+    if (!found) { return ''; }
     startNode = found;
-    currentLevel = parseInt(found.tagName[1]);
+    currentLevel = Number.parseInt(found.tagName[1], 10);
   }
 
-  if (!startNode) return '';
+  if (!startNode) { return ''; }
   const fragment_nodes: Node[] = [startNode.cloneNode(true)];
   let cur = startNode.nextSibling;
   while (cur) {
     if (cur.nodeType === 1 && /^H[1-6]$/.test((cur as Element).tagName)) {
-      if (parseInt((cur as Element).tagName[1]) <= currentLevel) break;
+      if (Number.parseInt((cur as Element).tagName[1], 10) <= currentLevel) { break; }
     }
     fragment_nodes.push(cur.cloneNode(true));
     cur = cur.nextSibling;
   }
-  const wrap = document.createElement('div');
-  wrap.className = 'wiki-embed-section-content';
-  fragment_nodes.forEach(node => wrap.appendChild(node));
+  const wrap = document.createElement("div");
+  wrap.className = "wiki-embed-section-content";
+  for (const node of fragment_nodes) {
+    wrap.appendChild(node);
+  }
   return wrap.innerHTML;
 }
 
-function toggleMathSource(el: HTMLElement) {
-    if (!el) return;
+function toggleMathSource(el: HTMLElement, forceRefresh = false) {
+    if (!el) {
+        return;
+    }
     const animateSwap = (renderNext: () => void) => {
+        if (forceRefresh) {
+            renderNext();
+            return;
+        }
+
         const startHeight = el.getBoundingClientRect().height;
-        el.classList.add("math-transitioning");
         el.style.height = `${startHeight}px`;
         el.style.overflow = "hidden";
+        el.classList.add("math-transitioning");
 
         renderNext();
 
@@ -334,13 +345,19 @@ function toggleMathSource(el: HTMLElement) {
     };
 
     const isShowingSource = el.dataset.sourceMode === "true";
-    const rawTex = el.dataset.tex || (el.dataset.sourceMode ? "" : el.textContent) || "";
+    
+    // Safety: ensure raw tex is saved in a stable attribute if it's not already
+    if (!el.dataset.tex) {
+        el.dataset.tex = el.textContent || "";
+    }
+    
+    const rawTex = el.dataset.tex || "";
     const tex = cleanMathSource(rawTex);
     const isBlock = el.classList.contains('math-block') || el.classList.contains('math-display') || el.classList.contains('math-block-long');
     
     const currentFormat = (el.dataset.copyFormat as 'dollar' | 'bracket') || 'dollar';
     
-    if (isShowingSource) {
+    if (isShowingSource && !forceRefresh) {
         animateSwap(() => {
             el.classList.remove('show-source', 'source-mode');
             el.dataset.sourceMode = "false";
@@ -363,14 +380,14 @@ function toggleMathSource(el: HTMLElement) {
                         <div class="code-dots"><div class="code-dot code-dot-red"></div><div class="code-dot code-dot-amber"></div><div class="code-dot code-dot-green"></div></div>
                     </div>
                     <div class="code-header-right flex items-center gap-4">
-                        <span class="code-lang-text">LaTeX</span>
-                        <div class="latex-header-actions flex items-center gap-1 transition-all duration-300">
+                        <span class="latex-header-label">LATEX</span>
+                        <div class="latex-header-actions flex items-center gap-1.5 transition-all duration-300">
                            <span class="latex-header-label">FMT</span>
                            <button class="format-toggle-btn" data-active="${currentFormat === 'dollar'}" data-format="dollar">$</button>
                            <button class="format-toggle-btn" data-active="${currentFormat === 'bracket'}" data-format="bracket">\\[</button>
                            
-                           <button class="code-copy-btn-math ml-2" title="Copy Source"><span>COPY</span></button>
-                           <button class="code-close-btn"><span>BACK</span></button>
+                           <button class="code-copy-btn-math ml-2" title="Copy Source"><span class="tracking-[0.1em]">COPY</span></button>
+                           <button class="code-close-btn" title="Back to formula"><span>BACK</span></button>
                         </div>
                     </div>
                 </div>
@@ -388,7 +405,7 @@ function toggleMathSource(el: HTMLElement) {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const newFormat = (btn as HTMLElement).dataset.format as 'dollar' | 'bracket';
-                    if (newFormat === el.dataset.copyFormat) return;
+                    if (newFormat === el.dataset.copyFormat) { return; }
                     el.dataset.copyFormat = newFormat;
                     
                     // Force refresh source view without closing
@@ -397,7 +414,8 @@ function toggleMathSource(el: HTMLElement) {
                     toast.success(`Format changed to ${newFormat === 'dollar' ? '$$' : '\\['}`, { duration: 1000 });
                     
                     // Re-render only the internal element to avoid recursive toggle
-                    toggleMathSource(el); // Re-triggering toggle logic is safe here if we handle state carefully
+                    // Use a flag to indicate we are only updating format, not toggling visibility
+                    toggleMathSource(el, true); 
                 });
             });
 
@@ -407,23 +425,44 @@ function toggleMathSource(el: HTMLElement) {
             });
 
             el.querySelector('.code-copy-btn-math')?.addEventListener('click', (e) => {
+                const copyBtn = e.currentTarget as HTMLElement;
                 e.stopPropagation();
                 const format = (el.dataset.copyFormat as 'dollar' | 'bracket') || 'dollar';
                 const copyStr = getLatexCopyContent(tex, isBlock, format);
-                navigator.clipboard.writeText(copyStr);
-                toast.success("LaTeX source copied");
+                
+                navigator.clipboard.writeText(copyStr).then(() => {
+                  const span = copyBtn.querySelector("span");
+                  if (span) {
+                    const originalText = span.textContent;
+                    span.textContent = "COPIED";
+                    copyBtn.classList.add("!text-emerald-400", "scale-105");
+                    setTimeout(() => {
+                      if (span) { span.textContent = originalText; }
+                      copyBtn.classList.remove("!text-emerald-400", "scale-105");
+                    }, 2000);
+                  }
+                  toast.success("LaTeX source copied", {
+                    duration: 2000,
+                    icon: (
+                      <div className="flex items-center justify-center rounded-full bg-emerald-500/20 p-1">
+                    <svg role="img" aria-label="Success" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="text-emerald-500">
+                          <title>Success</title>
+                          <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                    )
+                  });
+                });
             });
           });
         } else {
             el.classList.add('show-source', 'source-mode');
             el.dataset.sourceMode = "true";
             el.innerHTML = `<code class="math-source-content !px-3 !py-1">${highlightLatex(tex)}</code>`;
-            // For inline, just closing on next click is fine
-            el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleMathSource(el);
-            }, { once: true });
+            // Unified: Let handleDblClick on the container handle the toggle back.
+            // We only need to ensure the container-level listener isn't blocked.
         }
+
 
         // Persistent Clipboard Action
         const copyContent = getLatexCopyContent(tex, isBlock, currentFormat);
@@ -435,7 +474,7 @@ function toggleMathSource(el: HTMLElement) {
 function ensureImageToolbarVisibility(root: HTMLElement, isFinePointer: boolean) {
   root.querySelectorAll(".wiki-image-wrapper").forEach((wrapper) => {
     const toolbar = wrapper.querySelector(".img-toolbar") as HTMLElement | null;
-    if (!toolbar) return;
+    if (!toolbar) { return; }
 
     if (isFinePointer) {
       toolbar.classList.remove("opacity-100", "translate-y-0");
@@ -492,7 +531,7 @@ interface PreviewState {
 export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
-  const { resolvedTheme, theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const mounted = useRef(false);
 
   useEffect(() => {
@@ -503,16 +542,17 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
   const sanitizedHtml = React.useMemo(() => {
     // We sanitize on the client to ensure security, but since we trust the server-generated 
     // content (from our Rust core), we suppress hydration warnings on the container.
-    if (typeof window === "undefined") return html;
+    if (typeof window === "undefined") { return html; }
     return DOMPurify.sanitize(html, {
-      ADD_TAGS: ["math", "annotation", "semantics", "mtext", "mn", "mo", "mi", "mspace", "mover", "munder", "msubsup", "mfrac", "msqrt", "mroot", "mtable", "mtr", "mtd", "merror", "mpadded", "mphantom", "mstyle", "msub", "msup", "mmultiscripts"],
-      ADD_ATTR: ["display", "encoding", "mathvariant", "data-tex", "data-embed-kind", "data-src", "data-target", "data-page", "data-fragment"]
+      ADD_TAGS: ["math", "annotation", "semantics", "mtext", "mn", "mo", "mi", "mspace", "mover", "munder", "msubsup", "mfrac", "msqrt", "mroot", "mtable", "mtr", "mtd", "merror", "mpadded", "mphantom", "mstyle", "msub", "msup", "mmultiscripts", "button", "svg", "path", "circle", "rect"],
+      ADD_ATTR: ["display", "encoding", "mathvariant", "data-tex", "data-embed-kind", "data-src", "data-target", "data-page", "data-fragment", "data-prefix", "data-lang", "data-pre-rendered", "data-rendered-key", "data-callout-type", "data-callout-fold", "data-filename", "data-code"],
+      ALLOW_DATA_ATTR: true
     });
   }, [html]);
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) { return; }
     const isFinePointer = supportsFinePointer();
 
     // --- Sub-transformers ---
@@ -660,14 +700,16 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
           const themeRendered = targetNode.dataset.renderedTheme;
 
           // Force re-render if theme changed
-          if (themeRendered === String(isDark)) continue;
+          if (themeRendered === String(isDark)) {
+            continue;
+          }
           
           if (!content) {
             // Robust extraction: Handle Shiki (.line), our custom mockup-code (.mockup-code > pre > code), or raw.
             const codeNode = block.tagName === "CODE" ? block : block.querySelector('code');
             if (codeNode) {
                 const clone = codeNode.cloneNode(true) as HTMLElement;
-                clone.querySelectorAll('.line-number, .line-numbers, [data-prefix], .prefix').forEach(n => n.remove());
+                clone.querySelectorAll('.line-number, .line-numbers, [data-prefix], .prefix').forEach(n => { n.remove(); });
                 const lines = clone.querySelectorAll('.line');
                 if (lines.length > 0) {
                     content = Array.from(lines).map(line => line.textContent || "").join('\n');
@@ -676,7 +718,7 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
                 }
             } else {
                 const clone = (block as HTMLElement).cloneNode(true) as HTMLElement;
-                clone.querySelectorAll('.line-number, .line-numbers, [data-prefix], .prefix').forEach(n => n.remove());
+                clone.querySelectorAll('.line-number, .line-numbers, [data-prefix], .prefix').forEach(n => { n.remove(); });
                 content = clone.innerText || clone.textContent || "";
             }
             
@@ -702,8 +744,8 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
           const { svg } = await mermaid.render(id, content);
           
           // Look for an existing render container sibling
-          let existingContainer = targetNode.nextElementSibling;
-          if (existingContainer && existingContainer.classList.contains('mermaid-render-container')) {
+          const existingContainer = targetNode.nextElementSibling;
+          if (existingContainer?.classList.contains('mermaid-render-container')) {
               existingContainer.innerHTML = svg;
           } else {
               const div = document.createElement("div");
@@ -721,7 +763,7 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
         const el = embed as HTMLElement;
         const kind = el.dataset.embedKind;
         const src = el.dataset.src || el.dataset.target; // Support both
-        if (!src) continue;
+        if (!src) { continue; }
 
         // 1. Handle Images (R2 Integration with Local Fallback)
         if (kind === "image") {
@@ -799,7 +841,7 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
             if (contentEl) {
               contentEl.innerHTML = content;
               el.classList.add("hydrated");
-              contentEl.querySelectorAll(".math-block, .math-inline").forEach(m => mathHub?.register(m as HTMLElement));
+              contentEl.querySelectorAll(".math-block, .math-inline").forEach(m => { mathHub?.register(m as HTMLElement); });
             }
           }
         } catch (e) { console.error("Wiki embed error:", e); }
@@ -813,10 +855,103 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
       const calloutHeader = target.closest(".md-callout-header");
       if (calloutHeader) {
           const callout = calloutHeader.closest(".md-callout") as HTMLElement;
-          if (callout && callout.hasAttribute("data-callout-fold")) {
+          if (callout?.hasAttribute("data-callout-fold")) {
               const current = callout.getAttribute("data-callout-fold");
               callout.setAttribute("data-callout-fold", current === "+" ? "-" : "+");
           }
+      }
+
+      // 0.1 Block single-click on math source view to avoid "accidental" toggle (Double-click only)
+      const mathSource = target.closest(".math-source-content, .latex-lines-container, .latex-source, .math-block.source-mode");
+      if (mathSource) {
+          // If we click inside the source view and it's not a button, we don't do anything on single click.
+          // This prevents single-click return as requested by the user.
+          if (!target.closest(".format-toggle-btn, .code-close-btn, .code-copy-btn-math")) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+          }
+      }
+
+      // 0.5 Handle Code Copying (Delegated)
+      const copyBtn = target.closest(".code-copy-btn");
+      if (copyBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        const codeFenceContainer = copyBtn.closest(".code-fence-container") as HTMLElement;
+        if (!codeFenceContainer) { return; }
+
+        // Strategy 1: Use the raw code injected in data-code attribute (Server-side strategy)
+        // Strategy 2: Fallback to DOM traversal of pre > code lines
+        let codeText = codeFenceContainer.getAttribute("data-code") || "";
+        
+        if (!codeText) {
+          const codeBlock = codeFenceContainer.querySelector(".mockup-code");
+          if (codeBlock) {
+            const pres = codeBlock.querySelectorAll("pre");
+            if (pres.length > 0) {
+              codeText = Array.from(pres)
+                .map(pre => {
+                  const code = pre.querySelector("code");
+                  return code ? code.textContent || "" : pre.textContent || "";
+                })
+                .join("\n");
+            } else {
+              codeText = (codeBlock as HTMLElement).innerText || "";
+            }
+          }
+        }
+        
+        if (codeText) {
+          const cleanContent = codeText.replace(/\n$/, ""); 
+          
+          // Special handling for LaTeX to use the correct user-selected format
+          let textToCopy = cleanContent;
+          const mathEl = copyBtn.closest(".math-block, .math-inline") as HTMLElement | null;
+          if (mathEl) {
+            const tex = mathEl.dataset.tex || "";
+            const isBlock = mathEl.classList.contains("math-block");
+            const format = (mathEl.dataset.copyFormat as "dollar" | "bracket") || (isBlock ? "bracket" : "dollar");
+            
+            if (isBlock) {
+                textToCopy = format === "dollar" ? `$$${tex}$$` : `\\[${tex}\\]`;
+            } else {
+                textToCopy = format === "dollar" ? `$${tex}$` : `\\(${tex}\\)`;
+            }
+          }
+
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            // Visual feedback on the button itself
+            const span = copyBtn.querySelector("span");
+            if (span) {
+              const originalText = span.textContent;
+              span.textContent = "COPIED";
+              copyBtn.classList.add("!text-emerald-400", "scale-110", "bg-emerald-500/10");
+              
+              setTimeout(() => {
+                if (span) { span.textContent = originalText; }
+                copyBtn.classList.remove("!text-emerald-400", "scale-110", "bg-emerald-500/10");
+              }, 2000);
+            }
+            
+            toast.success("Code copied", {
+              duration: 2000,
+              icon: (
+                <div className="flex items-center justify-center rounded-full bg-emerald-500/20 p-1">
+                  <svg role="img" aria-label="Success" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="text-emerald-400">
+                    <title>Success</title>
+                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              )
+            });
+          }).catch(err => {
+            console.error("Clipboard copy failed:", err);
+            toast.error("Clipboard access denied");
+          });
+        }
+        return;
       }
 
       // 1. Image Toolbar Actions (Copy & Download)
@@ -828,8 +963,19 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
         const filename = (imgActionBtn as HTMLElement).dataset.filename;
         
         if (imgActionBtn.classList.contains("copy-img-btn") && url) {
-          navigator.clipboard.writeText(url);
-          toast.success("Image URL copied to clipboard");
+          navigator.clipboard.writeText(url).then(() => {
+            toast.success("Image URL copied", {
+              duration: 2000,
+              icon: (
+                <div className="flex items-center justify-center rounded-full bg-emerald-500/20 p-1">
+                  <svg role="img" aria-label="Success" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="text-emerald-500">
+                    <title>Success</title>
+                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              )
+            });
+          });
         } else if (imgActionBtn.classList.contains("download-img-btn") && url) {
           const a = document.createElement("a");
           a.href = url;
@@ -838,24 +984,16 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          toast.success("Download started");
+          toast.success("Download started", { duration: 1500 });
         }
         return;
       }
 
-      // 1.5 Touch-first math interaction
+      // 1.5 Touch-first math interaction (Double-click only now)
       if (!isFinePointer) {
         if (openTouchPreviewFromTarget(target, setPreview)) {
           e.preventDefault();
           e.stopPropagation();
-          return;
-        }
-
-        const math = target.closest(".math-block, .math-display, .math-inline") as HTMLElement | null;
-        if (math && !target.closest(".format-toggle-btn, .code-close-btn, .code-copy-btn-math")) {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleMathSource(math);
           return;
         }
       }
@@ -869,8 +1007,8 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
         const dataPage = link.getAttribute("data-page") || link.dataset.page || "";
         
         // Construct a full target identifier
-        const fullPath = (href === "#" || !href) ? (dataTarget || dataPage + (dataFragment ? "#" + dataFragment : "")) : href;
-        if (!fullPath && !dataFragment) return;
+        const fullPath = (href === "#" || !href) ? (dataTarget || `${dataPage}${dataFragment ? `#${dataFragment}` : ""}`) : href;
+        if (!fullPath && !dataFragment) { return; }
 
         // Extract path and fragment
         const [pathPartRaw, fragmentPartRaw] = fullPath.split("#");
@@ -885,10 +1023,10 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
         // Obsidian Style: [[测试]] should be local if current page is [[Folder/测试]]
         const isLocal = !pathPart || 
                         pathPart === currentSlug || 
-                        currentPathDecoded.endsWith("-" + pathPart) ||
-                        currentPathDecoded.endsWith("/" + pathPart) ||
-                        currentPathDecoded.endsWith("-" + encodeURIComponent(pathPart)) ||
-                        currentPathDecoded.endsWith("/" + encodeURIComponent(pathPart));
+                        currentPathDecoded.endsWith(`-${pathPart}`) ||
+                        currentPathDecoded.endsWith(`/${pathPart}`) ||
+                        currentPathDecoded.endsWith(`-${encodeURIComponent(pathPart)}`) ||
+                        currentPathDecoded.endsWith(`/${encodeURIComponent(pathPart)}`);
         
         if (isLocal && fragment) {
           e.preventDefault();
@@ -897,7 +1035,7 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
           
           // Strategy 1: Direct ID Match (including ^id and h- heading slugs)
           const bid = targetId.startsWith("^") ? targetId.slice(1) : targetId;
-          const slugId = targetId.startsWith("h-") ? targetId : "h-" + encodeURIComponent(targetId.trim().toLowerCase().replace(/\s+/g, '-')).slice(0, 50);
+          const slugId = targetId.startsWith("h-") ? targetId : `h-${encodeURIComponent(targetId.trim().toLowerCase().replace(/\s+/g, '-')).slice(0, 50)}`;
 
           targetEl = document.getElementById(targetId) || 
                      document.getElementById(bid) ||
@@ -906,7 +1044,7 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
           
           // Strategy 2: ReadingHeader Slugify Compatibility (h-...)
           if (!targetEl) {
-              const slugify = (s: string) => "h-" + encodeURIComponent(s.trim().toLowerCase().replace(/\s+/g, '-')).slice(0, 50);
+              const slugify = (s: string) => `h-${encodeURIComponent(s.trim().toLowerCase().replace(/\s+/g, '-')).slice(0, 50)}`;
               const s1 = slugify(targetId);
               targetEl = document.getElementById(s1) || container.querySelector(`[id="${s1}"]`);
           }
@@ -931,7 +1069,9 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
             // Visual Feedback: Highlight the target element (or its parent if it's an empty anchor)
             const highlightTarget = targetEl.classList.contains('block-anchor') ? (targetEl.parentElement || targetEl) : targetEl;
             highlightTarget.classList.add("jump-highlight");
-            setTimeout(() => highlightTarget?.classList.remove("jump-highlight"), 1500);
+            setTimeout(() => {
+              highlightTarget?.classList.remove("jump-highlight");
+            }, 1500);
             
             // Update URL hash without scroll jump (using the REAL target ID found)
             window.history.pushState(null, "", `#${targetEl.id}`);
@@ -943,7 +1083,7 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
           // Navigation logic for cross-page wiki-links
           // We assume /blog/ as the base route for notes unless instructed otherwise
           e.preventDefault();
-          const targetUrl = `${window.location.origin}/blog/${encodeURIComponent(pathPart)}${fragment ? "#" + fragment : ""}`;
+          const targetUrl = `${window.location.origin}/blog/${encodeURIComponent(pathPart)}${fragment ? `#${fragment}` : ""}`;
           window.location.assign(targetUrl);
           return;
         }
@@ -951,19 +1091,39 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
     };
 
     const handleDblClick = (e: MouseEvent) => {
-      if (!isFinePointer) return;
       const target = e.target as HTMLElement;
-      const math = target.closest(".math-block, .math-display, .math-inline") as HTMLElement;
-      if (math) toggleMathSource(math);
+      const math = target.closest(".math-block, .math-display, .math-inline") as HTMLElement | null;
+      
+      // Don't toggle if we're clicking interactive UI buttons (Copy, Back, Format)
+      const isUiButton = target.closest(".format-toggle-btn, .code-close-btn, .code-copy-btn-math");
+      
+      if (math && !isUiButton) { 
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Clear any text selected by the double click specifically
+        window.getSelection()?.removeAllRanges();
+        
+        toggleMathSource(math); 
+      }
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const math = target.closest(".math-block, .math-display, .math-inline");
+      if (math && e.detail > 1) {
+        // Prevent default selection logic for 2nd+ clicks
+        e.preventDefault();
+      }
     };
 
     // --- Initial Hash Jump Handling ---
     const handleInitialHash = () => {
       const hash = window.location.hash;
-      if (!hash) return;
+      if (!hash) { return; }
       
       const fragment = decodeURIComponent(hash.slice(1));
-      if (!fragment) return;
+      if (!fragment) { return; }
 
       // Premium Optimization: Wait for dynamic content (Math, Mermaid) to settle.
       // 400ms is a sweet spot for FCP plus micro-tasks.
@@ -1007,24 +1167,29 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
     const jumpTimer = handleInitialHash();
     init();
     mounted.current = true;
-    container.addEventListener("click", handleInteraction);
-    container.addEventListener("dblclick", handleDblClick);
+      container.addEventListener("click", handleInteraction);
+      container.addEventListener("dblclick", handleDblClick);
+      container.addEventListener("mousedown", handleMouseDown);
 
     return () => {
-      if (jumpTimer) clearTimeout(jumpTimer);
+      if (jumpTimer) { clearTimeout(jumpTimer); }
       container.removeEventListener("click", handleInteraction);
       container.removeEventListener("dblclick", handleDblClick);
-      container.querySelectorAll(".math-inline, .math-block").forEach(el => mathHub?.unregister(el as HTMLElement));
+      container.removeEventListener("mousedown", handleMouseDown);
+      container.querySelectorAll(".math-inline, .math-block").forEach(el => {
+        mathHub?.unregister(el as HTMLElement);
+      });
     };
   }, [sanitizedHtml, resolvedTheme]);
 
-  if (!html) return null;
+  if (!html) { return null; }
 
   return (
     <>
       <div 
         ref={containerRef}
         className="starry-night-theme markdown-body w-full max-w-none prose dark:prose-invert"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: Trusted server-generated MDX content
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }} 
         suppressHydrationWarning={true}
       />
@@ -1054,16 +1219,23 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
             >
               {preview.type === "image" && preview.imageSrc ? (
                 <div className="flex min-h-full min-w-max items-center justify-center">
-                  <img
-                    src={preview.imageSrc}
-                    alt={preview.imageAlt || "Preview image"}
-                    className="h-auto max-w-none rounded-2xl shadow-ambient"
-                    style={{ minWidth: "min(92vw, 28rem)" }}
-                  />
+                  <div className="relative" style={{ minWidth: "min(92vw, 28rem)", height: "auto" }}>
+                    <Image
+                      src={preview.imageSrc}
+                      alt={preview.imageAlt || "Preview image"}
+                      width={800}
+                      height={600}
+                      className="h-auto w-full rounded-2xl shadow-ambient"
+                      style={{ height: "auto" }}
+                      unoptimized={preview.imageSrc.startsWith('http')}
+                      priority
+                    />
+                  </div>
                 </div>
               ) : (
                 <div
                   className="mermaid-mobile-preview min-h-full min-w-max"
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: Sanitized Mermaid diagram content
                   dangerouslySetInnerHTML={{ __html: preview.htmlContent || "" }}
                 />
               )}

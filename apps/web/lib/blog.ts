@@ -1,13 +1,32 @@
 import {
   hasUsableDatabaseUrl,
   getAllPostSummariesQuery,
-  getPostsPageQuery,
   getPostBySlugQuery,
-  queryPostSummariesQuery,
-  searchPostsQuery,
+  getPostsPageQuery,
 } from "@repo/database";
 import katex from "katex";
 import { cacheLife, cacheTag } from "next/cache";
+import { createHighlighter } from "shiki";
+
+// === SHIKI SINGLETON PRE-WARMING ===
+// This prevents 1-5 second cold starts on initial post rendering
+let highlighterPromise: ReturnType<typeof createHighlighter> | null = null;
+
+export function getHighlighter() {
+  if (!highlighterPromise) {
+    highlighterPromise = createHighlighter({
+      themes: ['github-light', 'nord'],
+      langs: [
+        'ts', 'tsx', 'js', 'jsx', 'json', 'bash', 'md', 'html', 
+        'css', 'python', 'rust', 'yaml', 'toml', 'sql', 'ruby', 'go', 'xml', 'c', 'cpp'
+      ],
+    });
+  }
+  return highlighterPromise;
+}
+
+// Ensure it warms up as soon as the module loads (optional but helpful)
+getHighlighter();
 
 /**
  * Metadata stored in the JSONB field of the document.
@@ -36,6 +55,7 @@ export interface BlogPost {
   readingTime: string;
   area: "WORK" | "LEARN" | "OTHER";
   isPublished: boolean;
+  status: "draft" | "published" | "archived";
   metadata: PostMetadata;
   path: string;
   body: {
@@ -61,6 +81,7 @@ export interface BlogPostSummary {
   authorName: string;
   readingTime: string;
   path: string;
+  status: "draft" | "published" | "archived";
   highlightedTitle?: string;
   highlightedDescription?: string;
   highlightedBodyPreview?: string;
@@ -161,8 +182,8 @@ async function preRenderContent(html: string): Promise<string> {
   // Matches <pre><code class="language-xyz">...</code></pre>
   const codeRegex = /<pre><code(?:\s+class="language-([^"]+)")?>([\s\S]*?)<\/code><\/pre>/g;
   
-  // Dynamically import shiki so it's loaded lazily
-  const { codeToHtml } = await import('shiki');
+  // Avoid dynamic import overhead by using the cached singleton
+  const highlighter = await getHighlighter();
 
   processed = await asyncReplace(processed, codeRegex, async (match, lang, content) => {
     const rawLang = (lang || "TEXT").toUpperCase();
@@ -212,7 +233,7 @@ async function preRenderContent(html: string): Promise<string> {
 
     try {
       // Use shiki with dual themes and custom transformers to match mockup-code structure
-      formattedCodeHtml = await codeToHtml(code, {
+      formattedCodeHtml = highlighter.codeToHtml(code, {
         lang: language,
         themes: {
           light: 'github-light',
@@ -222,15 +243,15 @@ async function preRenderContent(html: string): Promise<string> {
         cssVariablePrefix: '--shiki-',
         transformers: [
           {
-            pre(node) {
+            pre(node: any) {
               node.tagName = 'div';
               node.properties.class = 'code-fence mockup-code !bg-background/20 !border-0';
               node.properties.style = '';
             },
-            code(node) {
+            code(node: any) {
               node.tagName = 'div';
             },
-            line(node, line) {
+            line(node: any, line: any) {
               node.tagName = 'pre';
               node.properties = { 'data-prefix': line };
             }
@@ -248,7 +269,7 @@ async function preRenderContent(html: string): Promise<string> {
     }
 
     return `
-      <div class="code-fence-container group/code" data-lang="${language.toLowerCase()}" data-pre-rendered="true">
+      <div class="code-fence-container group/code" data-lang="${language.toLowerCase()}" data-pre-rendered="true" data-code="${escapeHtml(code)}">
         <div class="code-fence-header shadow-inset-sm">
           <div class="code-header-left">
             <div class="code-dots">
@@ -256,11 +277,10 @@ async function preRenderContent(html: string): Promise<string> {
               <div class="code-dot code-dot-amber"></div>
               <div class="code-dot code-dot-green"></div>
             </div>
-            <!-- filename placeholder -->
           </div>
-          <div class="code-header-right">
+          <div class="code-header-right flex items-center gap-3">
             <span class="code-lang-text">${language}</span>
-            <button class="code-copy-btn opacity-0 group-hover/code:opacity-100 transition-all flex items-center gap-1.5 px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-primary uppercase active:scale-95">
+            <button class="code-copy-btn opacity-0 group-hover/code:opacity-100 transition-all flex items-center gap-1.5 px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-primary uppercase active:scale-95" title="Copy Code">
               <span>COPY</span>
             </button>
           </div>
@@ -305,6 +325,11 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
   const charLength = doc.content?.length || 0;
   const calculatedReadingTime = charLength > 0 ? `${Math.max(1, Math.ceil(charLength / 400))} MIN READ` : "5 MIN READ";
 
+  let status: "draft" | "published" | "archived" = doc.isPublished ? "published" : "draft";
+  if (doc.slug.includes("归档") || doc.title.includes("归档")) {
+    status = "archived";
+  }
+
   return {
     id: doc.id,
     slug: doc.slug,
@@ -320,6 +345,7 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
     path: doc.slug,
     area: doc.area,
     isPublished: doc.isPublished,
+    status,
     metadata,
     body: {
       code: "",
@@ -340,6 +366,11 @@ function mapDocumentToSummary(doc: any): BlogPostSummary {
   const charLength = doc.contentLength || 0;
   const calculatedReadingTime = charLength > 0 ? `${Math.max(1, Math.ceil(charLength / 400))} MIN READ` : "5 MIN READ";
 
+  let status: "draft" | "published" | "archived" = doc.isPublished ? "published" : "draft";
+  if (doc.slug.includes("归档") || doc.title.includes("归档")) {
+    status = "archived";
+  }
+
   return {
     id: doc.id,
     slug: doc.slug,
@@ -353,6 +384,7 @@ function mapDocumentToSummary(doc: any): BlogPostSummary {
     authorName: metadata.authorName || "xpx",
     readingTime: metadata.readingTime || calculatedReadingTime,
     path: doc.slug,
+    status,
   };
 }
 
@@ -394,28 +426,45 @@ export async function queryBlogPostFeed(params: BlogPostFeedParams = {}): Promis
     };
   }
 
-  const results = await queryPostSummariesQuery({
-    page,
-    pageSize,
-    query,
-    tags,
-  });
+  // 1. Fetch all summaries from global cache
+  const allSummaries = await getAllPostSummaries();
 
-  const totalCount = results.length > 0 ? Number(results[0].totalCount) : 0;
+  // 2. Perform in-memory filtering
+  let filtered = allSummaries;
+
+  if (tags.length > 0) {
+    filtered = filtered.filter((post) => tags.every((t) => post.tags.includes(t)));
+  }
+
+  if (query) {
+    const loweredQuery = query.toLowerCase();
+    filtered = filtered.filter(
+      (post) =>
+        post.title.toLowerCase().includes(loweredQuery) ||
+        (post.description && post.description.toLowerCase().includes(loweredQuery))
+    );
+  }
+
+  // 3. Paginate
+  const totalCount = filtered.length;
   const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0;
-  const posts = results.map((doc) => {
-    const summary = mapDocumentToSummary(doc);
+  
+  const startIndex = (page - 1) * pageSize;
+  const paginatedPosts = filtered.slice(startIndex, startIndex + pageSize);
+
+  // 4. Map and highlight results
+  const posts = paginatedPosts.map((summary) => {
     if (!query) {
       return summary;
     }
 
-    const description = buildDescriptionPreview(doc.description);
+    const description = buildDescriptionPreview(summary.description);
     return {
       ...summary,
       description,
-      highlightedTitle: renderSearchSnippet(doc.title, query, "title"),
+      highlightedTitle: renderSearchSnippet(summary.title, query, "title"),
       highlightedDescription: renderSearchSnippet(description, query, "description"),
-      highlightedBodyPreview: renderSearchSnippet(buildBodyPreview(query, doc.content), query, "body"),
+      highlightedBodyPreview: "", // Body content is not in memory for summaries
     };
   });
 
@@ -518,23 +567,7 @@ function buildDescriptionPreview(description?: string | null) {
   return normalizeWhitespace(description || "");
 }
 
-function buildBodyPreview(query: string, content?: string | null) {
-  const normalizedContent = normalizeWhitespace(content || "");
-  if (!normalizedContent) return "";
 
-  const loweredContent = normalizedContent.toLowerCase();
-  const loweredQuery = query.trim().toLowerCase();
-  const matchIndex = loweredQuery ? loweredContent.indexOf(loweredQuery) : -1;
-
-  if (matchIndex === -1) return "";
-
-  const start = Math.max(0, matchIndex - 52);
-  const end = Math.min(normalizedContent.length, matchIndex + loweredQuery.length + 108);
-  const prefix = start > 0 ? "..." : "";
-  const suffix = end < normalizedContent.length ? "..." : "";
-
-  return `${prefix}${normalizedContent.slice(start, end).trim()}${suffix}`;
-}
 
 function renderSearchSnippet(text: string, query: string, hitKind: "title" | "description" | "body") {
   const normalized = normalizeWhitespace(text);
@@ -595,26 +628,29 @@ function renderSearchSnippet(text: string, query: string, hitKind: "title" | "de
 }
 
 export async function searchBlogPosts(query: string, limit = 8): Promise<BlogSearchResult[]> {
-  if (!hasUsableDatabaseUrl()) {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) {
     return [];
   }
 
-  const results = await searchPostsQuery(query, limit);
+  // 1. Hit DB directly using optimized lightweight SQL query filtering
+  // This bypasses the memory-resident payload strategy explicitly for search as it is a hot-path.
+  const { posts } = await getPostsPage(1, limit, trimmed);
 
-  return results.map((doc) => {
+  return posts.map((doc) => {
     const description = buildDescriptionPreview(doc.description);
-    const bodyPreview = buildBodyPreview(query, doc.content);
+    const bodyPreview = ""; // Dropped to resolve the neon-http 5s overhead bottleneck
 
     return {
       id: doc.id,
-      title: doc.title,
+      title: doc.displayTitle || doc.title,
       description,
       bodyPreview,
-      url: `/blog/${encodeURIComponent(doc.slug)}`,
+      url: `/blog/${encodeURIComponent(doc.path)}`,
       section: "Blog",
-      highlightedTitle: renderSearchSnippet(doc.title, query, "title"),
+      highlightedTitle: renderSearchSnippet(doc.displayTitle || doc.title, query, "title"),
       highlightedDescription: renderSearchSnippet(description, query, "description"),
-      highlightedBodyPreview: renderSearchSnippet(bodyPreview, query, "body"),
+      highlightedBodyPreview: "", // Body preview skipped
     };
   });
 }

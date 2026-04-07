@@ -11,11 +11,15 @@ const PORT_MAP: Record<AppName, number> = {
 export function getAppUrl(app: AppName = 'web') {
   // 1. Build-time / Runtime Explicit override
   const envKey = `NEXT_PUBLIC_${app.toUpperCase()}_URL` as any;
-  if (process.env[envKey]) return process.env[envKey] as string;
+  if (process.env[envKey]) {
+    return process.env[envKey] as string;
+  }
 
   // 2. Production Fallbacks
   if (process.env.NODE_ENV === 'production') {
-    if (app === 'docs') return 'https://sparkle.codes/docs';
+    if (app === 'docs') {
+      return 'https://docs.sparkle.codes';
+    }
     return 'https://sparkle.codes';
   }
 

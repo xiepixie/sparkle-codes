@@ -6,7 +6,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-	basePath: "/docs",
 	reactStrictMode: true,
 	output: 'standalone',
 	outputFileTracingRoot: path.join(__dirname, "../../"),

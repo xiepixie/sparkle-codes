@@ -17,7 +17,7 @@ RUN pnpm --filter docs run postinstall
 
 # 环境变量声明，供构建使用
 ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/build-time-dummy
-ARG NEXT_PUBLIC_DOCS_URL=https://sparkle.codes/docs
+ARG NEXT_PUBLIC_DOCS_URL=https://docs.sparkle.codes
 ARG NEXT_PUBLIC_WEB_URL=https://sparkle.codes
 
 # --- Builder Web ---
@@ -61,6 +61,7 @@ ENV HOSTNAME="0.0.0.0"
 
 COPY --from=builder-docs /app/apps/docs/.next/standalone ./
 COPY --from=builder-docs /app/apps/docs/.next/static ./apps/docs/.next/static
+COPY --from=builder-docs /app/apps/docs/public ./apps/docs/public
 
 EXPOSE 3001
 CMD ["node", "apps/docs/server.js"]

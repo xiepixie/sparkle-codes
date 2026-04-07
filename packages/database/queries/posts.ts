@@ -39,7 +39,6 @@ function buildSearchFilter(query?: string) {
     ${documents.title} ilike ${pattern}
     or coalesce(${documents.description}, '') ilike ${pattern}
     or ${documents.slug} ilike ${pattern}
-    or coalesce(${documents.content}, '') ilike ${pattern}
   )`;
 }
 
@@ -56,8 +55,7 @@ function buildSearchRank(query?: string) {
     (
       case when ${documents.title} ilike ${pattern} then 8 else 0 end +
       case when coalesce(${documents.description}, '') ilike ${pattern} then 4 else 0 end +
-      case when ${documents.slug} ilike ${pattern} then 3 else 0 end +
-      case when coalesce(${documents.content}, '') ilike ${pattern} then 1 else 0 end
+      case when ${documents.slug} ilike ${pattern} then 3 else 0 end
     )
   `;
 }
@@ -125,6 +123,24 @@ export async function getAllPostSummariesQuery() {
       metadata: documents.metadata,
       createdAt: documents.createdAt,
       contentLength: sql<number>`char_length(${documents.content})`,
+    })
+    .from(documents)
+    .where(basePostFilter)
+    .orderBy(desc(documents.createdAt));
+}
+
+/**
+ * Fetch all posts with raw content for local-first full-text search.
+ */
+export async function getAllPostsForSearchQuery() {
+  return await db
+    .select({
+      id: documents.id,
+      slug: documents.slug,
+      title: documents.title,
+      description: documents.description,
+      content: documents.content,
+      createdAt: documents.createdAt,
     })
     .from(documents)
     .where(basePostFilter)

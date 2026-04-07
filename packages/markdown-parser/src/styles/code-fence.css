@@ -3,8 +3,8 @@
     /* --- Code Fence Wrapper --- */
     .code-fence-container {
         position: relative;
-        background: color-mix(in srgb, var(--background), transparent 30%);
-        border: 1px solid color-mix(in srgb, var(--primary), transparent 85%);
+        background: color-mix(in srgb, var(--background), transparent 20%);
+        border: 1px solid color-mix(in srgb, var(--md-border), transparent 40%);
         border-radius: var(--radius-lg, 8px); /* Adhere to AGENTS.md rule */
         margin: 2.5rem 0;
         overflow: hidden;
@@ -12,8 +12,9 @@
         -webkit-backdrop-filter: blur(16px);
         transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         contain: layout paint;
-        /* Subtle box shadow for depth */
-        box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05);
+        /* Neutral light-mode elevation */
+        box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05),
+                    0 0 0 1px rgba(0, 0, 0, 0.02);
     }
 
     @media (hover: none) and (pointer: coarse) {
@@ -24,9 +25,9 @@
 
         .code-fence-container:active {
             transform: scale(0.995);
-            border-color: color-mix(in srgb, var(--primary), transparent 60%);
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary), transparent 82%),
-                        0 10px 24px -16px color-mix(in srgb, var(--primary), transparent 70%);
+            border-color: color-mix(in srgb, var(--md-border), transparent 20%);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-border), transparent 80%),
+                        0 10px 24px -16px rgba(0, 0, 0, 0.1);
         }
     }
 
@@ -39,19 +40,19 @@
     }
 
     .code-fence-container:hover {
-        border-color: color-mix(in srgb, var(--primary), transparent 50%);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary), transparent 80%),
-                    0 10px 30px -10px color-mix(in srgb, var(--primary), transparent 80%);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 70%);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 90%),
+                    0 10px 30px -10px rgba(0, 0, 0, 0.08);
     }
 
     .dark .code-fence-container:hover {
-        border-color: color-mix(in srgb, var(--primary), transparent 40%);
+        border-color: color-mix(in srgb, var(--md-primary), transparent 40%);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 
-                    0 0 0 1px color-mix(in srgb, var(--primary), transparent 70%),
-                    0 15px 40px -10px color-mix(in srgb, var(--primary), transparent 85%);
+                    0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 70%),
+                    0 15px 40px -10px color-mix(in srgb, var(--md-primary), transparent 85%);
     }
 
-    /* Override DaisyUI's mockup-code which is interfering in globals.css */
+    /* Legacy overrides for older builds - keep briefly then move to @layer overrides */
     .code-fence-container .mockup-code {
         background: transparent !important;
         border: none !important;
@@ -59,8 +60,8 @@
         border-radius: 0 !important;
         margin: 0 !important;
         backdrop-filter: none !important;
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
     }
 
     /* Custom thin scrollbar for code and math */
@@ -139,7 +140,7 @@
     /* Mac-style window dots */
     .code-dots {
         display: flex;
-        gap: 6px;
+        gap: 8px;
         opacity: 0.5;
         transition: opacity 0.3s ease;
     }
@@ -149,8 +150,8 @@
     }
 
     .code-dot {
-        width: 10px;
-        height: 10px;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
         box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
     }
@@ -307,5 +308,60 @@
         font-style: var(--shiki-dark-font-style, normal);
         font-weight: var(--shiki-dark-font-weight, normal);
         text-decoration: var(--shiki-dark-text-decoration, none);
+    }
+}
+
+/* =========================================
+   Starry Overrides Layer (High Priority)
+   ========================================= */
+@layer overrides {
+    /* --- DaisyUI Mockup Overrides --- */
+    .code-fence-container .mockup-code {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        border-radius: 0;
+        margin: 0;
+        backdrop-filter: none;
+        min-width: 100%;
+        width: fit-content;
+    }
+
+    .dark .code-fence-container .mockup-code {
+        background: transparent;
+    }
+
+
+    /* --- Inline Math Source Style --- */
+    .math-inline.source-mode {
+        display: inline-flex;
+        align-items: center;
+        vertical-align: middle;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        padding-inline: 0.25rem;
+        margin-inline: 0.125rem;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .math-inline.source-mode:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: var(--primary-glow);
+    }
+
+    .math-source-content {
+        font-family: var(--font-mono);
+        font-size: 0.85em;
+        line-height: 1.4;
+        color: var(--primary);
+    }
+
+    /* --- LaTeX Source Alignment Fix --- */
+    /* Remove redundant margin when nested in a math block to ensure vertical alignment parity */
+    .math-block .code-fence-container,
+    .math-display .code-fence-container {
+        margin: 0 !important;
     }
 }

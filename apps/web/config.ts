@@ -1,3 +1,5 @@
+import { getAppUrl } from "@repo/utils";
+
 /**
  * Application Configuration
  * 
@@ -14,7 +16,7 @@ export const config = {
     "The personal blog and product lab of Xavier Pax (xpx), focused on applied AI, workflow systems, and technical writing.",
 
   // the link to the documentation app (if not defined, the documentation link will not be shown in the app)
-  docsLink: (process.env.NEXT_PUBLIC_DOCS_URL || "/docs") as string,
+  docsLink: getAppUrl('docs'),
 
   // the themes that should be available in the app
   enabledThemes: ["light", "dark"],

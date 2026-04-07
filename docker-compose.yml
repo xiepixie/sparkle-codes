@@ -36,8 +36,7 @@ services:
       - HOSTNAME=0.0.0.0
       - PORT=3001
     healthcheck:
-      # Docs has basePath: '/docs', so requests to root might be 404. We allow 200 or 404 for healthcheck, or just hit /docs.
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/docs').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

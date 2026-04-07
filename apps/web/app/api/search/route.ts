@@ -10,6 +10,12 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (query === "warmup") {
+      // Just hit the function to warm up the server-side caches and Next.js instance
+      await searchBlogPosts("a", 1);
+      return NextResponse.json([]);
+    }
+
     const blogResults = await searchBlogPosts(query, 8);
     return NextResponse.json(blogResults);
   } catch (error) {

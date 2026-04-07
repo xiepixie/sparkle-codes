@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Calendar } from "lucide-react";
+import { Calendar, ChevronLeft } from "lucide-react";
 import { getPostBySlug, getAllPostSummaries } from "@/lib/blog";
 import { ReadingHeader } from "@/components/ReadingHeader";
 
@@ -51,7 +51,7 @@ export default async function PostPage({ params }: PostPageProps) {
   }).format(new Date(post.date));
 
   return (
-    <div className="starry-night-theme relative mx-auto max-w-4xl overflow-hidden px-4 py-6 sm:px-6 sm:py-10 lg:py-16">
+    <div className="starry-night-theme relative mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         {/* Sticky Global Navigation - Managed Header */}
         <ReadingHeader 
           slug={slug} 
@@ -59,75 +59,132 @@ export default async function PostPage({ params }: PostPageProps) {
           suggestedPosts={suggestedPosts}
         />
 
-        {/* Minimalist Metadata Layer - All identity is now in the Atlas Command Bar */}
-        <header className="mb-12 flex flex-col px-1 pt-16 sm:mb-16 sm:px-4 sm:pt-20">
-            <div className="flex flex-col gap-4 border-b border-border/50 py-4 opacity-90 transition-opacity hover:opacity-100 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
-                    {/* Unified Premium Tags */}
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="grid grid-cols-1 gap-y-12 lg:grid-cols-[1fr_min(72ch,100%)_1fr] lg:gap-x-16">
+            {/* Sidebar Left: Navigation & Context (Commented out for next phase)
+            <aside className="hidden lg:sticky lg:top-32 lg:block lg:h-fit lg:pt-12">
+                <Link 
+                  href="/blog"
+                  className="group/back flex items-center gap-2 text-foreground/40 transition-colors hover:text-primary"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border/40 bg-background/40 transition-all group-hover/back:border-primary/40 group-hover/back:bg-primary/5 group-hover/back:group-hover/back:shadow-glow-sm">
+                    <ChevronLeft size={16} className="transition-transform group-hover/back:-translate-x-0.5" />
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-[0.2em]">
+                    Back to Blog
+                  </span>
+                </Link>
+
+                <div className="mt-12 space-y-8">
+                    <div className="h-px w-8 bg-border/40" />
+                </div>
+            </aside>
+            */}
+
+            {/* Main Content Column */}
+            <main className="min-w-0 lg:col-start-2 lg:pt-12">
+                <header className="mb-12 flex flex-col sm:mb-20">
+                    {/* Editorial Meta: Author, Date, Stats */}
+                    <div className="flex flex-col gap-8 border-b border-border/40 pb-10 transition-opacity">
+                        <h1 className="text-4xl font-black tracking-tight text-foreground sm:text-5xl lg:text-6xl lg:leading-[1.1]">
+                            {post.displayTitle || post.title}
+                        </h1>
+
+                        <div className="flex flex-wrap items-center justify-between gap-6">
+                            <div className="flex items-center gap-4">
+                                <div className="flex -space-x-2">
+                                    <div className="relative flex h-10 w-10 items-center justify-center rounded-full border-2 border-background bg-gradient-to-br from-background/80 to-muted/20 text-[10px] font-bold text-primary shadow-glow-sm transition-transform hover:scale-105">
+                                        {post.authorName?.charAt(0) || "S"}
+                                    </div>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold tracking-tight text-foreground/90">{post.authorName}</span>
+                                    <div className="flex items-center gap-2 text-[10px] font-medium tracking-wider text-foreground/40 font-mono">
+                                        <Calendar size={10} className="opacity-40" />
+                                        <time dateTime={post.date}>{formattedDate}</time>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <div className="flex h-1.5 w-1.5 rounded-full bg-emerald-500/40 shadow-glow-sm" title="Post is live" />
+                                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/20">
+                                    Editorial Insight
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Taxonomy: Progressive Tag Interaction */}
+                    <div className="mt-8 flex flex-wrap items-center gap-2">
                         {post.tags.map((tag: string) => (
-                            <span key={tag} className="premium-tag md-hashtag">
-                                #{tag}
-                            </span>
+                            <Link 
+                                href={`/blog?tag=${encodeURIComponent(tag)}`}
+                                key={tag} 
+                                className="group/tag relative overflow-hidden rounded-full border border-border/40 bg-background/40 px-3 py-1 transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-glow-xs active:scale-95"
+                            >
+                                <span className="relative z-10 text-[10px] font-bold tracking-wide text-foreground/50 transition-colors group-hover/tag:text-primary">
+                                    # {tag}
+                                </span>
+                            </Link>
                         ))}
                     </div>
 
-                    <div className="hidden h-3 w-[1px] bg-border/60 sm:block" />
+                    {post.description && (
+                        <div className="group relative mt-12 rounded-[2rem] border border-border/40 bg-background/20 p-8 shadow-ambient transition-all hover:bg-background/40">
+                            <div className="absolute left-8 top-0 -translate-y-1/2 rounded-full border border-border/60 bg-background px-4 py-1 text-[9px] font-black uppercase tracking-[0.4em] text-primary shadow-glow-sm">
+                                TL;DR
+                            </div>
+                            <p className="text-[15px] italic leading-relaxed text-muted-foreground/90 font-medium">
+                                {post.description}
+                            </p>
+                        </div>
+                    )}
+                </header>
 
-                    {/* Published Date */}
-                    <div className="flex items-center gap-2 text-foreground/40 font-mono text-[10px] tracking-[0.1em] font-medium leading-none whitespace-nowrap">
-                        <Calendar size={12} className="opacity-30" />
-                        <time dateTime={post.date}>
-                            {formattedDate}
-                        </time>
+                <article className="prose prose-starry prose-invert max-w-none">
+                    <MarkdownInteractivity html={post.body.html || ""} />
+                </article>
+
+                <footer className="mt-20 flex flex-col items-center gap-12 border-t border-border/40 pt-16 sm:mt-32">
+                    <Link 
+                      href="/blog"
+                      className="group/footer-btn relative flex items-center gap-3 overflow-hidden rounded-full border border-border/60 bg-background px-12 py-5 text-sm font-bold tracking-widest transition-all hover:border-primary/60 hover:shadow-glow-sm active:scale-95 lg:hidden"
+                    >
+                      <ChevronLeft size={18} className="transition-transform group-hover/footer-btn:-translate-x-1" />
+                      BACK TO BLOG
+                    </Link>
+
+                    <div className="flex flex-col items-center gap-4 text-center">
+                        <div className="text-[10px] font-black uppercase tracking-[0.4em] text-foreground/20">
+                            The End of Interaction
+                        </div>
+                        <div className="h-px w-24 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
                     </div>
+                </footer>
+            </main>
 
-                    <div className="hidden h-3 w-[1px] bg-border/60 sm:block" />
-
-                    {/* Author Attribution */}
-                    <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[9px] font-black uppercase tracking-[0.2em] text-foreground/40">
-                        <span className="opacity-20">BY</span>
-                        <span className="text-foreground/60">{post.authorName}</span>
+            {/* Sidebar Right: Metadata & Stats (Commented out for next phase)
+            <aside className="hidden lg:sticky lg:top-32 lg:block lg:h-fit lg:pt-12">
+                <div className="space-y-12">
+                    <div className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-foreground/30">Metadata</h4>
+                        <div className="rounded-2xl border border-border/40 bg-background/20 p-4 shadow-ambient">
+                             <div className="flex flex-col gap-3">
+                                 <div className="flex justify-between text-[10px]">
+                                     <span className="text-foreground/40">Format</span>
+                                     <span className="font-mono text-primary/60 uppercase tracking-tighter">MDX / SSR</span>
+                                 </div>
+                                 <div className="flex justify-between text-[10px]">
+                                     <span className="text-foreground/40">Status</span>
+                                     <span className="font-mono text-emerald-400 capitalize">Published</span>
+                                 </div>
+                             </div>
+                        </div>
                     </div>
                 </div>
-
-                <div className="hidden items-center gap-2 rounded-full border border-border/50 bg-background/50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 md:flex">
-                    Reading mode
-                </div>
-            </div>
-
-            {post.description && (
-              <div className="group relative mt-8 rounded-[1.75rem] border border-border/50 bg-background/40 p-6 shadow-glow-sm transition-all hover:border-primary/20 hover:bg-background/60 sm:mt-10 sm:rounded-[2rem] sm:p-8">
-                  <div className="absolute left-5 top-0 -translate-y-1/2 rounded-full border border-border/60 bg-background px-3 py-1 text-[9px] font-bold uppercase tracking-[0.32em] text-primary shadow-glow-sm sm:left-8 sm:px-4 sm:tracking-[0.4em]">
-                      Abstract
-                  </div>
-                  <p className="text-[14px] italic leading-[1.75] text-muted-foreground font-medium [overflow-wrap:anywhere] sm:text-[15px]">
-                      {post.description}
-                  </p>
-              </div>
-            )}
-        </header>
-
-        {/* Immersive Reading Layer */}
-        <article>
-            <MarkdownInteractivity html={post.body.html || ""} />
-        </article>
-
-        {/* Simple Navigation Footer */}
-        <footer className="mt-20 border-t border-border pt-10 sm:mt-24 sm:pt-12">
-            <div className="flex flex-col gap-6 rounded-2xl border border-border/50 bg-muted/30 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">About the Author</p>
-                <div className="font-semibold text-lg">{post.authorName}</div>
-              </div>
-              <Link 
-                href="/blog"
-                className="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-6 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                Back to Blog
-              </Link>
-            </div>
-        </footer>
+            </aside>
+            */}
+        </div>
     </div>
   );
 }

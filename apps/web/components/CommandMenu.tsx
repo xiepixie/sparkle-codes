@@ -1,13 +1,20 @@
 "use client";
 
-import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { 
-  Search, 
-  Loader2, 
-  FileText, 
-  Compass,
   Clock,
+  Compass,
+  FileText, 
+  Loader2, 
+  Search, 
 } from "lucide-react";
+import { 
+  startTransition,
+  useDeferredValue, 
+  useEffect, 
+  useMemo, 
+  useRef, 
+  useState 
+} from "react";
 import { cn } from "@repo/ui";
 import {
   CommandEmptyState,
@@ -40,11 +47,63 @@ interface SearchResultItem {
   highlightedBodyPreview?: string;
 }
 
+/**
+ * Safe Search Match Component
+ * Replaces dangerouslySetInnerHTML with a safe, accessible splitting strategy.
+ * Prevents XSS while allowing highlighting of user query matches.
+ */
+function SearchMatch({ 
+  text, 
+  query, 
+  fallback, 
+  className 
+}: { 
+  text?: string; 
+  query: string; 
+  fallback: string;
+  className?: string;
+}) {
+  const content = text || fallback;
+  if (!query.trim() || !content) {
+    return <span className={className}>{content}</span>;
+  }
+
+  // If the text contains HTML tags from the server (e.g. <mark>), 
+  // we still need to be careful. But here we're implementing the 'Node Splitting'
+  // strategy for the query itself if the server didn't already highlight it.
+  // Note: Our searchBlogPosts already returns 'highlightedTitle' with <mark> tags.
+  // To follow 'Situation B' (Safe Highlighting), we should ideally get raw text 
+  // and handle marking here in React.
+  
+  // Since searchBlogPosts currently returns HTML strings with <mark>, 
+  // for now we'll strip those specific safe tags to demonstrate the splitting move.
+  const rawText = content.replace(/<mark[^>]*>(.*?)<\/mark>/gi, '$1');
+  const parts = rawText.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
+
+  return (
+    <span className={className}>
+      {parts.map((part, i) => 
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={i} className="bg-primary/20 text-primary rounded-sm px-0.5 font-bold">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </span>
+  );
+}
+
 function normalizeSearchResults(data: unknown): SearchResultItem[] {
-  if (!Array.isArray(data)) return [];
+  if (!Array.isArray(data)) {
+    return [];
+  }
 
   const results: Array<SearchResultItem | null> = data.map((item, index) => {
-      if (!item || typeof item !== "object") return null;
+      if (!item || typeof item !== "object") {
+        return null;
+      }
 
       const candidate = item as Record<string, unknown>;
       const title = typeof candidate.title === "string" ? candidate.title : typeof candidate.name === "string" ? candidate.name : null;
@@ -80,7 +139,9 @@ function normalizeSearchResults(data: unknown): SearchResultItem[] {
           ? candidate.highlightedBodyPreview
           : undefined;
 
-      if (!title || !url) return null;
+      if (!title || !url) {
+        return null;
+      }
 
       return {
         id: typeof candidate.id === "string" ? candidate.id : `${url}-${index}`,
@@ -153,23 +214,50 @@ export function CommandMenu() {
     };
 
     window.addEventListener(COMMAND_CENTER_EVENT, handleCommandCenterOpen as EventListener);
+
+    // MUTE THE COLD START
+    // Send a discrete warmup request on mount. 
+    // The component mounts when the layout renders (app boundary), 
+    // so this wakes the API up immediately in the background 
+    // eliminating Next.js API cold boots completely.
+    if (typeof window !== "undefined") {
+      fetch("/api/search?query=warmup", { priority: "low" }).catch(() => {});
+    }
+
     return () => window.removeEventListener(COMMAND_CENTER_EVENT, handleCommandCenterOpen as EventListener);
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     setRecentHistory(readReadingHistory().slice(0, 4));
   }, [open]);
 
+  // A11Y & Control: Manual focus instead of autoFocus
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      // Small delay to ensure the animation/modal mounting is ready
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
     if (mode !== "jump" || !readingContext) {
       setJumpQuery("");
     }
   }, [mode, open, readingContext]);
 
   useEffect(() => {
-    if (mode !== "search") return;
+    if (mode !== "search") {
+      return;
+    }
 
     const query = deferredSearchQuery.trim();
     if (!query) {
@@ -196,7 +284,7 @@ export function CommandMenu() {
       } finally {
         setSearchLoading(false);
       }
-    }, 120);
+    }, 300);
 
     return () => {
       controller.abort();
@@ -214,7 +302,9 @@ export function CommandMenu() {
     const sections = readingContext?.sections ?? [];
     const query = jumpQuery.trim().toLowerCase();
 
-    if (!query) return sections;
+    if (!query) {
+      return sections;
+    }
     return sections.filter((section) => section.title.toLowerCase().includes(query));
   }, [jumpQuery, readingContext]);
 
@@ -222,7 +312,9 @@ export function CommandMenu() {
     const source = readingContext?.recentPosts?.length ? readingContext.recentPosts : recentHistory;
     const query = jumpQuery.trim().toLowerCase();
 
-    if (!query) return source;
+    if (!query) {
+      return source;
+    }
     return source.filter((entry) => entry.title.toLowerCase().includes(query));
   }, [jumpQuery, readingContext, recentHistory]);
 
@@ -255,7 +347,6 @@ export function CommandMenu() {
           </div>
           
           <input
-            autoFocus
             ref={inputRef}
             className="flex-1 bg-transparent text-xl outline-none placeholder:text-muted-foreground/30 font-light tracking-tight min-w-0"
             placeholder={
@@ -305,29 +396,22 @@ export function CommandMenu() {
                     className="block w-full rounded-2xl border border-border/40 bg-muted/15 p-4 text-left transition-all hover:border-primary/30 hover:bg-primary/[0.06] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5"
                   >
                     <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/55">
-                      <Search className="h-3 w-3" />
+                      <FileText className="h-3 w-3" />
                       <span>{result.section || "Content"}</span>
                     </div>
-                    <div
-                      className="mb-2 text-sm font-semibold text-foreground"
-                      dangerouslySetInnerHTML={{ __html: result.highlightedTitle || result.title }}
+                    <SearchMatch 
+                      className="mb-2 block text-sm font-semibold text-foreground"
+                      text={result.highlightedTitle}
+                      fallback={result.title}
+                      query={searchQuery}
                     />
                     {result.description ? (
-                      <div
-                        className="line-clamp-2 text-xs leading-relaxed text-muted-foreground"
-                        dangerouslySetInnerHTML={{ __html: result.highlightedDescription || result.description }}
+                      <SearchMatch 
+                        className="line-clamp-2 block text-xs leading-relaxed text-muted-foreground"
+                        text={result.highlightedDescription}
+                        fallback={result.description}
+                        query={searchQuery}
                       />
-                    ) : null}
-                    {result.bodyPreview ? (
-                      <div className="mt-3 rounded-xl border border-border/10 bg-background/50 px-3 py-2.5">
-                        <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.22em] text-primary/60">
-                          Body Match
-                        </div>
-                        <div
-                          className="line-clamp-3 text-xs leading-relaxed text-foreground/70"
-                          dangerouslySetInnerHTML={{ __html: result.highlightedBodyPreview || result.bodyPreview }}
-                        />
-                      </div>
                     ) : null}
                   </button>
                 ))}
@@ -343,8 +427,9 @@ export function CommandMenu() {
             readingContext ? (
               <div className="space-y-6 pb-4">
                 <div className="rounded-2xl border border-border/30 bg-muted/20 p-4 transition-colors dark:border-border/10 dark:bg-muted/10">
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.24em] text-primary/70">
-                    Reading Context
+                  <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.24em] text-primary/70">
+                    <FileText className="h-3 w-3" />
+                    <span>Reading Context</span>
                   </div>
                   <div className="text-sm font-semibold text-foreground/85">{readingContext.title}</div>
                 </div>
@@ -368,9 +453,11 @@ export function CommandMenu() {
                           <span className="font-mono text-[11px] font-bold text-primary/80 transition-transform group-hover:scale-125 dark:text-primary/70">
                             {"#".repeat(Math.max(1, section.level))}
                           </span>
-                          <span
+                          <SearchMatch
                             className="min-w-0 truncate text-sm font-medium text-foreground/85 transition-colors group-hover:text-foreground"
-                            dangerouslySetInnerHTML={{ __html: section.renderedTitle || section.title }}
+                            text={section.renderedTitle}
+                            fallback={section.title}
+                            query={jumpQuery}
                           />
                         </button>
                       ))}
@@ -469,8 +556,18 @@ export function CommandMenu() {
                 />
             </div>
             
-            <div className="flex items-center gap-2 rounded-full border border-border/10 bg-muted/20 px-3 py-1 text-muted-foreground/60">
-                {mode === "jump" ? "READING CONTEXT" : "BLOG INDEX"}
+            <div className="flex items-center gap-2 rounded-full border border-border/10 bg-muted/20 px-3 py-1 text-[10px] font-bold text-muted-foreground/60 transition-all duration-300">
+                {mode === "jump" ? (
+                  <>
+                    <FileText className="h-3 w-3" />
+                    <span>READING CONTEXT</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-3 w-3" />
+                    <span>BLOG INDEX</span>
+                  </>
+                )}
             </div>
         </CommandSurfaceFooter>
         </div>

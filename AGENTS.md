@@ -161,7 +161,12 @@ app/
 
 ### Caching Strategy
 
-Maximize static rendering and cacheable fetch requests. Use dynamic rendering only for request-specific logic (e.g., authentication, live chat, personalized dashboards).
+Maximize static rendering and cacheable fetch requests. For Next.js 15/16+:
+
+1. **'use cache' Directive**: Use the standard `'use cache'` directive for data-fetching and Markdown processing functions. Pair with `cacheLife('hours' | 'days')` for declarative TTL management.
+2. **Singleton Engine Patterns**: Heavy WASM-backed engines (e.g., Shiki, Oniguruma) must be instantiated as module-level Singletons (using Promises) to prevent main-thread blocking and layout shifts during request-time rendering.
+3. **Database Search Boundaries**: High-frequency interactive search (e.g., Command Center) should perform SQL-level filtering on metadata fields (`title`, `description`, `slug`) rather than scanning large text blobs.
+4. **API Pre-Warming**: Implement low-priority background fetches (`priority: low`) on client-side layout mounts to resolve Serverless cold starts and initialize module-level caches before user interaction.
 
 ---
 
@@ -311,6 +316,12 @@ Adhere to the following specifications for visual consistency:
 4. **Interaction Design**:
    - Apply `active:scale-95` for tactile feedback on buttons.
    - Use primary-colored glow effects (`shadow-glow`) on hover states.
+5. **Focus Management**:
+   - Avoid the `autoFocus` attribute for search inputs and modals.
+   - Use `useEffect` or component-library hooks to manually trigger focus (`.focus()`) after transitions or modal animations have completed to ensure a11y compatibility.
+6. **Security & Highlighting**:
+   - Avoid `dangerouslySetInnerHTML` for search result highlighting.
+   - Implement **Node Splitting** strategies where raw text is split into segments and highlighted using React nodes (`<mark>`) to prevent XSS vulnerabilities.
 
 ---
 

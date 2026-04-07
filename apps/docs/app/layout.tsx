@@ -25,7 +25,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-	metadataBase: new URL("http://localhost:3001"),
+	metadataBase: new URL("https://docs.sparkle.codes"),
 	title: "Sparkle Codes Docs",
 	description: "Documentation for Sparkle Codes",
 };

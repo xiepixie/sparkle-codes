@@ -47,16 +47,7 @@ const nextConfig = {
 		];
 	},
 	async rewrites() {
-		return [
-			{
-				source: "/docs",
-				destination: "http://localhost:3001/docs",
-			},
-			{
-				source: "/docs/:path*",
-				destination: "http://localhost:3001/docs/:path*",
-			},
-		];
+		return [];
 	},
 	webpack: (config, { webpack }) => {
 		config.plugins.push(

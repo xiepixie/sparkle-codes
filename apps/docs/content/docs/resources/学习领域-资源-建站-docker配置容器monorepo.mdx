@@ -3,7 +3,7 @@ title: "学习领域/资源/建站/docker配置容器monorepo"
 slug: "学习领域-资源-建站-docker配置容器monorepo"
 area: "LEARN"
 date: "2026-04-06T12:31:07Z"
-updatedAt: "2026-04-06T15:28:00Z"
+updatedAt: "2026-04-07T08:18:19Z"
 tags: []
 published: true
 ---
@@ -90,3 +90,10 @@ published: true
 - **如果你希望保持主站域名完整性**：我们需要继续打磨目前的 `/docs` 路径方案，确保 **Next.js `basePath`**、**Fumadocs `baseUrl`** 和 **Nginx/Docker 代理** 这三者逻辑完全咬合。
 
 **你想现在尝试切换到子域名方案（清理 `basePath` 等冗余逻辑），还是让我继续帮你把目前的 `/docs` 路径模式彻底修好？**
+
+cd /opt/1panel/apps/openresty/openresty/www/sites/sparkle.codes
+1. **新增 Pruner 阶段**：使用 `turbo prune` 预先提取各个应用的最小依赖树。这意味着如果你只修改了 `.md` 文档或业务代码，而没有修改 `package.json`，Docker 构建时将能够**跳过** `pnpm install` 阶段，直接利用缓存。
+2. **引入 BuildKit 缓存挂载**：
+    - **pnpm 存储缓存** (`--mount=type=cache,id=pnpm`)：即使依赖发生变化，也只需增量下载，速度提升显著。
+    - **Turbo 构建缓存** (`--mount=type=cache,target=/app/node_modules/.cache`)：在 Docker 内部保留 Turbo 的增量构建产物，极大缩短后续构建时间。
+3. **精准分层**：将基础环境、依赖安装、源码构建和最终运行环境进行物理隔离，确保最终镜像体积最小化（仅包含 Standalone 运行时）。

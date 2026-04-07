@@ -71,8 +71,7 @@ ENV HOSTNAME="0.0.0.0"
 
 COPY --from=builder /app/apps/docs/.next/standalone ./
 COPY --from=builder /app/apps/docs/.next/static ./apps/docs/.next/static
-COPY --from=builder /app/apps/docs/public ./apps/docs/public
+# 注意：apps/docs 目录下目前没有 public 文件夹，请勿在此添加 COPY指令，否则会报错终止构建
 
 EXPOSE 3001
 CMD ["node", "apps/docs/server.js"]
-

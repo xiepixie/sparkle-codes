@@ -1,0 +1,29 @@
+# 依赖与编译产物
+node_modules
+.next
+out
+dist
+build
+.turbo
+packages/markdown-parser/pkg
+packages/sentinel/target
+
+# 源代码管理
+.git
+.gitignore
+.agents
+AGENTS.md
+DOCS
+
+# 环境与日志
+.env*
+!.env.production.example
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 操作系统文件
+.DS_Store
+Thumbs.db

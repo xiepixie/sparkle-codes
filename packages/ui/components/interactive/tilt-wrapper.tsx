@@ -47,7 +47,9 @@ export function TiltWrapper({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) {
+      return;
+    }
     const pointerQuery = window.matchMedia("(pointer: fine)");
     const hoverQuery = window.matchMedia("(hover: none)");
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -67,7 +69,9 @@ export function TiltWrapper({
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (reducedMotionQuery.matches) return;
+      if (reducedMotionQuery.matches) {
+        return;
+      }
 
       const rect = container.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -125,7 +129,9 @@ export function TiltWrapper({
         }
       }}
       onPointerDown={() => {
-        if (!isInteractive) setIsTouchPressed(true);
+        if (!isInteractive) {
+          setIsTouchPressed(true);
+        }
       }}
       onPointerUp={() => setIsTouchPressed(false)}
       onPointerCancel={() => setIsTouchPressed(false)}
@@ -233,14 +239,14 @@ export function TiltWrapper({
                 isInteractive ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" : "opacity-0"
               )}
               style={{
-                background: `radial-gradient(500px circle at var(--x) var(--y), color-mix(in oklab, var(--color-primary, #513bb2) 5%, transparent) 0%, transparent 100%)`,
+                background: "radial-gradient(500px circle at var(--x) var(--y), color-mix(in oklab, var(--color-primary, #513bb2) 5%, transparent) 0%, transparent 100%)",
                 backgroundImage: `
                   linear-gradient(to right, color-mix(in oklab, var(--color-primary, #513bb2) 18%, transparent) 1px, transparent 1px), 
                   linear-gradient(to bottom, color-mix(in oklab, var(--color-primary, #513bb2) 18%, transparent) 1px, transparent 1px)
                 `,
-                backgroundSize: `24px 24px`,
-                WebkitMaskImage: `radial-gradient(300px circle at var(--x) var(--y), black 10%, transparent 100%)`,
-                maskImage: `radial-gradient(300px circle at var(--x) var(--y), black 10% , transparent 100%)`,
+                backgroundSize: "24px 24px",
+                WebkitMaskImage: "radial-gradient(300px circle at var(--x) var(--y), black 10%, transparent 100%)",
+                maskImage: "radial-gradient(300px circle at var(--x) var(--y), black 10% , transparent 100%)",
               }}
             />
 

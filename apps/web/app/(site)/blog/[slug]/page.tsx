@@ -38,7 +38,7 @@ export default async function PostPage({ params }: PostPageProps) {
   // Fetch some suggested posts as fallback for reading history from the global cache
   const allPosts = await getAllPostSummaries();
   const suggestedPosts = allPosts
-    .filter(p => p.path !== slug)
+    .filter(p => p.path !== post.slug)
     .slice(0, 10)
     .map(p => ({
       slug: p.path,
@@ -54,7 +54,8 @@ export default async function PostPage({ params }: PostPageProps) {
     <div className="starry-night-theme relative mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         {/* Sticky Global Navigation - Managed Header */}
         <ReadingHeader 
-          slug={slug} 
+          key={post.slug}
+          slug={post.slug} 
           title={post.displayTitle || post.title} 
           suggestedPosts={suggestedPosts}
         />
@@ -130,11 +131,14 @@ export default async function PostPage({ params }: PostPageProps) {
                     </div>
 
                     {post.description && (
-                        <div className="group relative mt-12 rounded-[2rem] border border-border/40 bg-background/20 p-8 shadow-ambient transition-all hover:bg-background/40">
-                            <div className="absolute left-8 top-0 -translate-y-1/2 rounded-full border border-border/60 bg-background px-4 py-1 text-[9px] font-black uppercase tracking-[0.4em] text-primary shadow-glow-sm">
+                        <div className="group relative mt-12 rounded-3xl border border-border/40 bg-background/30 p-8 shadow-ambient transition-all hover:bg-background/50">
+                            {/* Subtle Accent Line */}
+                            <div className="absolute left-0 top-1/2 h-12 w-1 -translate-y-1/2 rounded-r-full bg-primary/20 transition-colors group-hover:bg-primary/40" />
+                            
+                            <div className="absolute left-8 top-0 -translate-y-1/2 rounded-full border border-border/60 bg-background px-4 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-primary shadow-glow-sm">
                                 TL;DR
                             </div>
-                            <p className="text-[15px] italic leading-relaxed text-muted-foreground/90 font-medium">
+                            <p className="text-[15px] leading-relaxed text-foreground/80 font-medium selection:bg-primary/20">
                                 {post.description}
                             </p>
                         </div>
@@ -142,7 +146,17 @@ export default async function PostPage({ params }: PostPageProps) {
                 </header>
 
                 <article className="prose prose-starry prose-invert max-w-none">
-                    <MarkdownInteractivity html={post.body.html || ""} />
+                    <MarkdownInteractivity 
+                      html={post.body.html || ""} 
+                      currentSlug={slug}
+                      currentPostMeta={{
+                        title: post.displayTitle || post.title,
+                        description: post.description || undefined,
+                        area: post.area,
+                        status: post.status,
+                        tags: post.tags,
+                      }}
+                    />
                 </article>
 
                 <footer className="mt-20 flex flex-col items-center gap-12 border-t border-border/40 pt-16 sm:mt-32">

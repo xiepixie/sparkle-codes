@@ -1,3 +1,4 @@
+@import 'katex/dist/katex.min.css';
 @layer tokens, theme, base, markdown, components, utilities, overrides;
 
 @import '@repo/tailwind-config/theme.css';

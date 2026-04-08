@@ -1,7 +1,7 @@
 "use client";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import "./styles.css";
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
   CONSTELLATIONS,
@@ -96,7 +96,9 @@ const GlobalSkyCache: SkyCache = {
 };
 
 function debugLog(event: string, details?: Record<string, unknown>) {
-  if (!IS_DEV || typeof window === "undefined") return;
+  if (!IS_DEV || typeof window === "undefined") {
+    return;
+  }
   console.log("[StarryBackground]", event, details ?? {});
 }
 
@@ -146,7 +148,9 @@ function getViewportProfile() {
 }
 
 function isValidScene(scene: unknown): scene is SelectedScene {
-  if (!scene || typeof scene !== "object") return false;
+  if (!scene || typeof scene !== "object") {
+    return false;
+  }
 
   const candidate = scene as Partial<SelectedScene>;
   const validSlots = new Set(["dawn", "day", "dusk", "night"]);
@@ -177,7 +181,9 @@ function createAmbientStar(
   while (attempts < 10) {
     const dx = xRel - 0.5;
     const dy = yRel - 0.5;
-    if (Math.sqrt(dx * dx + dy * dy) > 0.18) break;
+    if (Math.sqrt(dx * dx + dy * dy) > 0.18) {
+      break;
+    }
     xRel = rng();
     yRel = rng();
     attempts++;
@@ -233,7 +239,7 @@ function createHeroStar(
   const baseOpacity = 0.65 + rng() * 0.25;
 
   // Convert hex color to RGB string if present, otherwise fallback to theme colors
-  let starColor = point.color ? hexToRgb(point.color) : (rng() > 0.45 ? colors.primary : colors.secondary);
+  const starColor = point.color ? hexToRgb(point.color) : (rng() > 0.45 ? colors.primary : colors.secondary);
 
   return {
     xRel,
@@ -260,9 +266,9 @@ function createHeroStar(
 function hexToRgb(hex: string): string {
   // Simple hex to rgb converter
   const cleanHex = hex.replace("#", "");
-  const r = parseInt(cleanHex.substring(0, 2), 16);
-  const g = parseInt(cleanHex.substring(2, 4), 16);
-  const b = parseInt(cleanHex.substring(4, 6), 16);
+  const r = Number.parseInt(cleanHex.substring(0, 2), 16);
+  const g = Number.parseInt(cleanHex.substring(2, 4), 16);
+  const b = Number.parseInt(cleanHex.substring(4, 6), 16);
   return `${r}, ${g}, ${b}`;
 }
 
@@ -298,7 +304,9 @@ function drawStar(
   globalOpacityMultiplier = 1
 ) {
   // Hard-exit for invisibility to ensure 100% clean background in Light mode
-  if (globalOpacityMultiplier < 0.001) return;
+  if (globalOpacityMultiplier < 0.001) {
+    return;
+  }
 
   const now = performance.now();
   const shimmerFactor = isGoldEffect ? (Math.sin(now * 0.008 + star.x) * 0.25 + 0.75) : 1;
@@ -321,7 +329,7 @@ function drawStar(
     
     // CRITICAL: Glow opacity MUST be multiplied by globalOpacityMultiplier
     // to prevent "gray halos" on white background during theme switch.
-    let baseGlowOpacity = isGoldEffect
+    const baseGlowOpacity = isGoldEffect
       ? 0.35 * shimmerFactor
       : star.isHero
         ? star.excitement * 0.45
@@ -391,7 +399,7 @@ function drawStar(
     } else if (shouldFlare) {
       // Standard smaller cross flare for atmospheric depth
       ctx.rotate(now * (star.isHero ? 0.0004 : 0.00018) + star.twinkleOffset);
-      let baseFlareOpacity = star.isHero ? (star.excitement - 0.25) * 0.55 : effectiveOpacity * 0.38;
+      const baseFlareOpacity = star.isHero ? (star.excitement - 0.25) * 0.55 : effectiveOpacity * 0.38;
       const flareOpacity = clamp(baseFlareOpacity * globalOpacityMultiplier, 0, 0.75);
       
       if (flareOpacity > 0.01) {
@@ -423,14 +431,15 @@ export function StarryBackground() {
   const frameCountRef = useRef(0);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const transitionRef = useRef<number>(isDark ? 1 : 0);
   
 
   const refreshSceneSelection = useCallback(() => {
     const now = new Date();
     const currentSlot = getTimeSlotByHour(now.getHours());
     const generated = buildSceneForDate(now);
-    if (!generated) return;
+    if (!generated) {
+      return;
+    }
 
     let nextScene: SelectedScene | null = null;
 
@@ -473,7 +482,6 @@ export function StarryBackground() {
 
   const initSceneLayers = useCallback((width: number, height: number, scene: SelectedScene) => {
     const colors = GlobalSkyCache.colors;
-    const cfg = TIME_SLOT_CONFIG[scene.timeSlot];
     const { densityMultiplier, isCompact } = getViewportProfile();
     const visibility = getSceneVisibilityProfile(scene.timeSlot, isCompact);
     const rng = createSeededRandom(scene.seed || 0.5);
@@ -490,7 +498,7 @@ export function StarryBackground() {
       ambientStars.push(createAmbientStar(rng, colors, visibility.ambientOpacityMax));
     }
 
-    const { primarySlot, secondarySlot } = resolveSlots(scene.primary, scene.secondary);
+    const { primarySlot, secondarySlot } = resolveSlots(scene.primary, scene.secondary, scene.seed);
     const shouldRenderConstellations = visibility.renderConstellations;
 
     // (Type 1) PRIMARY: Main constellations fixed by PC Time rule
@@ -517,7 +525,9 @@ export function StarryBackground() {
     }
 
     rescaleStars(ambientStars, width, height);
-    for (const stars of heroMap.values()) rescaleStars(stars, width, height);
+    for (const stars of heroMap.values()) {
+      rescaleStars(stars, width, height);
+    }
 
     GlobalSkyCache.ambientStars = ambientStars;
     GlobalSkyCache.heroStars = heroMap;
@@ -538,7 +548,9 @@ export function StarryBackground() {
 
   const resizeCanvas = useCallback((width: number, height: number) => {
     const canvas = canvasRef.current;
-    if (!canvas) return null;
+    if (!canvas) {
+      return null;
+    }
 
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     viewportRef.current = { width, height, dpr };
@@ -548,7 +560,9 @@ export function StarryBackground() {
     canvas.style.height = `${height}px`;
 
     const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
+    if (!ctx) {
+      return null;
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     return ctx;
   }, []);
@@ -561,7 +575,9 @@ export function StarryBackground() {
 
   const rebuildScene = useCallback((width: number, height: number) => {
     ensureSceneReady();
-    if (!GlobalSkyCache.scene || width <= 0 || height <= 0) return;
+    if (!GlobalSkyCache.scene || width <= 0 || height <= 0) {
+      return;
+    }
 
     resizeCanvas(width, height);
 
@@ -601,13 +617,21 @@ export function StarryBackground() {
       if (!isDark) {
         // Just clear excitation to prevent residual glows, but leave effect.active intact 
         // to allow it to resume if the user switches back during its duration.
-        GlobalSkyCache.ambientStars.forEach(s => s.excitement = 0);
-        GlobalSkyCache.heroStars.forEach(stars => stars.forEach(s => s.excitement = 0));
+        GlobalSkyCache.ambientStars.forEach(s => {
+          s.excitement = 0;
+        });
+        GlobalSkyCache.heroStars.forEach(stars => {
+          stars.forEach(s => {
+            s.excitement = 0;
+          });
+        });
       }
       debugLog("scene:theme-reconciled", { isDark });
     } else {
       rescaleStars(GlobalSkyCache.ambientStars, width, height);
-      for (const stars of GlobalSkyCache.heroStars.values()) rescaleStars(stars, width, height);
+      for (const stars of GlobalSkyCache.heroStars.values()) {
+        rescaleStars(stars, width, height);
+      }
     }
   }, [ensureSceneReady, initSceneLayers, resizeCanvas, isDark]);
 
@@ -623,7 +647,9 @@ export function StarryBackground() {
   const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx || !GlobalSkyCache.scene) return;
+    if (!canvas || !ctx || !GlobalSkyCache.scene) {
+      return;
+    }
 
     const { width, height } = viewportRef.current;
     const fx = GlobalSkyCache.effect;
@@ -642,7 +668,9 @@ export function StarryBackground() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       isAnimating.current = false;
       // Do NOT set effect.active = false here, let it run its course silently.
-      if (rafId.current) cancelAnimationFrame(rafId.current);
+      if (rafId.current) {
+        cancelAnimationFrame(rafId.current);
+      }
       return;
     }
 
@@ -685,7 +713,7 @@ export function StarryBackground() {
       
       if (distSq < threshold * threshold) {
         const dist = Math.sqrt(distSq);
-        star.excitement = Math.pow((threshold - dist) / threshold, 1.6);
+        star.excitement = ((threshold - dist) / threshold) ** 1.6;
       } else {
         star.excitement *= 0.94;
       }
@@ -696,7 +724,9 @@ export function StarryBackground() {
 
     for (const placedConstellation of GlobalSkyCache.placedConstellations) {
       const stars = GlobalSkyCache.heroStars.get(placedConstellation.name);
-      if (!stars) continue;
+      if (!stars) {
+        continue;
+      }
 
       for (const star of stars) {
         const dx = mouseX - star.x;
@@ -706,7 +736,7 @@ export function StarryBackground() {
 
         if (distSq < threshold * threshold) {
           const dist = Math.sqrt(distSq);
-          star.excitement = Math.pow((threshold - dist) / threshold, 1.8);
+          star.excitement = ((threshold - dist) / threshold) ** 1.8;
         } else {
           star.excitement *= 0.92;
         }
@@ -722,7 +752,9 @@ export function StarryBackground() {
       for (const [from, to] of placedConstellation.links) {
         const a = stars[from];
         const b = stars[to];
-        if (!a || !b) continue;
+        if (!a || !b) {
+          continue;
+        }
 
         const energy = clamp((a.excitement + b.excitement) / 2, 0, 1);
         
@@ -760,7 +792,9 @@ export function StarryBackground() {
   }, [isDark]); // Re-bind on theme change to ensure smooth transition trigger
 
   const animate = useCallback(() => {
-    if (!isAnimating.current) return;
+    if (!isAnimating.current) {
+      return;
+    }
     drawFrame();
     rafId.current = requestAnimationFrame(animate);
   }, [drawFrame]);
@@ -768,7 +802,9 @@ export function StarryBackground() {
   const start = useCallback(() => {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    if (width <= 0 || height <= 0) return;
+    if (width <= 0 || height <= 0) {
+      return;
+    }
 
     const rootStyles = getComputedStyle(document.documentElement);
     GlobalSkyCache.colors = {
@@ -797,7 +833,9 @@ export function StarryBackground() {
 
   const stop = useCallback(() => {
     isAnimating.current = false;
-    if (rafId.current) cancelAnimationFrame(rafId.current);
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current);
+    }
   }, []);
 
   useLayoutEffect(() => {
@@ -805,7 +843,9 @@ export function StarryBackground() {
   }, [isDark, start]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof document === "undefined") return;
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
 
     if (!debugStateRef.current.loggedMount) {
       debugStateRef.current.loggedMount = true;
@@ -868,7 +908,9 @@ export function StarryBackground() {
       refreshSceneSelection();
       start();
     };
-    const handlePageHide = () => stop();
+    const handlePageHide = () => {
+      stop();
+    };
 
     if (!coarsePointer) {
       window.addEventListener("mousemove", handleMouseMove, { passive: true });
@@ -907,7 +949,9 @@ export function StarryBackground() {
 
   // Handle absolute unmount cleanup 
   useEffect(() => {
-    return () => stop();
+    return () => {
+      stop();
+    };
   }, [stop]);
 
 

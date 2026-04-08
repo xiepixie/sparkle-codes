@@ -3,6 +3,8 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Search, X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { BlogCard } from "@/components/Blog/BlogCard";
+import { BlogCardFeatured } from "@/components/Blog/BlogCardFeatured";
+import { BlogCardCompact } from "@/components/Blog/BlogCardCompact";
 import type { BlogPostFeedResult } from "@/lib/blog";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
@@ -279,6 +281,12 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
     router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
   };
 
+  const isFiltering = query.trim() !== "" || activeTags.length > 0 || currentPage > 1;
+  const isShowFeatured = !isFiltering;
+  const featuredPost = isShowFeatured && feed.posts.length > 0 ? feed.posts[0] : undefined;
+  const secondaryPosts = isShowFeatured ? feed.posts.slice(1, 4) : [];
+  const restPosts = isShowFeatured ? feed.posts.slice(4) : feed.posts;
+
   return (
     <div className="w-full">
       {/* 1. Fast Search Component */}
@@ -392,9 +400,43 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
               </button>
             </div>
           ) : feed.posts.length > 0 ? (
-            feed.posts.map((post, i) => (
-              <BlogCard key={post.path} post={post} index={i} onTagSelect={handleTagToggle} activeTags={activeTags} />
-            ))
+            <div className="w-full space-y-8">
+              {isShowFeatured && featuredPost && (
+                <div className="w-full">
+                   <BlogCardFeatured 
+                    post={featuredPost} 
+                    onTagSelect={handleTagToggle} 
+                    activeTags={activeTags} 
+                   />
+                </div>
+              )}
+              {isShowFeatured && secondaryPosts.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                  {secondaryPosts.map((post, i) => (
+                    <BlogCardCompact 
+                      key={post.path} 
+                      post={post} 
+                      serialNumber={String(i + 2).padStart(2, "0")} 
+                      onTagSelect={handleTagToggle} 
+                      activeTags={activeTags} 
+                    />
+                  ))}
+                </div>
+              )}
+              {restPosts.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {restPosts.map((post, i) => (
+                    <BlogCard 
+                      key={post.path} 
+                      post={post} 
+                      index={isShowFeatured ? i + 4 : i + (currentPage - 1) * pageSize} 
+                      onTagSelect={handleTagToggle} 
+                      activeTags={activeTags} 
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
             <div className="rounded-3xl border border-dashed border-border/50 bg-background/20 py-16 text-center backdrop-blur-sm sm:py-20">
               <p className="text-sm font-medium text-foreground">

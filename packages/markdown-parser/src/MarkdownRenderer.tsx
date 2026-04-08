@@ -1,10 +1,16 @@
-import React, { useLayoutEffect, useEffect, useState, useRef, useCallback } from 'react';
-import 'katex/dist/katex.min.css';
-import './markdown.css';
-import morphdom from 'morphdom';
-import katex from 'katex';
-import DOMPurify from 'dompurify';
-import { generateContentHash } from '@repo/utils';
+import { generateContentHash } from "@repo/utils";
+import DOMPurify from "dompurify";
+import katex from "katex";
+import "katex/dist/katex.min.css";
+import morphdom from "morphdom";
+import React, {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
+import "./markdown.css";
 
 // ✅ P0 FIX: Removed WASM dependencies. Now supports pre-rendered HTML from the database.
 
@@ -21,7 +27,7 @@ type IdleOptions = { timeout?: number };
 const ric: (cb: IdleCallback, opts?: IdleOptions) => number =
     hasWindow && 'requestIdleCallback' in window
         ? (cb, opts) => (window as any).requestIdleCallback(cb, opts)
-        : (cb, opts) => globalThis.setTimeout(() => cb({ didTimeout: true, timeRemaining: () => 0 }), opts?.timeout ?? 1) as unknown as number;
+        : (cb, opts) => globalThis.setTimeout(() => { cb({ didTimeout: true, timeRemaining: () => 0 }); }, opts?.timeout ?? 1) as unknown as number;
 
 const cic: (id: number) => void =
     hasWindow && 'cancelIdleCallback' in window
@@ -42,10 +48,13 @@ class LRUCache<K, V> {
         return value;
     }
     set(key: K, value: V): void {
-        if (this.cache.has(key)) this.cache.delete(key);
-        else if (this.cache.size >= this.maxSize) {
+        if (this.cache.has(key)) {
+            this.cache.delete(key);
+        } else if (this.cache.size >= this.maxSize) {
             const firstKey = this.cache.keys().next().value;
-            if (firstKey !== undefined) this.cache.delete(firstKey);
+            if (firstKey !== undefined) {
+                this.cache.delete(firstKey);
+            }
         }
         this.cache.set(key, value);
     }
@@ -115,22 +124,29 @@ class MathRenderHub {
             return;
         }
 
-        this.observer = new IntersectionObserver((entries) => {
-            const toRender: HTMLElement[] = [];
-            entries.forEach((entry: IntersectionObserverEntry) => {
-                if (entry.isIntersecting) {
-                    const el = entry.target as HTMLElement;
-                    this.observer.unobserve(el);
-                    // If not yet rendered, add to immediate batch
-                    if (!el.dataset.renderedKey) toRender.push(el);
+        this.observer = new IntersectionObserver(
+            (entries) => {
+                const toRender: HTMLElement[] = [];
+                for (const entry of entries) {
+                    if (entry.isIntersecting) {
+                        const el = entry.target as HTMLElement;
+                        this.observer.unobserve(el);
+                        // If not yet rendered, add to immediate batch
+                        if (!el.dataset.renderedKey) {
+                            toRender.push(el);
+                        }
+                    }
                 }
-            });
-            if (toRender.length > 0) this.renderBatch(toRender);
-        }, {
-            root: null,
-            rootMargin: '1200px', // More aggressive pre-loading for global hub
-            threshold: 0.01
-        });
+                if (toRender.length > 0) {
+                    this.renderBatch(toRender);
+                }
+            },
+            {
+                root: null,
+                rootMargin: "1200px", // More aggressive pre-loading for global hub
+                threshold: 0.01,
+            },
+        );
     }
 
     // ✅ P0 优化：评估元素复杂度（用于优先级排序）
@@ -138,11 +154,17 @@ class MathRenderHub {
         const tex = el.dataset.tex || el.textContent || '';
         let score = tex.length;
         // 环境块更复杂
-        if (tex.includes('\\begin{')) score += 50;
+        if (tex.includes('\\begin{')) {
+            score += 50;
+        }
         // 分数、矩阵更复杂
-        if (tex.includes('\\frac') || tex.includes('\\matrix')) score += 30;
+        if (tex.includes('\\frac') || tex.includes('\\matrix')) {
+            score += 30;
+        }
         // 积分、求和更复杂
-        if (tex.includes('\\int') || tex.includes('\\sum')) score += 20;
+        if (tex.includes('\\int') || tex.includes('\\sum')) {
+            score += 20;
+        }
         return score;
     }
 
@@ -152,14 +174,18 @@ class MathRenderHub {
         // Intersecting elements are already visible/near-visible.
         const sorted = items.filter(el => document.contains(el));
 
-        sorted.forEach((el: HTMLElement) => {
-            if (!el.dataset.renderedKey) renderMathElement(el);
+        for (const el of sorted) {
+            if (!el.dataset.renderedKey) {
+                renderMathElement(el);
+            }
             this.queue.delete(el);
-        });
+        }
     }
 
     public register(el: HTMLElement) {
-        if (el.dataset.renderedKey) return;
+        if (el.dataset.renderedKey) {
+            return;
+        }
         this.observer.observe(el);
         this.queue.add(el);
         this.refCount++;
@@ -169,11 +195,15 @@ class MathRenderHub {
     public unregister(el: HTMLElement) {
         this.observer.unobserve(el);
         const wasInQueue = this.queue.delete(el);
-        if (wasInQueue) this.refCount--;
+        if (wasInQueue) {
+            this.refCount--;
+        }
     }
 
     private startIdleSweep() {
-        if (this.isSweepRunning || this.queue.size === 0) return;
+        if (this.isSweepRunning || this.queue.size === 0) {
+            return;
+        }
         this.isSweepRunning = true;
         this.sweepHandle = ric((deadline) => this.sweep(deadline), { timeout: 2000 });
     }
@@ -208,8 +238,12 @@ class MathRenderHub {
             processed++;
 
             // 动态调整：如果时间充裕，继续处理更多
-            if (processed >= maxBatchSize) break;
-            if (processed >= minBatchSize && deadline.timeRemaining() < 5) break;
+            if (processed >= maxBatchSize) {
+                break;
+            }
+            if (processed >= minBatchSize && deadline.timeRemaining() < 5) {
+                break;
+            }
         }
 
         this.isSweepRunning = false;
@@ -329,7 +363,7 @@ export function sanitizeLatex(tex: string): string {
 
     // Safety: prevent nested delimiters that KaTeX can't handle inside a rendered block
     for (const cmd of dangerousCommands) {
-        const regex = new RegExp(cmd.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g');
+        const regex = new RegExp(`${cmd.replace(/\\/g, '\\\\')}(?![a-zA-Z])`, 'g');
         if (regex.test(clean)) {
             console.warn(`[Security] Blocked potentially dangerous LaTeX command: ${cmd}`);
             clean = clean.replace(regex, `\\text{[BLOCKED: ${cmd}]} `);
@@ -373,7 +407,9 @@ function renderMathElement(el: HTMLElement): void {
     el.classList.add('not-prose');
 
     // ✅ FIX: If we're already showing source, don't try to render as KaTeX
-    if (el.classList.contains('show-source')) return;
+    if (el.classList.contains('show-source')) {
+        return;
+    }
 
     if (displayMode) {
         el.classList.add('math-block');
@@ -387,9 +423,13 @@ function renderMathElement(el: HTMLElement): void {
     el.classList.remove('show-source');
 
     // Safety check: if no tex content, don't try to render
-    if (!tex.trim()) return;
+    if (!tex.trim()) {
+        return;
+    }
 
-    if (el.dataset.renderedKey === cacheKey) return;
+    if (el.dataset.renderedKey === cacheKey) {
+        return;
+    }
 
     const perfId = `katex-${cacheKey.slice(0, 12).replace(/[^a-zA-Z0-9]/g, '')}`;
     performance.mark(`${perfId}-start`);
@@ -420,10 +460,12 @@ function renderMathElement(el: HTMLElement): void {
         el.dataset.renderedKey = cacheKey;
         el.classList.add('is-rendered');
         el.classList.remove('math-error');
-        if (el.querySelector('.katex-error')) el.classList.add('math-error');
+        if (el.querySelector('.katex-error')) {
+            el.classList.add('math-error');
+        }
 
         performance.mark(`${perfId}-end`);
-        performance.measure(`katex-render`, `${perfId}-start`, `${perfId}-end`);
+        performance.measure("katex-render", `${perfId}-start`, `${perfId}-end`);
     } catch {
         el.textContent = tex;
         el.classList.add('math-error');
@@ -473,16 +515,24 @@ function highlightLatex(tex: string): string {
 
     // 2. Control Sequences (Commands) - handle greek letters, functions, and symbols specifically
     source = source.replace(/\\[a-zA-Z]+/g, m => {
-        if (LATEX_GREEK.has(m)) return createToken(m, 'tex-greek');
-        if (LATEX_FUNCTIONS.has(m)) return createToken(m, 'tex-function');
-        if (LATEX_SYMBOLS.has(m)) return createToken(m, 'tex-symbol');
-        if (m === '\\begin' || m === '\\end') return createToken(m, 'tex-env-cmd');
+        if (LATEX_GREEK.has(m)) {
+            return createToken(m, 'tex-greek');
+        }
+        if (LATEX_FUNCTIONS.has(m)) {
+            return createToken(m, 'tex-function');
+        }
+        if (LATEX_SYMBOLS.has(m)) {
+            return createToken(m, 'tex-symbol');
+        }
+        if (m === '\\begin' || m === '\\end') {
+            return createToken(m, 'tex-env-cmd');
+        }
         return createToken(m, 'tex-command');
     });
 
     // 3. Environment Arguments: {matrix}, {aligned} etc.
     // Try to match arguments of \begin or \end specifically for better coloring
-    source = source.replace(/(\{)([a-zA-Z\*]+)(\})/g, (_match, p1, p2, p3) => {
+    source = source.replace(/(\{)([a-zA-Z*]+)(\})/g, (_match, p1, p2, p3) => {
         return createToken(p1, 'tex-brace') + createToken(p2, 'tex-env-name') + createToken(p3, 'tex-brace');
     });
 
@@ -490,10 +540,10 @@ function highlightLatex(tex: string): string {
     source = source.replace(/\\[{}$#%&_^~]/g, m => createToken(m, 'tex-escape'));
 
     // 5. Brackets & Parentheses
-    source = source.replace(/[\{\}\[\]\(\)]/g, m => createToken(m, 'tex-brace'));
+    source = source.replace(/[{}[\]()]/g, m => createToken(m, 'tex-brace'));
 
     // 6. Operators, Equal signs & Aligners
-    source = source.replace(/[&_^=+\-*\/<>]|\\pm|\\mp|\\to|\\approx/g, m => createToken(m, 'tex-operator'));
+    source = source.replace(/[&_^=+\-*/<>]|\\pm|\\mp|\\to|\\approx/g, m => createToken(m, 'tex-operator'));
 
     // Step 3: Escape remaining plain text
     source = escapeHtml(source);
@@ -529,8 +579,8 @@ function formatLatexSource(tex: string): string[] {
 
     // Step 2: Smart Prettifying
     // 1. Break before/after environments
-    source = source.replace(/(\\begin\{[^\}]+\})/g, '\n$1\n');
-    source = source.replace(/(\\end\{[^\}]+\})/g, '\n$1\n');
+    source = source.replace(/(\\begin\{[^}]+\})/g, '\n$1\n');
+    source = source.replace(/(\\end\{[^}]+\})/g, '\n$1\n');
 
     // 2. Break after LaTeX line breaks \\
     source = source.replace(/\\\\/g, '\\\\\n');
@@ -544,8 +594,11 @@ function formatLatexSource(tex: string): string[] {
         let result = '';
         for (let i = 0; i < source.length; i++) {
             const char = source[i];
-            if (char === '{') depth++;
-            else if (char === '}') depth--;
+            if (char === '{') {
+                depth++;
+            } else if (char === '}') {
+                depth--;
+            }
 
             // Break at principal operators (=, \to) at top level
             if (depth === 0 && i > 25) {
@@ -637,8 +690,8 @@ function toggleMathSource(el: HTMLElement, t: (key: string, options?: any) => st
                     <div class="code-header-right flex items-center gap-4">
                         <span class="code-lang-text">LaTeX</span>
                         <div class="flex items-center gap-1 opacity-0 group-hover/latex-hdr:opacity-100 transition-all duration-300">
-                           <button class="code-copy-btn-math ml-2 flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-primary uppercase active:scale-95" aria-label="${t('markdown.action.copy_latex', { defaultValue: '复制 LaTeX' })}"><span>COPY</span></button>
-                           <button class="code-close-btn flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-white/50 hover:text-white uppercase active:scale-95" aria-label="${t('markdown.action.back_to_render', { defaultValue: '返回渲染' })}"><span>BACK</span></button>
+                           <button type="button" class="code-copy-btn-math ml-2 flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-primary uppercase active:scale-95" aria-label="${t('markdown.action.copy_latex', { defaultValue: '复制 LaTeX' })}"><span>COPY</span></button>
+                           <button type="button" class="code-close-btn flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-white/50 hover:text-white uppercase active:scale-95" aria-label="${t('markdown.action.back_to_render', { defaultValue: '返回渲染' })}"><span>BACK</span></button>
                         </div>
                     </div>
                 </div>
@@ -649,14 +702,14 @@ function toggleMathSource(el: HTMLElement, t: (key: string, options?: any) => st
                 <div class="latex-ref-panel hidden">
                     <div class="ref-panel-header">
                         <span class="ref-panel-title">${t('markdown.panel.latex_ref', { defaultValue: 'LaTeX 参考' })}</span>
-                        <button class="ref-panel-close">
+                        <button type="button" class="ref-panel-close">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 18L18 6M6 6l12 12"></path></svg>
                         </button>
                     </div>
                     <div class="ref-panel-content"></div>
                 </div>
             </div>`
-            : `<code class="math-source-content">${highlightLatex(tex)}<button class="inline-copy-btn ml-2 opacity-30 hover:opacity-100 transition-opacity" title="${t('markdown.action.copy', { defaultValue: '复制' })}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></button></code>`;
+            : `<code class="math-source-content">${highlightLatex(tex)}<button type="button" class="inline-copy-btn ml-2 opacity-30 hover:opacity-100 transition-opacity" title="${t('markdown.action.copy', { defaultValue: '复制' })}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></button></code>`;
 
         el.innerHTML = content;
 
@@ -733,8 +786,10 @@ function extractSection(html: string, fragmentPath: string): string {
             let curr = startNode.nextElementSibling;
             while (curr) {
                 if (/^H[1-6]$/.test(curr.tagName)) {
-                    const level = parseInt(curr.tagName[1]);
-                    if (level <= currentLevel) break; // Exit scope
+                    const level = Number.parseInt(curr.tagName[1], 10);
+                    if (level <= currentLevel) {
+                        break; // Exit scope
+                    }
                     candidates.push(curr);
                 }
                 curr = curr.nextElementSibling;
@@ -742,13 +797,17 @@ function extractSection(html: string, fragmentPath: string): string {
         }
 
         const found = candidates.find(h => norm(h.textContent || '') === f);
-        if (!found) return ''; // Link broke or heading renamed
+        if (!found) {
+            return ""; // Link broke or heading renamed
+        }
 
         startNode = found;
-        currentLevel = parseInt(found.tagName[1]);
+        currentLevel = Number.parseInt(found.tagName[1]);
     }
 
-    if (!startNode) return '';
+    if (!startNode) {
+        return '';
+    }
 
     // 2. Section Slicing: Capture content including the start node
     const fragment_nodes: Node[] = [startNode.cloneNode(true)];
@@ -757,7 +816,9 @@ function extractSection(html: string, fragmentPath: string): string {
         if (cur.nodeType === 1) { // Element
             const el = cur as HTMLElement;
             if (/^H[1-6]$/.test(el.tagName)) {
-                if (parseInt(el.tagName[1]) <= currentLevel) break;
+                if (Number.parseInt(el.tagName[1]) <= currentLevel) {
+                break;
+            }
             }
         }
         fragment_nodes.push(cur.cloneNode(true));
@@ -766,7 +827,9 @@ function extractSection(html: string, fragmentPath: string): string {
 
     const wrap = document.createElement('div');
     wrap.className = 'wiki-embed-section-content';
-    fragment_nodes.forEach((node: Node) => wrap.appendChild(node));
+    fragment_nodes.forEach((node: Node) => {
+        wrap.appendChild(node);
+    });
     return wrap.innerHTML;
 }
 
@@ -788,19 +851,23 @@ function highlightCode(code: string, language: string): string {
     const lang = language.toLowerCase();
     let highlighted = escapeHtml(code);
     const patterns: Array<{ regex: RegExp; className: string }> = [];
-
     // 1. Compile or get cached patterns
-    const getRegex = (key: string, source: string, flags = 'g') => {
+    const getRegex = (key: string, source: string, flags = "g") => {
         const cacheKey = `${lang}|${key}`;
-        if (!highlightCache.has(cacheKey)) highlightCache.set(cacheKey, new RegExp(source, flags));
-        return highlightCache.get(cacheKey)!;
+        const cached = highlightCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+        const regex = new RegExp(source, flags);
+        highlightCache.set(cacheKey, regex);
+        return regex;
     };
 
-    if (['python', 'ruby', 'bash', 'shell'].includes(lang)) {
-        patterns.push({ regex: getRegex('comment', /(#.*$)/.source, 'gm'), className: 'token comment' });
-    } else if (['javascript', 'typescript', 'java', 'c', 'cpp', 'rust', 'go', 'csharp'].includes(lang)) {
-        patterns.push({ regex: getRegex('comment-sl', /(\/\/.*$)/.source, 'gm'), className: 'token comment' });
-        patterns.push({ regex: getRegex('comment-ml', /(\/\*[\s\S]*?\*\/)/.source, 'g'), className: 'token comment' });
+    if (["python", "ruby", "bash", "shell"].includes(lang)) {
+        patterns.push({ regex: getRegex("comment", /(#.*$)/.source, "gm"), className: "token comment" });
+    } else if (["javascript", "typescript", "java", "c", "cpp", "rust", "go", "csharp"].includes(lang)) {
+        patterns.push({ regex: getRegex("comment-sl", /(\/\/.*$)/.source, "gm"), className: "token comment" });
+        patterns.push({ regex: getRegex("comment-ml", /(\/\*[\s\S]*?\*\/)/.source, "g"), className: "token comment" });
     }
     patterns.push({ regex: getRegex('string', /(&quot;[^&quot;]*&quot;|'[^']*'|&#39;[^#]*&#39;)/.source, 'g'), className: 'token string' });
     patterns.push({ regex: getRegex('number', /\b(\d+\.?\d*)\b/.source, 'g'), className: 'token number' });
@@ -821,14 +888,31 @@ function highlightCode(code: string, language: string): string {
     for (const { regex, className } of patterns) {
         const newParts: Array<{ text: string; isToken: boolean }> = [];
         for (const part of parts) {
-            if (part.isToken) { newParts.push(part); continue; }
-            let lastIdx = 0; let m; regex.lastIndex = 0;
-            while ((m = regex.exec(part.text)) !== null) {
-                if (m.index > lastIdx) newParts.push({ text: part.text.substring(lastIdx, m.index), isToken: false });
+            if (part.isToken) {
+                newParts.push(part);
+                continue;
+            }
+            let lastIdx = 0;
+            let m: RegExpExecArray | null;
+            regex.lastIndex = 0;
+            m = regex.exec(part.text);
+            while (m !== null) {
+                if (m.index > lastIdx) {
+                    newParts.push({
+                        text: part.text.substring(lastIdx, m.index),
+                        isToken: false,
+                    });
+                }
                 newParts.push({ text: `<span class="${className}">${m[0]}</span>`, isToken: true });
                 lastIdx = m.index + m[0].length;
+                m = regex.exec(part.text);
             }
-            if (lastIdx < part.text.length) newParts.push({ text: part.text.substring(lastIdx), isToken: false });
+            if (lastIdx < part.text.length) {
+                newParts.push({
+                    text: part.text.substring(lastIdx),
+                    isToken: false,
+                });
+            }
         }
         parts.length = 0; parts.push(...newParts);
     }
@@ -843,7 +927,9 @@ const scrollListenerMap = new WeakMap<HTMLElement, () => void>();
 
 function setupCodeBlockScrollDetection(el: HTMLElement): void {
     // 避免重复添加监听器
-    if (scrollListenerMap.has(el)) return;
+    if (scrollListenerMap.has(el)) {
+        return;
+    }
 
     const checkScrollPosition = () => {
         const isScrolledToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
@@ -875,13 +961,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
     resolveAsset,
     resolveNote,
     showTexBadge = true,
-    t = (k: string, o?: any) => o?.defaultValue || k
+    t = (k: string, o?: { defaultValue?: string; [key: string]: any }) => o?.defaultValue || k
 }: MarkdownRendererProps) => {
-    const [error, setError] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const lastHashRef = useRef<string>('');
-    const idleHandleRef = useRef<number | null>(null); 
-
+    // lastHashRef and idleHandleRef were indeed unused and removed
+    const error: string | null = null; // Defined as constant since setError was unused
 
     // ✅ P1-2: Refs for interaction management
     const longPressTimerRef = useRef<number | null>(null);
@@ -904,7 +988,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
 
         if (wikiLink instanceof HTMLElement) {
             const { target: linkTarget, page, fragment } = wikiLink.dataset;
-            if (!linkTarget || !page) return;
+            if (!linkTarget || !page) {
+                return;
+            }
 
             // Clear any pending dismissal
             if (previewTimerRef.current) {
@@ -939,7 +1025,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
                 if (resolveNote) {
                     try {
                         let html = noteContentCache.get(page);
-                        if (html instanceof Promise) html = await html;
+                        if (html instanceof Promise) {
+                            html = await html;
+                        }
                         if (!html) {
                             const p = resolveNote(page);
                             noteContentCache.set(page, p);
@@ -1071,10 +1159,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
                     notify(ok ? 'markdown:markdown.notifications.code_lines_copied' : 'markdown:markdown.notifications.copy_failed', ok ? 'success' : 'error', ok ? { count: lines.length } : undefined);
                     if (ok) {
                         container.classList.add('is-copied');
-                        selectedLines.forEach((line: Element) => line.classList.add('is-copied'));
+                        selectedLines.forEach((line: Element) => {
+                            line.classList.add('is-copied');
+                        });
                         setTimeout(() => {
                             container.classList.remove('is-copied');
-                            selectedLines.forEach((line: Element) => line.classList.remove('is-copied'));
+                            selectedLines.forEach((line: Element) => {
+                            line.classList.remove('is-copied');
+                        });
                         }, 400);
                     }
                 });
@@ -1087,10 +1179,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
                         if (success) {
                             container.classList.add('is-copied');
                             const codeElements = container.querySelectorAll('.mockup-code pre');
-                            codeElements.forEach((line: Element) => line.classList.add('is-copied'));
+                            codeElements.forEach((line: Element) => {
+                                line.classList.add('is-copied');
+                            });
                             setTimeout(() => {
                                 container.classList.remove('is-copied');
-                                codeElements.forEach((line: Element) => line.classList.remove('is-copied'));
+                                codeElements.forEach((line: Element) => {
+                                    line.classList.remove('is-copied');
+                                });
                             }, 400);
                         }
                     });
@@ -1103,7 +1199,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
         const closeBtn = target.closest('.code-close-btn');
         if (closeBtn) {
             const mathEl = closeBtn.closest(MATH_SELECTOR) as HTMLElement;
-            if (mathEl) toggleMathSource(mathEl);
+            if (mathEl) {
+                toggleMathSource(mathEl);
+            }
             return;
         }
 
@@ -1116,11 +1214,13 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
             e.stopPropagation();
 
             const container = codeLine.closest('.code-fence-container') as HTMLElement;
-            if (!container) return; // Defensive check
+            if (!container) {
+                return; // Defensive check
+            }
 
             const style = getComputedStyle(container);
-            const gutterRem = parseFloat(style.getPropertyValue('--code-gutter')) || 3.5;
-            const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            const gutterRem = Number.parseFloat(style.getPropertyValue('--code-gutter')) || 3.5;
+            const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
             const gutterPx = gutterRem * rootFontSize;
 
             const rect = codeLine.getBoundingClientRect();
@@ -1225,7 +1325,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
 
         // Option 2: Fallback to content parsing (Note: Requires a parser)
         // If we want zero-WASM, we should ideally NOT parse here or use a lighter JS parser
-        if (!content) return;
+        if (!content) {
+            return;
+        }
 
         // For now, if we have content but no HTML, we show a warning or fallback
         // Given the goal of removing WASM, we should expect HTML to be the main path.
@@ -1238,7 +1340,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
     }, [initialHtml, content]);
 
     useLayoutEffect(() => {
-        if (!parsedResult || !containerRef.current) return;
+        if (!parsedResult || !containerRef.current) {
+            return;
+        }
 
         const perfId = `dom-${parsedResult.hash.slice(0, 8)}`;
         performance.mark(`${perfId}-morph-start`);
@@ -1277,10 +1381,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
 
         // ✅ P1-3: Table Wrapper Injection for Overflow & Layout Spacing
         // industry-standard wrapping for responsive tables
-        fragment.querySelectorAll('table').forEach((table: Element) => {
-            if (table.parentElement?.classList.contains('md-table-wrap')) return;
-            const wrap = document.createElement('div');
-            wrap.className = 'md-table-wrap';
+        fragment.querySelectorAll("table").forEach((table: Element) => {
+            if (table.parentElement?.classList.contains("md-table-wrap")) {
+                return;
+            }
+            const wrap = document.createElement("div");
+            wrap.className = "md-table-wrap";
             table.replaceWith(wrap);
             wrap.appendChild(table);
         });
@@ -1297,19 +1403,26 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
             childrenOnly: true,
             // ✅ P0-3: Safe nodeType check before accessing dataset
             getNodeKey: (node: Node) => {
-                if (!node || node.nodeType !== 1) return null;
+                if (!node || node.nodeType !== 1) {
+                    return null;
+                }
                 const el = node as HTMLElement;
                 return el.dataset.key || el.id || null;
             },
             onBeforeElUpdated: (from: Node, to: Node) => {
-                if (!(from instanceof HTMLElement) || !(to instanceof HTMLElement)) return true;
-                const fk = from.dataset.key, tk = to.dataset.key;
+                if (!(from instanceof HTMLElement) || !(to instanceof HTMLElement)) {
+                    return true;
+                }
+                const fk = from.dataset.key;
+                const tk = to.dataset.key;
                 // ✅ P0-4: Preserve interactive state on keyed nodes (IDE experience)
                 // Support math state persistence even for unkeyed elements (data-tex based)
                 const isMath = from.dataset.tex !== undefined;
                 if ((fk && fk === tk) || (isMath && from.dataset.tex === to.dataset.tex)) {
                     ['is-selected', 'is-active', 'is-copied', 'show-source'].forEach((cls: string) => {
-                        if (from.classList.contains(cls)) to.classList.add(cls);
+                        if (from.classList.contains(cls)) {
+                            to.classList.add(cls);
+                        }
                     });
                     if (from.getAttribute('aria-selected') === 'true') {
                         to.setAttribute('aria-selected', 'true');
@@ -1330,38 +1443,60 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
             },
             onNodeAdded: (n: Node) => {
                 if (n instanceof HTMLElement) {
-                    if (n.classList.contains('math-inline') || n.classList.contains('math-block') || n.classList.contains('sentinel-math')) mathQueue.add(n);
-                    n.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => mathQueue.add(el as HTMLElement));
+                    if (
+                        n.classList.contains("math-inline") ||
+                        n.classList.contains("math-block") ||
+                        n.classList.contains("sentinel-math")
+                    ) {
+                        mathQueue.add(n);
+                    }
+                    n.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => {
+                        mathQueue.add(el as HTMLElement);
+                    });
 
                     // ✅ WikiEmbed Lazy Loading & Rendering
                     if (n.classList.contains('wiki-embed') && !n.dataset.rendered) {
                         embedQueueRef.current.add(n);
                     }
-                    n.querySelectorAll('.wiki-embed:not([data-rendered])').forEach((el: Element) => {
+                    for (const el of n.querySelectorAll(".wiki-embed:not([data-rendered])")) {
                         embedQueueRef.current.add(el as HTMLElement);
-                    });
+                    }
 
                     // ✅ 代码块滚动状态检测：添加滚动监听器
-                    if (n.classList.contains('code-fence') && n.classList.contains('mockup-code')) {
+                    if (n.classList.contains("code-fence") && n.classList.contains("mockup-code")) {
                         setupCodeBlockScrollDetection(n);
                     }
-                    n.querySelectorAll('.code-fence.mockup-code').forEach((el: Element) => {
+                    for (const el of n.querySelectorAll(".code-fence.mockup-code")) {
                         setupCodeBlockScrollDetection(el as HTMLElement);
-                    });
+                    }
                 }
                 return n;
             },
             onElUpdated: (el: Node) => {
-                if (el instanceof HTMLElement && (el.classList.contains('math-inline') || el.classList.contains('math-block') || el.classList.contains('sentinel-math')) && !el.dataset.renderedKey) mathQueue.add(el);
+                if (
+                    el instanceof HTMLElement &&
+                    (el.classList.contains("math-inline") ||
+                        el.classList.contains("math-block") ||
+                        el.classList.contains("sentinel-math")) &&
+                    !el.dataset.renderedKey
+                ) {
+                    mathQueue.add(el);
+                }
             },
             onNodeDiscarded: (n: Node) => {
                 if (n instanceof HTMLElement) {
-                    if (n.classList.contains('math-inline') || n.classList.contains('math-block') || n.classList.contains('sentinel-math')) mathHub.unregister(n);
-                    n.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => mathHub.unregister(el as HTMLElement));
+                    if (n.classList.contains('math-inline') || n.classList.contains('math-block') || n.classList.contains('sentinel-math')) {
+                        mathHub.unregister(n);
+                    }
+                    n.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => {
+                        mathHub.unregister(el as HTMLElement);
+                    });
                 }
             }
         });
-        containerRef.current.querySelectorAll(`${MATH_SELECTOR}:not([data-rendered-key])`).forEach((el: Element) => mathQueue.add(el as HTMLElement));
+        containerRef.current.querySelectorAll(`${MATH_SELECTOR}:not([data-rendered-key])`).forEach((el: Element) => {
+            mathQueue.add(el as HTMLElement);
+        });
 
         // ✅ P1-4: Accessibility fixes must ALWAYS run, not be skipped by early return
         if (containerRef.current) {
@@ -1369,11 +1504,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
             
             // 🚨 P1-Global: Clean up any leaked blockquote prefixes ("> ") in math data-tex
             // We do this globally first to catch all instances
-            container.querySelectorAll(MATH_SELECTOR).forEach((el: any) => {
-                if (el.dataset.tex) {
+            container.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => {
+                const mathEl = el as HTMLElement;
+                if (mathEl.dataset.tex) {
                     // Use multiline flag 'm' to catch prefixes on every line, 
                     // and handle various escape formats from different parsers
-                    el.dataset.tex = el.dataset.tex
+                    mathEl.dataset.tex = mathEl.dataset.tex
                         .replace(/^(?:\s*&gt;|\s*>|\s*&amp;gt;)\s?/gm, '')
                         .trim();
                 }
@@ -1382,7 +1518,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
             // 🚨 P2: Obsidian-style callouts are now handled by the Rust parser at the Pass 2.7 stage.
             // This prevents hydration errors and ensures SSR/CSR semantic parity.
             // 🚨 P3: Accessibility & Tab Index for Math
-            container.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => {
+            for (const el of container.querySelectorAll(MATH_SELECTOR)) {
                 const mathEl = el as HTMLElement;
                 const isBlock = mathEl.classList.contains('math-block') || mathEl.classList.contains('math-display');
                 
@@ -1400,24 +1536,26 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
                     });
                     mathEl.setAttribute('aria-label', label);
                 }
-            });
+            }
         }
 
         if (mathQueue.size > 0) {
-            mathQueue.forEach((el: HTMLElement) => mathHub.register(el));
+            for (const el of mathQueue) {
+                mathHub.register(el);
+            }
             performance.mark(`${perfId}-math-queued`);
         }
 
         // ✅ P0: WikiEmbed Task Scheduling
         if (embedQueueRef.current.size > 0) {
-            embedQueueRef.current.forEach((el: HTMLElement) => {
+            for (const el of embedQueueRef.current) {
                 embedObserverRef.current?.observe(el);
-            });
+            }
             embedQueueRef.current.clear();
         }
 
         performance.mark(`${perfId}-morph-end`);
-        performance.measure(`markdown-dom-update`, `${perfId}-morph-start`, `${perfId}-morph-end`);
+        performance.measure("markdown-dom-update", `${perfId}-morph-start`, `${perfId}-morph-end`);
 
         return () => {
             // Components don't disconnect the hub, just unobserve items they added if they are vanishing
@@ -1514,7 +1652,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
     // ✅ P0: Implementation of WikiEmbed rendering
     async function renderWikiEmbed(el: HTMLElement) {
         const { type, target, page, fragment, alias } = el.dataset;
-        if (!page) return;
+        if (!page) {
+            return;
+        }
 
         el.classList.add('is-loading');
 
@@ -1542,7 +1682,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
 
                 // Check cache first
                 let noteHtml = noteContentCache.get(page);
-                if (noteHtml instanceof Promise) noteHtml = await noteHtml;
+                if (noteHtml instanceof Promise) {
+                    noteHtml = await noteHtml;
+                }
                 if (!noteHtml) {
                     const promise = resolveNote(page);
                     noteContentCache.set(page, promise);
@@ -1570,10 +1712,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
                 el.innerHTML = headerHtml + `<div class="wiki-embed-content">${noteHtml}</div>`;
 
                 // Recursive Enhancement: Process math, code etc inside embedded content
-                el.querySelectorAll(MATH_SELECTOR).forEach((m: Element) => mathHub.register(m as HTMLElement));
-                el.querySelectorAll('.code-fence.mockup-code').forEach((c: Element) => setupCodeBlockScrollDetection(c as HTMLElement));
+                for (const m of el.querySelectorAll(MATH_SELECTOR)) {
+                    mathHub.register(m as HTMLElement);
+                }
+                for (const c of el.querySelectorAll(".code-fence.mockup-code")) {
+                    setupCodeBlockScrollDetection(c as HTMLElement);
+                }
                 // Handle nested embeds
-                el.querySelectorAll('.wiki-embed:not([data-rendered])').forEach((e: Element) => renderWikiEmbed(e as HTMLElement));
+                for (const e of el.querySelectorAll(".wiki-embed:not([data-rendered])")) {
+                    renderWikiEmbed(e as HTMLElement);
+                }
             }
 
             el.dataset.rendered = '1';
@@ -1590,7 +1738,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
         }
     }
 
-    if (error) return <div className="alert alert-error m-4 rounded-xl shadow-lg border-none">{error}</div>;
+    if (error) {
+        return <article className="alert alert-error m-4 rounded-xl shadow-lg border-none">{error}</article>;
+    }
 
 
     // Support both legacy prose-none and new data-density attribute
@@ -1601,11 +1751,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
 
     return (
         <>
-            <div
+            <article
                 ref={containerRef}
                 className={`${baseClasses} ${className}`}
-                data-density={density === 'compact' ? 'compact' : undefined}
-                data-hide-tex-badge={showTexBadge ? undefined : ''}
+                data-density={density === "compact" ? "compact" : undefined}
+                data-hide-tex-badge={showTexBadge ? undefined : ""}
                 onClick={handleClick}
                 onContextMenu={handleContextMenu}
                 onDoubleClick={handleDoubleClick}
@@ -1614,10 +1764,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onMouseOver={handleMouseEnter}
+                onFocus={() => { /* no-op */ }} 
             />
 
             {/* ✅ WikiLink Preview Popover */}
-            {preview && preview.visible && (
+            {preview?.visible && (
                 <div
                     className="wiki-link-preview sea glass-panel shadow-premium-lg"
                     style={{
@@ -1638,7 +1789,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
                 >
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2 border-bottom border-base-content/10 pb-2 mb-2">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" role="img" aria-label="Note Preview Icon">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>
                             <span className="font-bold truncate text-primary">{preview.page}{preview.fragment ? ` #${preview.fragment}` : ''}</span>
                         </div>
                         {preview.content === null ? (
@@ -1648,6 +1802,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
                         ) : (
                             <div
                                 className="prose prose-xs text-base-content/80 line-clamp-6 mask-fade-bottom"
+                                // biome-ignore lint: sanitized
                                 dangerouslySetInnerHTML={{ __html: preview.content }}
                             />
                         )}

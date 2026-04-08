@@ -32,7 +32,17 @@ static ADMONITION_BLOCK_RE: Lazy<Regex> = Lazy::new(|| {
     // Matches Obsidian Admonition code block syntax: ```ad-type \n content \n ```
     Regex::new(r"(?sm)^```ad-([a-zA-Z0-9_-]+)[ \t]*\n(.*?)^```").unwrap()
 });
+static EXTRACT_HEADING_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?i)<(h[1-6])\b[^>]*id="([^"]+)"[^>]*>(.*?)</h[1-6]>"#).unwrap()
+});
+static EXTRACT_BLOCK_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?i)<span id="\^([^"]+)" class="block-anchor"></span></([a-zA-Z0-9]+)>"#).unwrap()
+});
+
 static ESCAPED_HASH_PLACEHOLDER: &str = "__SPARKLE_ESCAPED_HASH__";
+
+pub mod structs;
+pub use structs::{HeadingNode, SectionNode, BlockNode};
 
 #[derive(Serialize, Debug, Clone)]
 pub struct WikiLink {
@@ -56,6 +66,9 @@ pub struct ParseResult {
     pub has_hashtags: bool,
     pub links: Vec<WikiLink>,
     pub hashtags: Vec<String>,
+    pub headings: Vec<HeadingNode>,
+    pub sections: Vec<SectionNode>,
+    pub blocks: Vec<BlockNode>,
 }
 fn parse_tag(bytes: &[u8], i: usize) -> (usize, Option<u8>, bool, bool) {
     let mut j = i + 1;
@@ -142,11 +155,13 @@ fn parse_wikilink_at<'a>(html: &'a str, bytes: &[u8], i: usize) -> Option<(usize
     None
 }
 
-fn is_image_ext(page: &str) -> bool {
+fn is_attachment_ext(page: &str) -> bool {
     let page = page.to_lowercase();
     page.ends_with(".png") || page.ends_with(".jpg") || page.ends_with(".jpeg") || 
     page.ends_with(".gif") || page.ends_with(".webp") || page.ends_with(".svg") ||
-    page.ends_with(".pdf")
+    page.ends_with(".pdf") || page.ends_with(".mp4") || page.ends_with(".webm") ||
+    page.ends_with(".ogv") || page.ends_with(".mp3") || page.ends_with(".wav") ||
+    page.ends_with(".mov")
 }
 
 fn escape_html_attr(s: &str) -> String {
@@ -246,7 +261,7 @@ fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bo
                     if let Some((end, parts)) = parse_wikilink_at(html, bytes, i) {
                         if last < start_idx { out.push_str(&html[last..start_idx]); }
 
-                        let is_image = is_image_ext(parts.page);
+                        let is_attachment = is_attachment_ext(parts.page);
                         let escaped_full = escape_html_attr(parts.raw_target);
                         let escaped_page = escape_html_attr(parts.page);
                         let escaped_frag = escape_html_attr(parts.fragment);
@@ -262,12 +277,12 @@ fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bo
 
                         if is_embed {
                             has_wiki_embeds = true;
-                            let embed_kind = if is_image { "image" } else { "note" };
+                            let embed_kind = if is_attachment { "image" } else { "note" };
                             out.push_str("<span class=\"wiki-embed\" data-embed-kind=\"");
                             out.push_str(embed_kind);
                             out.push_str("\" ");
 
-                            if is_image {
+                            if is_attachment {
                                 out.push_str("data-src=\"");
                                 out.push_str(&escaped_full);
                                 out.push_str("\" ");
@@ -288,15 +303,10 @@ fn process_inline_entities(html: &str) -> (String, bool, bool, Vec<WikiLink>, bo
                             }
                             out.push_str(">");
                             
-                            if is_image { out.push_str("<span class=\"wiki-embed-image-placeholder\">🖼️ "); }
-                            else { out.push_str("<span class=\"wiki-embed-note-placeholder\">📄 "); }
-                            
-                            if parts.has_explicit_label && !parts.label.is_empty() {
-                                out.push_str(&escape_html_text(parts.label));
-                            } else {
-                                push_default_display(&mut out, parts.page, &parts.fragment);
+                            // Cleaner placeholder for SSR/SEO, will be replaced by hydration
+                            if is_attachment {
                             }
-                            out.push_str("</span></span>");
+                            out.push_str("</span>");
                         } else {
                             has_wiki_links = true;
                             out.push_str("<a class=\"wiki-link\" data-target=\"");
@@ -766,6 +776,8 @@ pub fn parse_content_native(input: &str) -> Result<ParseResult, String> {
     let has_table = TABLE_TAG_RE.is_match(&final_html);
     let hash = simple_hash(&final_html);
 
+    let (headings, sections, blocks) = extract_structural_nodes(&final_html);
+
     Ok(ParseResult {
         html: final_html,
         hash,
@@ -777,7 +789,132 @@ pub fn parse_content_native(input: &str) -> Result<ParseResult, String> {
         has_hashtags,
         links,
         hashtags,
+        headings,
+        sections,
+        blocks,
     })
+}
+
+fn extract_structural_nodes(html: &str) -> (Vec<HeadingNode>, Vec<SectionNode>, Vec<BlockNode>) {
+    let mut headings = Vec::new();
+    let mut sections = Vec::new();
+    let mut blocks = Vec::new();
+    
+    let mut section_boundaries = Vec::new();
+    
+    for cap in EXTRACT_HEADING_RE.captures_iter(html) {
+        let m = cap.get(0).unwrap();
+        let tag = cap.get(1).unwrap().as_str();
+        let id = cap.get(2).unwrap().as_str();
+        let content = cap.get(3).unwrap().as_str();
+        let level = tag[1..].parse::<i32>().unwrap_or(2);
+        
+        headings.push(HeadingNode {
+            id: id.to_string(),
+            text: HTML_TAG_RE.replace_all(content, "").trim().to_string(),
+            level,
+        });
+        
+        section_boundaries.push(m.start());
+    }
+    section_boundaries.push(html.len());
+    
+    let mut last_idx = 0;
+    let mut current_heading_id: Option<String> = None;
+    let mut current_heading_text = "".to_string();
+    let mut current_heading_level = 0;
+    let mut section_index = 0_i32;
+    
+    for cap in EXTRACT_HEADING_RE.captures_iter(html) {
+        let start_idx = cap.get(0).unwrap().start();
+        
+        if start_idx > last_idx || section_index == 0 {
+            let html_chunk = &html[last_idx..start_idx];
+            if !html_chunk.trim().is_empty() || section_index == 0 {
+                sections.push(SectionNode {
+                    heading_id: current_heading_id.clone(),
+                    heading_text: current_heading_text.clone(),
+                    heading_level: current_heading_level,
+                    section_index,
+                    html: html_chunk.trim().to_string(),
+                    text_content: HTML_TAG_RE.replace_all(html_chunk, "").trim().to_string(),
+                    is_first_section: section_index == 0,
+                });
+                section_index += 1;
+            }
+        }
+        
+        last_idx = start_idx;
+        current_heading_id = Some(cap.get(2).unwrap().as_str().to_string());
+        current_heading_text = HTML_TAG_RE.replace_all(cap.get(3).unwrap().as_str(), "").trim().to_string();
+        current_heading_level = cap.get(1).unwrap().as_str()[1..].parse::<i32>().unwrap_or(2);
+    }
+    
+    if last_idx < html.len() {
+        let html_chunk = &html[last_idx..];
+        if !html_chunk.trim().is_empty() || section_index == 0 {
+            sections.push(SectionNode {
+                heading_id: current_heading_id.clone(),
+                heading_text: current_heading_text.clone(),
+                heading_level: current_heading_level,
+                section_index,
+                html: html_chunk.trim().to_string(),
+                text_content: HTML_TAG_RE.replace_all(html_chunk, "").trim().to_string(),
+                is_first_section: section_index == 0,
+            });
+        }
+    }
+    
+    for cap in EXTRACT_BLOCK_RE.captures_iter(html) {
+        let block_id = cap.get(1).unwrap().as_str().to_string();
+        let tag_name = cap.get(2).unwrap().as_str();
+        let match_end = cap.get(0).unwrap().end();
+        let match_start = cap.get(0).unwrap().start();
+        
+        let open_tag = format!("<{}", tag_name);
+        let close_tag = format!("</{}", tag_name);
+        
+        let prefix = &html[..match_start];
+        let mut depth = 0;
+        let mut block_start_idx = None;
+        
+        let mut events = Vec::new();
+        for (i, _) in prefix.rmatch_indices(&open_tag) {
+            events.push((i, 1));
+        }
+        for (i, _) in prefix.rmatch_indices(&close_tag) {
+            events.push((i, -1));
+        }
+        events.sort_by_key(|k| k.0);
+        events.reverse();
+        
+        for (i, diff) in events {
+            depth += diff;
+            if depth > 0 {
+                block_start_idx = Some(i);
+                break;
+            }
+        }
+        
+        if let Some(start) = block_start_idx {
+            let block_html = &html[start..match_end];
+            let mut sec_idx = 0;
+            for (idx, &bound) in section_boundaries.iter().enumerate() {
+                if start < bound {
+                    sec_idx = idx as i32;
+                    break;
+                }
+            }
+            blocks.push(BlockNode {
+                block_id,
+                section_index: sec_idx,
+                html: block_html.to_string(),
+                text_content: HTML_TAG_RE.replace_all(block_html, "").trim().to_string(),
+            });
+        }
+    }
+    
+    (headings, sections, blocks)
 }
 
 // NOTE: Math detection uses regex on HTML output from markdown-rs.

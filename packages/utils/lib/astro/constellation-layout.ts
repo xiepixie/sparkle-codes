@@ -61,8 +61,9 @@ export function placeConstellation(
 
 /**
  * Strategy to resolve slots for primary and secondary constellations.
+ * If a seed is provided, it use a weighted random approach to select slots.
  */
-export function resolveSlots(primary: string | null, secondary: string | null) {
+export function resolveSlots(primary: string | null, secondary: string | null, seed?: number) {
   if (!primary) {
     return { primarySlot: null, secondarySlot: null };
   }
@@ -76,17 +77,34 @@ export function resolveSlots(primary: string | null, secondary: string | null) {
     "bottomLeft",
   ];
 
-  // Deterministic seed based on names
-  const pIdx = Math.abs(primary.length) % availableSlots.length;
+  let pIdx: number;
+  
+  if (seed !== undefined) {
+    // Generate a secondary stable seed from the first one
+    const s1 = Math.abs(Math.sin(seed * 1234.567));
+    pIdx = Math.floor(s1 * availableSlots.length);
+  } else {
+    // Deterministic fallback based on names
+    pIdx = Math.abs(primary.length) % availableSlots.length;
+  }
+  
   const primarySlot = availableSlots[pIdx];
 
   if (!secondary) {
     return { primarySlot, secondarySlot: null };
   }
 
-  // Pick secondary slot: must be different from primary and ideally not adjacent
-  // For simplicity, just pick the one most "opposite" or just different
-  const sIdx = (pIdx + 3) % availableSlots.length;
+  let sIdx: number;
+  if (seed !== undefined) {
+    // Pick an offset that is not 0 (must be different slot)
+    const s2 = Math.abs(Math.cos(seed * 789.012));
+    const offset = 1 + Math.floor(s2 * (availableSlots.length - 1));
+    sIdx = (pIdx + offset) % availableSlots.length;
+  } else {
+    // Fallback pick secondary slot: must be different from primary 
+    sIdx = (pIdx + 3) % availableSlots.length;
+  }
+  
   const secondarySlot = availableSlots[sIdx];
 
   // Special rule for Scorpio + BigDipper (Easter Egg)

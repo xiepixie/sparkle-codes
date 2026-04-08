@@ -58,18 +58,8 @@ export function ThemeToggle({ className }: { className?: string }) {
 		setTimeout(() => setIsAnimating(false), 500);
 
 		const transition = transitionDocument.startViewTransition(() => {
-			const scrollY = window.scrollY;
-			const docHeight = document.documentElement.scrollHeight;
-			document.documentElement.style.minHeight = `${docHeight}px`;
-
 			flushSync(() => {
 				setTheme(nextTheme);
-			});
-
-			window.scrollTo({ top: scrollY, behavior: "instant" as ScrollBehavior });
-
-			requestAnimationFrame(() => {
-				document.documentElement.style.minHeight = "";
 			});
 		});
 

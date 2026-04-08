@@ -10,7 +10,7 @@ import Link from "next/link";
 import { cn, Logo, Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger, ThemeToggle } from "@repo/ui";
 import katex from "katex";
 import "katex/dist/katex.min.css";
-import { updateReadingHistory } from "@/lib/reading-history";
+import { updateReadingHistory, normalizeSlug, updateLastReadSection, getReadingRecommendations, readReadingHistory } from "@/lib/reading-history";
 import { openCommandCenter } from "@/lib/command-center";
 
 interface ReadingSegment {
@@ -105,9 +105,8 @@ export function ReadingHeader({
 			return;
 		}
 
-		const normalize = (url: string) => url.split("#")[0].split("?")[0].replace(/\/$/, "");
-		const current = normalize(pathname);
-		const target = normalize(pendingUrl);
+		const current = normalizeSlug(pathname);
+		const target = normalizeSlug(pendingUrl);
 
 		// Cleanup: URL matches destination OR transition finished
 		if (current === target || target.endsWith(current) || !isNavigating) {
@@ -119,13 +118,71 @@ export function ReadingHeader({
 		segmentsRef.current = segments;
 	}, [segments]);
 
-	// Persistence for "Recently Viewed"
+	// Persistence for "Recently Viewed" & Scroll Restoration
+	const isRestoring = useRef(false);
 	useEffect(() => {
 		if (typeof window === "undefined" || !slug) {
 			return;
 		}
 
-		setRecentPosts(updateReadingHistory({ slug, title: displayTitle }, suggestedPosts));
+		// 1. Persist the current visit
+		updateReadingHistory({ slug, title: displayTitle });
+		
+		// 2. Derive recommendations for the UI (Visited + Suggested)
+		const recommendations = getReadingRecommendations(slug, suggestedPosts);
+		setRecentPosts(recommendations);
+
+		// 3. Scroll Restoration (Resume Reading)
+		// Only trigger once per slug mount
+		if (isRestoring.current) {
+			return;
+		}
+
+		const history = readReadingHistory();
+		const entry = history.find((e) => normalizeSlug(e.slug) === normalizeSlug(slug));
+
+		if (entry?.sectionSlug) {
+			const targetId = entry.sectionSlug;
+			
+			const restoreScroll = () => {
+				const element = document.getElementById(targetId);
+				if (element) {
+					isRestoring.current = true;
+					isGuarding.current = true;
+					
+					const headerOffset = 100;
+					const top = element.getBoundingClientRect().top + window.scrollY - headerOffset;
+					
+					window.scrollTo({ top, behavior: "smooth" });
+					
+					// Apply highlight effect using CSS animation defined in JUMP_HIGHLIGHT_STYLE
+					element.classList.add("jump-highlight");
+					setTimeout(() => {
+						element.classList.remove("jump-highlight");
+						isGuarding.current = false;
+					}, 2000);
+					
+					return true;
+				}
+				return false;
+			};
+
+			// Attempt immediate restoration or wait for content hydration via MutationObserver
+			if (!restoreScroll()) {
+				const observer = new MutationObserver((_, obs) => {
+					if (restoreScroll()) {
+						obs.disconnect();
+					}
+				});
+				
+				const target = document.querySelector(".markdown-body");
+				if (target) {
+					observer.observe(target, { childList: true, subtree: true });
+					// Timeout to prevent infinite observation if heading no longer exists
+					setTimeout(() => observer.disconnect(), 3000);
+				}
+			}
+		}
 	}, [slug, displayTitle, suggestedPosts]);
 
 	// Multi-boundary responsive progress tracking
@@ -181,9 +238,17 @@ export function ReadingHeader({
 
 			const headings = Array.from(markdownBody.querySelectorAll("h1, h2, h3, h4")) as HTMLElement[];
 			return headings.map((h, i) => {
+				// We expect the Rust parser to have provided IDs already.
+				// If missing (unlikely in prod), we generate a consistent slug.
 				if (!h.id) {
-					const baseId = h.innerText.trim().toLowerCase().replace(/\s+/g, "-");
-					h.id = `h-${encodeURIComponent(baseId).slice(0, 50) || i}`;
+					const text = h.innerText.trim();
+					// Robust slugification matching Rust parser (alphanumeric + single hyphens)
+					const slug = text.toLowerCase()
+						.replace(/[^a-z0-9]+/g, '-')
+						.replace(/-+$/, '')
+						.replace(/^-+/, '');
+					
+					h.id = `h-${slug || i}`;
 				}
 
 				const clone = h.cloneNode(true) as HTMLElement;
@@ -267,7 +332,17 @@ export function ReadingHeader({
 				// O(n) reverse search without cloning the array
 				for (let i = currentSegments.length - 1; i >= 0; i--) {
 					if (currentSegments[i].top <= scrollPos) {
-						setActiveSegmentId((prev) => (prev === currentSegments[i].id ? prev : currentSegments[i].id));
+						const segment = currentSegments[i];
+						setActiveSegmentId((prev) => {
+							if (prev !== segment.id) {
+								// Update section history when segment truly changes
+								if (slug) {
+									updateLastReadSection(slug, segment.id, segment.title);
+								}
+								return segment.id;
+							}
+							return prev;
+						});
 						break;
 					}
 				}
@@ -285,7 +360,14 @@ export function ReadingHeader({
 			window.removeEventListener("scroll", handleScroll);
 			window.removeEventListener("resize", updateBounds);
 		};
-	}, [discoverSegments]);
+	}, [slug, discoverSegments]); // Force re-binding observers when the active post changes
+
+	// Reset state and clear stale data on route change
+	useEffect(() => {
+		setSegments([]);
+		setActiveSegmentId(null);
+		isRestoring.current = false;
+	}, [slug]);
 
 	const renderKatex = (text: string) => {
 		if (typeof window === "undefined" || !text) {

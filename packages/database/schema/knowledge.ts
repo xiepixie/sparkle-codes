@@ -1,38 +1,19 @@
 import { createId as cuid } from "@paralleldrive/cuid2";
 import { relations, sql } from "drizzle-orm";
 import {
+	boolean,
+	customType,
+	index,
+	integer,
+	jsonb,
+	pgEnum,
 	pgTable,
 	text,
 	timestamp,
-	boolean,
-	jsonb,
-	index,
-	pgEnum,
-	integer,
 	uniqueIndex,
-	customType,
 } from "drizzle-orm/pg-core";
 
 // --- CUSTOM TYPES (PGVECTOR) ---
-
-/** 
- * Standard Float Vector (Max 2000 dimensions)
- */
-const vector = customType<{ data: number[]; config: { dimensions: number } }>({
-	dataType(config) {
-		return `vector(${config?.dimensions ?? 768})`;
-	},
-	fromDriver(value: unknown) {
-		if (typeof value !== "string") return [];
-		return value
-			.slice(1, -1)
-			.split(",")
-			.map((v) => parseFloat(v));
-	},
-	toDriver(value: number[]) {
-		return `[${value.join(",")}]`;
-	},
-});
 
 /** 
  * Half-precision Vector (float16)
@@ -43,11 +24,13 @@ const halfvec = customType<{ data: number[]; config: { dimensions: number } }>({
 		return `halfvec(${config?.dimensions ?? 2560})`;
 	},
 	fromDriver(value: unknown) {
-		if (typeof value !== "string") return [];
+		if (typeof value !== "string") {
+			return [];
+		}
 		return value
 			.slice(1, -1)
 			.split(",")
-			.map((v) => parseFloat(v));
+			.map((v) => Number.parseFloat(v));
 	},
 	toDriver(value: number[]) {
 		return `[${value.join(",")}]`;
@@ -57,6 +40,7 @@ const halfvec = customType<{ data: number[]; config: { dimensions: number } }>({
 // PARA Areas
 export const areaEnum = pgEnum("Area", ["WORK", "LEARN", "OTHER"]);
 export const sourceTypeEnum = pgEnum("SourceType", ["OBSIDIAN", "MDX", "IMPORTED"]);
+export const targetTypeEnum = pgEnum("TargetType", ["ARTICLE", "HEADING", "BLOCK"]);
 
 // ✅ P0: Documents - High-Fidelity Knowledge Node
 export const documents = pgTable(
@@ -135,6 +119,19 @@ export const documentLinks = pgTable(
 			.$type<"wiki" | "embed">()
 			.default("wiki")
 			.notNull(),
+			
+		// --- EXTENDED TRACKING (WikiLink Opt) ---
+		targetType: targetTypeEnum("targetType"),
+		sourceHeadingId: text("sourceHeadingId"),
+		sourceBlockId: text("sourceBlockId"),
+		sourceTextSnippet: text("sourceTextSnippet"),
+		sourceOrder: integer("sourceOrder"),
+		targetFragmentRaw: text("targetFragmentRaw"),
+		targetHeadingId: text("targetHeadingId"),
+		targetBlockId: text("targetBlockId"),
+		isFragmentResolved: boolean("isFragmentResolved").default(false).notNull(),
+		attachmentUrl: text("attachmentUrl"),
+		resolutionError: text("resolutionError"),
 	},
 	(table) => [
 		index("link_from_idx").on(table.fromId),
@@ -143,7 +140,58 @@ export const documentLinks = pgTable(
 	],
 );
 
+// ✅ P1.5: Document Sections (Heading-based chunks for preview)
+export const documentSections = pgTable(
+	"document_sections",
+	{
+		id: text("id")
+			.$defaultFn(() => cuid())
+			.primaryKey(),
+		documentId: text("documentId")
+			.notNull()
+			.references(() => documents.id, { onDelete: "cascade" }),
+		headingId: text("headingId"),
+		headingText: text("headingText").notNull(),
+		headingLevel: integer("headingLevel").notNull(),
+		sectionIndex: integer("sectionIndex").notNull(),
+		html: text("html").notNull(),
+		textContent: text("textContent").notNull(),
+		startOffset: integer("startOffset"),
+		endOffset: integer("endOffset"),
+		isFirstSection: boolean("isFirstSection").default(false).notNull(),
+	},
+	(table) => [
+		index("section_doc_idx").on(table.documentId),
+		index("section_heading_idx").on(table.headingId),
+	],
+);
+
+// ✅ P1.6: Document Blocks (Block anchor lookup)
+export const documentBlocks = pgTable(
+	"document_blocks",
+	{
+		id: text("id")
+			.$defaultFn(() => cuid())
+			.primaryKey(),
+		documentId: text("documentId")
+			.notNull()
+			.references(() => documents.id, { onDelete: "cascade" }),
+		blockId: text("blockId").notNull(),
+		sectionId: text("sectionId")
+			.notNull()
+			.references(() => documentSections.id, { onDelete: "cascade" }),
+		html: text("html").notNull(),
+		textContent: text("textContent").notNull(),
+		blockIndex: integer("blockIndex").notNull(),
+	},
+	(table) => [
+		index("block_doc_idx").on(table.documentId),
+		index("block_idx").on(table.blockId),
+	],
+);
+
 // ✅ P2: Semantic Fragments (Chunking Logic)
+
 export const documentChunks = pgTable(
 	"document_chunks",
 	{
@@ -188,6 +236,8 @@ export const documentRelations = relations(documents, ({ many }) => ({
 	links: many(documentLinks, { relationName: "outgoingLinks" }),
 	incomingLinks: many(documentLinks, { relationName: "incomingLinks" }),
 	chunks: many(documentChunks),
+	sections: many(documentSections),
+	blocks: many(documentBlocks),
 }));
 
 export const documentLinksRelations = relations(documentLinks, ({ one }) => ({
@@ -200,6 +250,24 @@ export const documentLinksRelations = relations(documentLinks, ({ one }) => ({
 		fields: [documentLinks.resolvedDocumentId],
 		references: [documents.id],
 		relationName: "incomingLinks",
+	}),
+}));
+
+export const documentSectionsRelations = relations(documentSections, ({ one }) => ({
+	document: one(documents, {
+		fields: [documentSections.documentId],
+		references: [documents.id],
+	}),
+}));
+
+export const documentBlocksRelations = relations(documentBlocks, ({ one }) => ({
+	document: one(documents, {
+		fields: [documentBlocks.documentId],
+		references: [documents.id],
+	}),
+	section: one(documentSections, {
+		fields: [documentBlocks.sectionId],
+		references: [documentSections.id],
 	}),
 }));
 

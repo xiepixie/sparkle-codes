@@ -1,3 +1,5 @@
+import type { ReadingHistoryEntry } from "./reading-history";
+
 export type CommandCenterMode = "search" | "jump";
 
 export interface CommandCenterSection {
@@ -11,7 +13,7 @@ export interface CommandCenterReadingContext {
   title: string;
   slug?: string;
   sections: CommandCenterSection[];
-  recentPosts: Array<{ slug: string; title: string }>;
+  recentPosts: ReadingHistoryEntry[];
 }
 
 export type CommandJumpSubMode = "sections" | "history";

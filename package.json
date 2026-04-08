@@ -6,8 +6,8 @@
         "build": "turbo build",
         "lint": "biome lint",
         "format": "biome format --write",
-        "clean": "turbo clean",
-        "sync": "tsx scripts/sync-obsidian.ts"
+        "clean": "turbo clean && turbo run clean",
+        "clean:all": "pnpm clean && rm -rf node_modules .turbo target .cargo-target dist build out"
     },
     "devDependencies": {
         "@biomejs/biome": "2.3.13",

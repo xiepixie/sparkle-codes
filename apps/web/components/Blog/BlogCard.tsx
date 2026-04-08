@@ -42,22 +42,39 @@ export function BlogCard({ post, index, activeTags = [], onTagSelect }: BlogCard
     day: "numeric",
   }).format(new Date(post.date));
 
+  const serialNumber = String(index + 1).padStart(2, '0');
+
   return (
     <article
       className="h-full animate-in fade-in slide-in-from-bottom-4"
       style={{ animationDelay: `${index * 70}ms` }}
     >
-      <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-border/40 bg-background/40 p-5 shadow-sm transition-all duration-300 hover:border-primary/25 hover:bg-muted/10 hover:shadow-glow sm:p-6 md:p-8 backdrop-blur-3xl">
+      <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-border/40 bg-background/40 shadow-sm transition-all duration-300 hover:border-primary/25 hover:bg-muted/10 hover:shadow-glow-sm hover:-translate-y-0.5 backdrop-blur-3xl">
           {/* Top Decorative Scanning Line */}
-          <div className="pointer-events-none absolute left-0 top-0 h-[1px] w-full bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+          <div className="pointer-events-none absolute left-0 top-0 h-[1px] w-full bg-gradient-to-r from-transparent via-primary/20 to-transparent z-10" />
           
           <Link 
             href={`/blog/${post.path}`}
-            className="relative z-10 flex flex-1 flex-col rounded-2xl no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="absolute inset-0 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset"
             aria-label={`Read post: ${post.displayTitle || post.title}`}
-          >
+          />
+
+          {/* Serial Number background / decoration */}
+          <div className="absolute right-6 top-6 font-mono text-5xl font-black text-muted-foreground/5 transition-colors duration-300 group-hover:text-primary/10 pointer-events-none z-10">
+             {serialNumber}
+          </div>
+
+          {post.banner && (
+            <div className="relative h-48 sm:h-56 w-full shrink-0 overflow-hidden border-b border-border/20 bg-background/50">
+              {/* biome-ignore lint/a11y/useAltText: Background decorative banner */}
+              <img src={post.banner} alt="" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 mix-blend-screen" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+            </div>
+          )}
+
+          <div className="relative z-0 flex flex-1 flex-col pointer-events-none p-5 sm:p-6 md:p-8">
             {/* Header Info: Date and Reading Time */}
-            <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground/50 sm:mb-6 sm:text-[11px] sm:tracking-widest">
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground/50 sm:mb-5 sm:text-[11px] sm:tracking-widest">
               <div className="flex items-center gap-1.5 transition-colors group-hover:text-primary/70">
                 <Calendar className="h-3.5 w-3.5" />
                 <time dateTime={post.date}>{formattedDate}</time>
@@ -71,9 +88,33 @@ export function BlogCard({ post, index, activeTags = [], onTagSelect }: BlogCard
               </div>
             </div>
 
+            {/* Tags (Eyebrow Position) - Need to be interactive so z-20 */}
+            {post.tags && post.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3 pointer-events-auto relative z-20">
+                {post.tags.slice(0, 3).map((tag: string) => (
+                  <button
+                    type="button"
+                    key={tag} 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onTagSelect?.(tag);
+                    }}
+                    aria-pressed={selectedTags.has(tag.toLowerCase())}
+                    className={`inline-flex min-h-6 items-center rounded-lg border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.15em] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 cursor-pointer ${
+                      selectedTags.has(tag.toLowerCase())
+                        ? "border-primary/40 bg-primary/14 text-foreground"
+                        : "border-border/30 bg-muted/40 text-muted-foreground/85 hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Title & Description */}
             <div className="mb-4 min-w-0 space-y-3 sm:space-y-4">
-              <h2 className="text-xl font-bold leading-snug tracking-tight text-foreground transition-colors duration-300 group-hover:text-primary [overflow-wrap:anywhere] sm:text-2xl">
+              <h2 className="text-xl font-bold leading-snug tracking-tight text-foreground transition-colors duration-300 group-hover:text-primary [overflow-wrap:anywhere] sm:text-2xl pr-12">
                 <HighlightedTitle html={post.highlightedTitle || post.displayTitle || post.title} />
               </h2>
 
@@ -84,49 +125,18 @@ export function BlogCard({ post, index, activeTags = [], onTagSelect }: BlogCard
                 />
               ) : null}
 
-              {shouldShowBodyPreview ? (
+              {shouldShowBodyPreview && !hasDescription ? (
                 <HighlightedBlock
                   className="rounded-2xl border border-border/10 bg-muted/10 px-4 py-3 text-xs leading-relaxed text-foreground/80 [overflow-wrap:anywhere]"
                   html={post.highlightedBodyPreview || ""}
                 />
               ) : null}
             </div>
-          </Link>
-
-          {/* Footer: Tags & Action */}
-          <div className="relative z-20 mt-auto flex flex-col gap-4 border-t border-border/20 pt-5 transition-colors group-hover:border-primary/20 sm:flex-row sm:items-center sm:justify-between">
-            {/* Tags */}
-            <div className="flex flex-wrap gap-2">
-              {post.tags && post.tags.length > 0 ? (
-                post.tags.slice(0, 3).map((tag: string) => (
-                  <button
-                    type="button"
-                    key={tag} 
-                    onClick={() => onTagSelect?.(tag)}
-                    aria-pressed={selectedTags.has(tag.toLowerCase())}
-                    className={`inline-flex min-h-11 items-center rounded-xl border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.15em] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 cursor-pointer ${
-                      selectedTags.has(tag.toLowerCase())
-                        ? "border-primary/40 bg-primary/14 text-foreground"
-                        : "border-border/30 bg-muted/40 text-muted-foreground/85 hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                ))
-              ) : (
-                <span className="inline-flex min-h-11 items-center rounded-xl border border-border/20 bg-muted/20 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/50">
-                  ARTICLE
-                </span>
-              )}
+            
+            {/* Arrow indicator at bottom right */}
+            <div className="mt-auto self-end flex items-center justify-center w-8 h-8 rounded-full border border-primary/0 bg-primary/0 transition-all duration-300 group-hover:bg-primary/10 group-hover:border-primary/30">
+               <ArrowRight className="h-4 w-4 text-primary opacity-0 -translate-x-2 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100" />
             </div>
-
-            {/* Read More Trigger */}
-            <Link href={`/blog/${post.path}`} className="flex items-center gap-2 self-start rounded-lg pr-1 text-primary no-underline transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:self-auto">
-              <span className="text-[10px] font-bold uppercase tracking-widest opacity-100 transition-all duration-300">
-                Read article
-              </span>
-              <ArrowRight className="h-4 w-4 text-primary opacity-80 transition-all duration-300 group-hover:translate-x-1 group-hover:text-primary group-hover:opacity-100" />
-            </Link>
           </div>
 
           {/* Corner Decals */}

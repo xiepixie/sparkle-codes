@@ -4,14 +4,14 @@
 
 ## Goal
 
-This repository is a **content-first technical blog and documentation platform** built with **Next.js App Router, Fumadocs, and MDX**.
+This repository is an **industrial-grade technical blog and content-first knowledge platform** built with **Next.js App Router (v16+), Rust-driven content pipelines, and Neon Postgres**.
 
 Agents must optimize for the following priorities, in order:
 
 1. **Correctness** — prioritize small, verifiable, and well-tested changes.
-2. **Performance** — prioritize server-side rendering and minimize client-side JavaScript.
-3. **Content Integrity** — ensure MDX rendering, documentation routing, and SEO metadata remain functional.
-4. **Maintainability** — encapsulate business logic within packages rather than page files.
+2. **Performance** — prioritize server-side rendering (SSR), `'use cache'` persistence, and minimal client-side JavaScript.
+3. **Content Integrity** — ensure that the Obsidian → Sentinel → Neon → Web rendering pipeline remains robust and low-latency.
+4. **Maintainability** — encapsulate business logic within workspace packages (`packages/*`) rather than page files.
 
 When requirements are unclear, follow existing patterns in the codebase rather than introducing new abstractions.
 
@@ -21,16 +21,19 @@ When requirements are unclear, follow existing patterns in the codebase rather t
 
 - **Node.js 20+**
 - **pnpm + Turbo** monorepo
-- **Next.js App Router**
-- **React + TypeScript**
-- **Fumadocs** for independent documentation (apps/docs)
-- **Content-Collections** for technical blog and notes (apps/web)
-- **MDX** for high-fidelity content authoring
-- **Tailwind CSS + shadcn/ui**
-- **Neon Postgres + Drizzle ORM**
-- **Zod** for data validation
-- **Playwright** for end-to-end testing
-- **Sentry** for runtime monitoring
+- **Next.js 16+ (App Router)** with **React 19**
+- **Neon Postgres + Drizzle ORM** (Primary content and metadata store)
+- **Sentinel (Rust)** (Native sync daemon; watches Obsidian vault and syncs to Neon)
+- **@v2/markdown-parser (Rust/WASM)** (High-performance Markdown engine with KaTeX/WikiLink support)
+- **Fumadocs** (Used only for standalone developer documentation in `apps/docs`)
+- **Vercel AI SDK** (For generative AI features and chat)
+- **Biome** (Strict linter and formatter)
+- **Tailwind CSS 4.0** with **Starry Night** design system tokens
+- **Docker** (For production-ready containerized deployments)
+- **Zod** (For data validation at boundaries)
+- **Testing (Planned)** (Playwright/Vitest planned for critical path validation)
+- **Sentry (Planned)** (Planned for runtime error tracking)
+- **T3-Env (Planned)** (Planned for centralized environment variable validation)
 
 ---
 
@@ -39,40 +42,41 @@ When requirements are unclear, follow existing patterns in the codebase rather t
 ```txt
 /
 ├── apps/
-│   ├── web/                        # Main site: blog, notes, landing pages
+│   ├── web/                        # Main site: Blog, lab, and interactive tools
 │   │   ├── app/                    # Next.js App Router
-│   │   ├── content/                # MDX content source
-│   │   │   ├── blog/
-│   │   │   └── notes/
-│   │   ├── components/             # Presentational components
-│   │   ├── lib/                    # Adapters, source loaders, metadata helpers
+│   │   ├── components/             # Presentational components (including markdown-interactivity)
+│   │   ├── lib/                    # Blog data access layer and fetchers
+│   │   ├── config.ts               # Application configuration and constants
 │   │   └── public/
-│   └── docs/                       # Standalone docs (only if distinct from main site)
+│   └── docs/                       # Developer documentation (Fumadocs-based)
 ├── packages/
-│   ├── ai/                         # RAG logic: embeddings, retrieval, prompt assembly
-│   ├── database/                   # Drizzle schema, migrations, and query functions
+│   ├── database/                   # Drizzle schema, queries, and migrations
 │   │   ├── schema/
-│   │   ├── queries/
-│   │   ├── migrations/
-│   │   └── index.ts
-│   ├── schema/                     # Shared Zod schemas and Type definitions
-│   ├── ui/                         # Shared UI primitives based on shadcn
-│   └── utils/                      # Shared utility functions
-├── scripts/                        # Ingestion, synchronization, and maintenance scripts
-├── drizzle/                        # Database migration artifacts
-├── tests/                          # Shared test fixtures and cross-app tests
+│   │   │   ├── postgres.ts         # User, session, and organization schemas
+│   │   │   └── knowledge.ts        # Documents, links, and chunks (pgvector halfvec)
+│   │   ├── queries/                # Domain-specific SQL queries
+│   │   ├── drizzle/                # SQL migration artifacts (Drizzle Kit)
+│   │   └── index.ts                # Database client and proxy instance
+│   ├── sentinel/                    # [Rust] Sync daemon (Obsidian -> Postgres)
+│   ├── markdown-parser/            # [Rust] WASM-based Markdown renderer logic
+│   ├── ai/                         # AI utilities and RAG stub (TODO: Implementation)
+│   ├── ui/                         # Shared UI primitives and Shadcn components
+│   └── utils/                      # Shared TS utility functions
+├── tooling/                        # Standardized Tailwind and TypeScript configs
+├── scripts/                        # Maintenance and R2 upload scripts
+├── DOCS/                           # Internal architecture and design specifications
+├── Dockerfile                      # Production build manifest
 ├── turbo.json
-├── pnpm-workspace.yaml
-└── AGENTS.md
+└── pnpm-workspace.yaml
 ```
 
 ### Architectural Rules
 
-- **Routing and Rendering**: Keep logic within `apps/web/app`.
-- **Content Storage**: Store MDX files in `apps/web/content`.
-- **Database Access**: All database logic must reside in `packages/database`. Do not write SQL or use ORM clients directly in route handlers.
-- **AI Logic**: Encapsulate RAG pipelines and AI utilities in `packages/ai`.
-- **Sub-applications**: Use `apps/docs` only if the documentation requires a unique deployment or navigation model.
+- **Content Flow**: Content is **not** stored as local MDX files in `apps/web`. Content originates from the Obsidian vault, ingested by **Sentinel (Rust)** into **Neon Postgres**. Use the `@/lib/blog` helpers to fetch and render content.
+- **Database Access**: All DB interactions must be defined in `packages/database`. Page files should call exported query functions.
+- **Styling**: Adhere to **Starry Layered CSS (SLC)**. Use Tailwind variables for semantic mapping.
+- **Markdown Rendering**: Use the `@v2/markdown-parser` for consistency between the sync daemon and the web client.
+- **Sentinel Sync**: The `sentinel` package handles the logic for directory-to-database mapping (PARA category enforcement).
 
 ---
 
@@ -80,25 +84,16 @@ When requirements are unclear, follow existing patterns in the codebase rather t
 
 ### 1) Default to Server Components
 
-Use React Server Components (RSC) by default. Use the `"use client"` directive only for components requiring:
-
-- Event listeners (e.g., `onClick`, `onChange`)
-- Browser-specific APIs (e.g., `window`, `localStorage`)
-- Local state management (`useState`, `useReducer`)
-- Client-only third-party libraries
-
-Avoid converting entire layouts or pages to Client Components for isolated interactive elements.
+Use React Server Components (RSC) by default. Use the `"use client"` directive only for components requiring interactivity (e.g., `MarkdownInteractivity`, `CommandMenu`). Ensure deep pre-rendering of Markdown (via Shiki/KaTeX) happens on the server to maximize LCP.
 
 ### 2) Minimal Page Logic
 
-Ensure blog, note, and documentation page files remain focused on:
+Routine page files in `apps/web/app` should focus on:
+- Decoding params and invoking data fetchers.
+- Assembling metadata.
+- Composing layouts with high-level components.
 
-- Content loading
-- Metadata assembly
-- Layout composition
-- Invoking shared helpers
-
-Do not implement business logic, database queries, or AI pipelines directly within page files.
+Do not write raw SQL or complex HTML transformation logic inside `page.tsx`.
 
 ### 3) Use Workspace Exports
 
@@ -106,9 +101,9 @@ Prioritize workspace-level exports over deep relative imports:
 
 ```ts
 import { db } from "@repo/database";
-import { getPostBySlug } from "@repo/database/queries";
-import { retrieveContext } from "@repo/ai";
-import { Button } from "@repo/ui/components/button";
+import { getPostBySlugQuery } from "@repo/database"; // Optimized workspace export
+import { Button } from "@repo/ui"; // Shared UI primitive
+import "@v2/markdown-parser"; // High-perf parser
 ```
 
 Avoid relative paths that cross package boundaries.
@@ -118,7 +113,7 @@ Avoid relative paths that cross package boundaries.
 Utilize Zod for data validation at all system boundaries:
 
 - API request validation
-- Environment variable parsing (use a centralized config using `t3-env` or equivalent)
+- Environment variable parsing (current: manual `process.env` with plans for `t3-env` integration)
 - Script inputs and CLI arguments
 - AI tool definitions
 - Data transfer objects (DTOs)
@@ -136,21 +131,22 @@ For RAG and generation logic:
 
 ## Routing and Rendering Guidelines
 
-### App Router Structure
+### Apps/Web Router
 
-Follow the established App Router conventions:
+Follow the established folder structure:
 
 ```txt
 app/
 ├── (site)/
-│   ├── page.tsx
-│   ├── blog/
-│   ├── notes/
-│   └── docs/
-├── (experiments)/
-│   └── ai/
+│   ├── page.tsx                    # Landing page
+│   └── blog/                       # Blog list and [slug] details
+├── experiments/                    # Interactive lab features (Markdown, Tilt, etc.)
 ├── api/
-└── layout.tsx
+│   ├── blog-search/                # Specialized blog search endpoint
+│   ├── chat/                       # AI chat endpoint (Vercel AI SDK)
+│   └── search/                     # Global metadata search endpoint
+├── layout.tsx                      # Root layout with NavBar and CommandMenu
+└── globals.css                     # SLC @layer implementation
 ```
 
 ### Metadata and SEO
@@ -173,8 +169,8 @@ Maximize static rendering and cacheable fetch requests. For Next.js 15/16+:
 ## Fumadocs Implementation
 
 - **Fumadocs** is strictly for the standalone documentation site (`apps/docs`).
-- **Content-Collections** manages the integrated blog and notes in `apps/web`.
-- Ensure compatibility with MDX when updating configurations or file structures.
+- Content in `apps/web` is database-driven (Neon Postgres) via the Sentinel pipeline.
+- Ensure compatibility with MDX when updating configurations or file structures for documentation.
 - Default to the Node.js runtime unless Edge runtime compatibility is explicitly verified.
 
 ### Layout and Styling Patterns
@@ -190,11 +186,10 @@ Organize content to simplify ingestion and authoring:
 
 ```txt
 apps/web/content/
-├── blog/
-└── notes/
+└── (empty)                         # Content is stored in Postgres; directory reserved for parity
 
 apps/docs/content/
-└── docs/
+└── docs/                           # Local MDX for developer documentation
 ```
 
 ---
@@ -208,28 +203,30 @@ All schema definitions and query logic must be located in `packages/database`.
 ```txt
 packages/database/
 ├── schema/
-│   ├── posts.ts
-│   ├── notes.ts
+│   ├── postgres.ts                 # Auth and Core tables
+│   ├── knowledge.ts                # Content and Vector tables
 │   └── index.ts
 ├── queries/
-│   ├── posts.ts
-│   ├── search.ts
-│   └── index.ts
+│   ├── posts.ts                    # Post retrieval and search logic
+│   └── index.ts                    # (Planned: aggregated exports)
+├── drizzle/                        # SQL migration artifacts
 └── index.ts
 ```
 
 ### Query Standards
 
-- Implement small, focused query functions.
-- Use explicit column selection rather than broad `select *` queries.
-- Centralize all relation definitions within the schema directory.
-- Database clients must not be instantiated within application code.
+- Place query logic in `packages/database/queries`.
+- Use the provided `db` proxy to avoid multiple client instantiations.
+- Implement specialized search logic (using ILIKE/pg_trgm) directly in SQL where performance is critical.
 
 ---
 
 ## AI and RAG Standards
 
 ### Responsibilities of `packages/ai`
+
+> [!NOTE]
+> Currently, `packages/ai` is a **stub** (Gemini 1.5 Flash wrapper). Full retrieval pipelines are planned.
 
 The AI package manages:
 - Document chunking and normalization
@@ -289,7 +286,7 @@ All CSS must be declared within one of the following `@layer` blocks (defined in
 When mapping global tokens to local components, avoid "mechanical" re-assignments.
 - ❌ **Mechanical**: `--md-primary: var(--primary);` (just passing values).
 - ✅ **Domain-Semantic**: `--md-callout-border: var(--color-border);`, `--md-code-header-bg: var(--color-muted);`.
-- **Constraint**: Domain variables must describe **what** the variable does in the component context, not just **where** it comes from.
+- **Constraint**: Domain variables must describe **what** the variable does in the component context, not just **where** it comes from. (Note: Some legacy variables in `globals.css` may still follow mechanical patterns and should be refactored).
 
 #### 4. Modularization & Scoping
 - **Markdown Scoping**: Use `@scope (.markdown-body)` to isolate prose styles and prevent global style leakage.
@@ -325,6 +322,24 @@ Adhere to the following specifications for visual consistency:
 
 ---
 
+## Decision-Based Comments (决策型注释要求)
+
+以下场景必须补充“为什么”型注释，而不只是“做什么”：
+- 业务分支 (Business logic branching)
+- 缓存策略 (Caching strategies)
+- 幂等/去重/重试 (Idempotency / Deduplication / Retries)
+- fallback / 降级 (Fallback / Degradation)
+- 历史兼容 (Historical compatibility)
+- 安全与合规限制 (Security and compliance restrictions)
+
+注释至少回答以下问题中的两个：
+- 为什么这样做 (Why was it implemented this way?)
+- 保护了什么约束 (What constraints does this protect?)
+- 改坏会怎样 (What would break if this is changed?)
+- 在什么条件下可以删除 (Under what conditions can this be safely removed?)
+
+---
+
 ## Implementation Examples
 
 ### 1. Component Definition
@@ -347,6 +362,7 @@ export default BlogCard;
 import { db } from "../index";
 
 export async function getPostBySlug(slug: string) {
+  // Use the standard findFirst pattern with eq constraint
   return await db.query.posts.findFirst({
     where: (posts, { eq }) => eq(posts.slug, slug),
   });
@@ -357,21 +373,15 @@ export async function getPostBySlug(slug: string) {
 
 ```typescript
 // ✅ apps/web/app/(site)/blog/[slug]/page.tsx
-import { allBlogs } from "content-collections";
-import { notFound } from "next/navigation";
+import { getPostBySlug } from "@/lib/blog"; // Wraps DB query with 'use cache' and rendering logic
 
-export default async function PostPage({ params }: { params: { slug: string } }) {
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const post = allBlogs.find((p) => p.path === slug);
+  const post = await getPostBySlug(decodeURIComponent(slug));
   
   if (!post) notFound();
   
-  return (
-    <article>
-      <h1>{post.title}</h1>
-      {/* <MDXContent code={post.body.code} /> */}
-    </article>
-  );
+  return <article>{/* Rendered Markdown from post.content */}</article>;
 }
 ```
 
@@ -401,14 +411,14 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
 ## Testing and Safety
 
-### Test Coverage
+### Test Coverage (Planned)
 
-Focus on verifying core functionality and critical paths:
+Focus on verifying core functionality and critical paths as testing infrastructure is implemented:
 
 1. Navigation and page rendering (including metadata).
-2. MDX compilation and routing.
-3. AI retrieval accuracy (answers + sources).
-4. Error handling for missing content or invalid slugs.
+2. Markdown rendering and database retrieval.
+3. AI chat response consistency.
+4. Error handling for missing entries or 404s.
 
 ### Development Safety
 

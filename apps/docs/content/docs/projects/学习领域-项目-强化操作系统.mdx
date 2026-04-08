@@ -1,12 +1,12 @@
 ---
-title: "学习领域/项目/强化操作系统"
+title: "强化操作系统"
 slug: "学习领域-项目-强化操作系统"
-area: "LEARN"
-date: "2025-09-13T02:38:55Z"
-updatedAt: "2025-11-23T14:04:01Z"
-tags: []
+area: LEARN
+date: "2025-11-23T14:04:01+00:00"
+updatedAt: "2025-11-23T14:04:01+00:00"
 published: true
 ---
+
 
 # PV操作核心知识与应用解析
 
@@ -149,19 +149,19 @@ published: true
         *   **申请逻辑 (以哲学家 i 为例):**
             ```
             P(lock);
-            if (bowl_count >= 1 && 
+            if (bowl_count &gt;= 1 && 
                 chopsticks_count[i] == 1 && 
-                chopsticks_count[(i+1)%N] == 1) {
+                chopsticks_count[(i+1)%N] == 1) &#123;
                 
                 bowl_count--;
                 chopsticks_count[i]--;
                 chopsticks_count[(i+1)%N]--;
                 V(lock);
                 // break loop
-            } else {
+            &#125; else &#123;
                 V(lock);
                 // continue loop
-            }
+            &#125;
             ```
     *   **技巧：** 这个模板是解决此类问题的“万能钥匙”。无论题目如何变换“马甲”（如将哲学家换成“干饭人”，将筷子和碗换成“饭盆”和“座位”），只要识别出“一个进程需要多种资源”的核心模型，就可以直接套用此模板，将复杂的死锁问题转化为简单的互斥访问计数器问题。
 

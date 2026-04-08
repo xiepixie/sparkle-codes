@@ -1,4 +1,4 @@
-import { db, documents, and, eq, desc, sql } from "../index";
+import { db, documents, documentSections, and, or, eq, desc, sql } from "../index";
 
 /**
  * Common Post Filter - Work Area & Published
@@ -39,6 +39,7 @@ function buildSearchFilter(query?: string) {
     ${documents.title} ilike ${pattern}
     or coalesce(${documents.description}, '') ilike ${pattern}
     or ${documents.slug} ilike ${pattern}
+    or ${documents.content} ilike ${pattern}
   )`;
 }
 
@@ -53,9 +54,10 @@ function buildSearchRank(query?: string) {
   const pattern = `%${trimmed}%`;
   return sql<number>`
     (
+      case when ${documents.slug} ilike ${pattern} then 12 else 0 end +
       case when ${documents.title} ilike ${pattern} then 8 else 0 end +
       case when coalesce(${documents.description}, '') ilike ${pattern} then 4 else 0 end +
-      case when ${documents.slug} ilike ${pattern} then 3 else 0 end
+      case when ${documents.content} ilike ${pattern} then 1 else 0 end
     )
   `;
 }
@@ -88,6 +90,7 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
       description: documents.description,
       banner: documents.banner,
       content: documents.content,
+      html: documents.html,
       metadata: documents.metadata,
       createdAt: documents.createdAt,
       contentLength: sql<number>`char_length(${documents.content})`,
@@ -167,27 +170,139 @@ export async function searchPostsQuery(query: string, limit = 8) {
 /**
  * Find a single post by slug, handling both exact matches and partial paths.
  */
+/**
+ * Find a single post by slug, handling exact matches, aliases, and partial paths.
+ * 🚀 Industrial Optimization: Single round-trip query with priority-based ranking.
+ */
 export async function getPostBySlugQuery(slug: string) {
-  let post = await db.query.documents.findFirst({
-    where: (docs, { eq, and }) => and(
-        eq(docs.slug, slug),
-        eq(docs.area, "WORK")
-    ),
-  });
-
-  if (!post) {
-      post = await db.query.documents.findFirst({
-          where: (docs, { eq, and, or }) => and(
-              or(
-                  eq(docs.slug, slug),
-                  sql`${docs.slug} LIKE ${'%-' + slug}`,
-                  sql`${docs.slug} LIKE ${'%/' + slug}`
-              ),
-              eq(docs.area, "WORK")
-          ),
-          orderBy: [desc(documents.createdAt)]
-      });
+  const [mainSlug] = slug.split('#');
+  if (!mainSlug) {
+    return null;
   }
 
-  return post || null;
+  const searchTarget = mainSlug;
+
+  // Unified query with scoring for performance
+  const results = await db
+    .select({
+      id: documents.id,
+      slug: documents.slug,
+      title: documents.title,
+      description: documents.description,
+      banner: documents.banner,
+      content: documents.content,
+      metadata: documents.metadata,
+      createdAt: documents.createdAt,
+      isPublished: documents.isPublished,
+      area: documents.area,
+      html: documents.html,
+    // Priority hierarchy for resolution (Obsidian-aligned):
+    // 1. Exact Slug Match (WORK) -> Most specific
+    // 2. Alias Match (WORK)      -> Explicitly defined intent
+    // 3. Title Match (WORK)      -> Document name
+    // 4. Exact Slug Match (Any)  -> Fallback to other areas
+    // 5. Alias Match (Any)       -> Fallback
+    // 6. Title Match (Any)       -> Fallback
+    priority: sql<number>`
+      CASE 
+        WHEN ${documents.slug} = ${searchTarget} AND ${documents.area} = 'WORK' THEN 1
+        WHEN ${documents.aliases} @> ${JSON.stringify([searchTarget])}::jsonb AND ${documents.area} = 'WORK' THEN 2
+        WHEN ${documents.title} = ${searchTarget} AND ${documents.area} = 'WORK' THEN 3
+        WHEN ${documents.slug} = ${searchTarget} THEN 4
+        WHEN ${documents.aliases} @> ${JSON.stringify([searchTarget])}::jsonb THEN 5
+        WHEN ${documents.title} = ${searchTarget} THEN 6
+        ELSE 7
+      END
+    `.as('match_priority')
+  })
+  .from(documents)
+  .where(
+    or(
+      eq(documents.slug, searchTarget),
+      eq(documents.title, searchTarget),
+      sql`${documents.aliases} @> ${JSON.stringify([searchTarget])}::jsonb`
+    )
+  )
+  .orderBy(sql`match_priority`, desc(documents.isPublished), desc(documents.createdAt))
+  .limit(1);
+
+  return results[0] || null;
+}
+
+/**
+ * Retrieve a specific section or block from a post.
+ */
+export async function getPostFragmentPreviewQuery(documentId: string, fragment: string) {
+  if (fragment.startsWith('^')) {
+    const block = await db.query.documentBlocks.findFirst({
+      where: (blocks, { eq, and }) => and(
+        eq(blocks.documentId, documentId),
+        eq(blocks.blockId, fragment)
+      )
+    });
+    return block ? { html: block.html, type: "block" } : null;
+  }
+
+  // Obsidian often doesn't store exact ID matching for heading in link, but we'll try exact match first
+  const section = await db.query.documentSections.findFirst({
+    where: (sections, { eq, and, or, ilike }) => and(
+      eq(sections.documentId, documentId),
+      or(
+        eq(sections.headingId, fragment),
+        ilike(sections.headingText, fragment)
+      )
+    )
+  });
+  return section ? { html: section.html, type: "heading", title: section.headingText } : null;
+}
+
+/**
+ * Internal SQL fragment to search across sections and blocks.
+ */
+function buildSectionSearchFilter(query: string) {
+  const pattern = `%${query}%`;
+  return sql`(
+    ${documentSections.headingText} ilike ${pattern} 
+    or ${documentSections.textContent} ilike ${pattern}
+  )`;
+}
+
+/**
+ * Search across all document sections to find specific hits.
+ */
+export async function searchPostSectionsQuery(query: string, limit = 20) {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  return await db
+    .select({
+      id: documentSections.id,
+      documentId: documentSections.documentId,
+      slug: documents.slug,
+      title: documents.title,
+      headingId: documentSections.headingId,
+      headingText: documentSections.headingText,
+      textContent: documentSections.textContent,
+      html: documentSections.html,
+      headingLevel: documentSections.headingLevel,
+      // Priority: heading match > content match
+      rank: sql<number>`
+        CASE 
+          WHEN ${documentSections.headingText} ilike ${`%${trimmed}%`} THEN 10
+          ELSE 1
+        END
+      `.as('section_rank')
+    })
+    .from(documentSections)
+    .innerJoin(documents, eq(documentSections.documentId, documents.id))
+    .where(
+      and(
+        basePostFilter,
+        buildSectionSearchFilter(trimmed)
+      )
+    )
+    .orderBy(sql`section_rank desc`, desc(documents.createdAt))
+    .limit(limit);
 }

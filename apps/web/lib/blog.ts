@@ -3,7 +3,13 @@ import {
   getAllPostSummariesQuery,
   getPostBySlugQuery,
   getPostsPageQuery,
+  searchPostSectionsQuery,
 } from "@repo/database";
+import { 
+  renderMarkdownSnippet as renderSearchSnippet, 
+  normalizeWhitespace,
+  escapeHtml
+} from "./markdown-utils";
 import katex from "katex";
 import { cacheLife, cacheTag } from "next/cache";
 import { createHighlighter } from "shiki";
@@ -141,20 +147,24 @@ async function asyncReplace(
     return "";
   });
   const replacements = await Promise.all(promises);
-  return str.replace(regex, () => replacements.shift()!);
+  return str.replace(regex, () => {
+    return replacements.shift() ?? "";
+  });
 }
 
 /**
  * Server-side HTML transformations to minimize client-side hydration cost.
  */
 async function preRenderContent(html: string): Promise<string> {
-  if (!html) return html;
+  if (!html) {
+    return html;
+  }
 
   let processed = html;
 
   // 1. Pre-render Math (KaTeX)
   const mathRegex = /<(span|div)[^>]*class="[^"]*sparkle-math[^"]*"[^>]*data-tex="([^"]*)"[^>]*>([\s\S]*?)<\/\1>/g;
-  processed = processed.replace(mathRegex, (match, tag, tex, content) => {
+  processed = processed.replace(mathRegex, (match, tag, tex) => {
     const isDisplay = match.includes("math-block");
     const decodedTex = tex
       .replace(/&#39;/g, "'")
@@ -189,8 +199,9 @@ async function preRenderContent(html: string): Promise<string> {
     const rawLang = (lang || "TEXT").toUpperCase();
     
     // Skip mermaid for client-side rendering
-    if (rawLang === "MERMAID") return match; 
-    
+    if (rawLang === "MERMAID") {
+      return match; 
+    }    
     // Handle Admonitions (Obsidian Plugin Style ad-...)
     if (rawLang.startsWith("AD-")) {
       const type = rawLang.replace("AD-", "").toLowerCase();
@@ -258,10 +269,12 @@ async function preRenderContent(html: string): Promise<string> {
           }
         ]
       });
-    } catch (e) {
+    } catch {
       console.warn(`[Shiki] Failed to compile code block for language: ${language}`);
       const lines = code.split("\n");
-      if (lines[lines.length - 1] === "") lines.pop(); // Trailing newline
+      if (lines[lines.length - 1] === "") {
+        lines.pop(); // Trailing newline
+      }
       const formattedLines = lines.map((line: string, i: number) => 
         `<pre data-prefix="${i + 1}"><code>${line.replace(/</g, "&lt;").replace(/>/g, "&gt;") || " "}</code></pre>`
       ).join("");
@@ -290,24 +303,12 @@ async function preRenderContent(html: string): Promise<string> {
     `.trim();
   });
 
-  // 3. Pre-render Hashtags and Badges
-  // Matches [TEXT] or [TEXT:variant] and #hashtag
-  // This is a safety pass for items the Rust parser might have missed or that need specific web-app styling
-  processed = processed.replace(/(^|\s)#([a-zA-Z\u4e00-\u9fa5][a-zA-Z\d_\-\/\u4e00-\u9fa5]{0,30})/g, '$1<span class="premium-tag md-hashtag">#$2</span>');
-  processed = processed.replace(/\[([A-Z\d_\- ]{2,25})(?::(\w+))?\]/g, '<span class="badge-primary">$1</span>');
-
-  // 4. Pre-render WikiLinks
-  // Matches [[Path#Fragment|Label]]
-  processed = processed.replace(/\[\[([^\]#|]{1,100})(?:#([^\]|]{0,100}))?(?:\|([^\]]{0,100}))?\]\]/g, (_match, path, frag, label) => {
-    const p = (path || "").trim();
-    const f = (frag || "").trim();
-    const l = (label || "").trim();
-    const displayLabel = l || (f ? (p ? `${p} > ${f}` : f) : p);
-    
-    // We leave href as "#" or the path, and let the client-side handeInteraction 
-    // refine the leap behavior. For SSR, we just provide a valid-ish structure.
-    const href = p ? `/blog/${encodeURIComponent(p)}${f ? '#' + f : ''}` : `#${f}`;
-    return `<a href="${href}" class="premium-link wiki-link" data-target="${p}" data-fragment="${f}">${displayLabel}</a>`;
+  // 4. Pre-process WikiLinks/Embeds already rendered by Rust to ensure correct URLs
+  // The Rust parser outputs <a class="wiki-link" data-target="Path/To/Doc">...</a>
+  // We need to ensure the href is valid for our App Router (/blog/[slug])
+  processed = processed.replace(/<a class="wiki-link" data-target="([^"]+)"/g, (_match, target) => {
+    const slugForHref = target.split('/').pop() || target;
+    return `<a href="/blog/${encodeURIComponent(slugForHref)}" class="wiki-link" data-target="${target}"`;
   });
 
   return processed;
@@ -325,6 +326,16 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
   const charLength = doc.content?.length || 0;
   const calculatedReadingTime = charLength > 0 ? `${Math.max(1, Math.ceil(charLength / 400))} MIN READ` : "5 MIN READ";
 
+  /**
+   * Status Heuristic Mapping
+   * 
+   * 为什么这样做：
+   * 目前 documents 表仅通过 isPublished 布尔值追踪状态。Obsidian 的 "归档" 逻辑
+   * 通常体现在文件夹路径 or 标题中。通过这种启发式映射，我们可以让网站界面
+   * 与用户的 Obsidian PARA 组织方式保持动态同步，而无需在数据库层引入复杂的状态机。
+   * 
+   * 改坏会怎样：已归档文章可能会出现在“已发布”列表中。
+   */
   let status: "draft" | "published" | "archived" = doc.isPublished ? "published" : "draft";
   if (doc.slug.includes("归档") || doc.title.includes("归档")) {
     status = "archived";
@@ -441,7 +452,7 @@ export async function queryBlogPostFeed(params: BlogPostFeedParams = {}): Promis
     filtered = filtered.filter(
       (post) =>
         post.title.toLowerCase().includes(loweredQuery) ||
-        (post.description && post.description.toLowerCase().includes(loweredQuery))
+        post.description?.toLowerCase().includes(loweredQuery)
     );
   }
 
@@ -513,7 +524,9 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
 
   // Fetch the raw document from DB
   const doc = await getPostBySlugQuery(slug);
-  if (!doc) return null;
+  if (!doc) {
+    return null;
+  }
 
   // Render MDX to optimized HTML (includes KaTeX, Shiki, etc.)
   return await mapDocumentToPost(doc);
@@ -540,27 +553,12 @@ export interface BlogSearchResult {
   description: string;
   bodyPreview: string;
   url: string;
-  section: string;
+  section: string; // Internal type (Post vs Section)
+  context: string; // The post title/filename
   highlightedTitle: string;
   highlightedDescription: string;
   highlightedBodyPreview: string;
-}
-
-function normalizeWhitespace(text: string) {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function escapeHtml(text: string) {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function escapeRegExp(text: string) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  highlightedContext: string;
 }
 
 function buildDescriptionPreview(description?: string | null) {
@@ -569,63 +567,7 @@ function buildDescriptionPreview(description?: string | null) {
 
 
 
-function renderSearchSnippet(text: string, query: string, hitKind: "title" | "description" | "body") {
-  const normalized = normalizeWhitespace(text);
-  if (!normalized) return "";
-
-  const placeholders: Array<{ key: string; html: string }> = [];
-  const pushPlaceholder = (html: string) => {
-    const key = `__SPARKLE_SNIPPET_${placeholders.length}__`;
-    placeholders.push({ key, html });
-    return key;
-  };
-
-  // Render a constrained markdown subset for search snippets so results stay readable
-  // without reusing the full article rendering pipeline.
-  let prepared = normalized
-    .replace(/(^|\s)#{1,6}\s+/g, "$1")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label, href) =>
-      pushPlaceholder(
-        `<a class="premium-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`,
-      ),
-    )
-    .replace(/\$([^$\n]+)\$/g, (_match, formula) => {
-      try {
-        return pushPlaceholder(
-          `<span class="search-katex">${katex.renderToString(formula, {
-            displayMode: false,
-            throwOnError: false,
-          })}</span>`,
-        );
-      } catch {
-        return formula;
-      }
-    })
-    .replace(/`([^`]+)`/g, (_match, code) =>
-      pushPlaceholder(`<code class="search-inline-code">${escapeHtml(code)}</code>`),
-    );
-
-  let html = escapeHtml(prepared)
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/~~(.+?)~~/g, "<del>$1</del>")
-    .replace(/==(.+?)==/g, `<mark class="search-inline-accent">$1</mark>`);
-
-  const trimmedQuery = query.trim();
-  if (trimmedQuery) {
-    const pattern = new RegExp(`(${escapeRegExp(trimmedQuery)})`, "gi");
-    html = html.replace(
-      pattern,
-      `<mark class="search-hit" data-hit-kind="${hitKind}">$1</mark>`,
-    );
-  }
-
-  for (const placeholder of placeholders) {
-    html = html.replaceAll(placeholder.key, placeholder.html);
-  }
-
-  return html;
-}
+// renderSearchSnippet is now imported from markdown-utils
 
 export async function searchBlogPosts(query: string, limit = 8): Promise<BlogSearchResult[]> {
   const trimmed = query.trim().toLowerCase();
@@ -633,26 +575,55 @@ export async function searchBlogPosts(query: string, limit = 8): Promise<BlogSea
     return [];
   }
 
-  // 1. Hit DB directly using optimized lightweight SQL query filtering
-  // This bypasses the memory-resident payload strategy explicitly for search as it is a hot-path.
+  // 1. Hit DB for post-level matches
   const { posts } = await getPostsPage(1, limit, trimmed);
+  
+  // 2. Hit DB for section-level matches (High-fidelity structural search)
+  const sections = await searchPostSectionsQuery(trimmed, limit);
 
-  return posts.map((doc) => {
+  // 3. Map Post hits
+  const postResults: BlogSearchResult[] = posts.map((doc) => {
+    const title = doc.displayTitle || doc.title;
     const description = buildDescriptionPreview(doc.description);
-    const bodyPreview = ""; // Dropped to resolve the neon-http 5s overhead bottleneck
-
+    // Filename should be the path (slug)
+    const filename = doc.path;
     return {
       id: doc.id,
-      title: doc.displayTitle || doc.title,
+      title,
       description,
-      bodyPreview,
+      bodyPreview: "",
       url: `/blog/${encodeURIComponent(doc.path)}`,
-      section: "Blog",
-      highlightedTitle: renderSearchSnippet(doc.displayTitle || doc.title, query, "title"),
+      section: "Post",
+      context: filename,
+      highlightedTitle: renderSearchSnippet(title, query, "title"),
       highlightedDescription: renderSearchSnippet(description, query, "description"),
-      highlightedBodyPreview: "", // Body preview skipped
+      highlightedBodyPreview: "",
+      highlightedContext: renderSearchSnippet(filename, query, "title"),
     };
   });
+
+  // 4. Map Section hits
+  const sectionResults: BlogSearchResult[] = sections.map((sec) => {
+    // For section hits, we show the document slug as the "context" (filename)
+    // and the section heading as the main title.
+    const filename = sec.slug;
+    return {
+      id: sec.id,
+      title: `${sec.headingText}`,
+      description: sec.textContent.slice(0, 160),
+      bodyPreview: "",
+      url: `/blog/${encodeURIComponent(sec.slug)}#${sec.headingId}`,
+      section: "Section",
+      context: filename,
+      highlightedTitle: renderSearchSnippet(sec.headingText, query, "title"),
+      highlightedDescription: renderSearchSnippet(sec.textContent.slice(0, 160), query, "description"),
+      highlightedBodyPreview: "",
+      highlightedContext: renderSearchSnippet(filename, query, "title"),
+    };
+  });
+
+  // 5. Merge and return, deduplicating by URL
+  return [...postResults, ...sectionResults].slice(0, limit);
 }
 
 /**

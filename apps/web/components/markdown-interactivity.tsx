@@ -9,6 +9,7 @@ import { useTheme } from "next-themes";
 import Image from "next/image";
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { WikiLinkPreviewManager, type PreviewData } from "./wiki-link-preview";
 
 /**
  * --- UTILITIES START ---
@@ -458,7 +459,7 @@ function toggleMathSource(el: HTMLElement, forceRefresh = false) {
         } else {
             el.classList.add('show-source', 'source-mode');
             el.dataset.sourceMode = "true";
-            el.innerHTML = `<code class="math-source-content !px-3 !py-1">${highlightLatex(tex)}</code>`;
+            el.innerHTML = `<code class="math-source-content">${highlightLatex(tex)}</code>`;
             // Unified: Let handleDblClick on the container handle the toggle back.
             // We only need to ensure the container-level listener isn't blocked.
         }
@@ -518,6 +519,10 @@ function openTouchPreviewFromTarget(target: HTMLElement, setPreview: (preview: P
 
 interface MarkdownInteractivityProps {
   html: string;
+  currentSlug?: string;
+  /** Metadata about the current post — used by WikiLinkPreviewManager 
+   *  to short-circuit same-document preview without a network request. */
+  currentPostMeta?: PreviewData;
 }
 
 interface PreviewState {
@@ -528,7 +533,7 @@ interface PreviewState {
   htmlContent?: string;
 }
 
-export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
+export function MarkdownInteractivity({ html, currentSlug, currentPostMeta }: MarkdownInteractivityProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const { resolvedTheme } = useTheme();
@@ -550,303 +555,283 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
     });
   }, [html]);
 
+  const isFinePointer = React.useMemo(() => supportsFinePointer(), []);
+
+  const transformCalloutIcons = React.useCallback((root: HTMLElement) => {
+    const calloutIcons = {
+      info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+      todo: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 11 3 3 6-6"/></svg>',
+      success: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+      check: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+      done: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+      warning: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+      caution: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-octagon"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>',
+      danger: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-zap"><path d="M4 14.89 14 3.11V10h6L10 20.89V14H4z"/></svg>',
+      tip: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lightbulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .5 2.2 1.5 3.1.7.9 1.2 1.7 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>',
+      help: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-help-circle"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
+      question: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-help-circle"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
+      note: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sticky-note"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v5h6"/></svg>',
+      abstract: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>',
+      example: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-beaker"><path d="M4.5 3h15"/><path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"/><path d="M6 14h12"/></svg>',
+      quote: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-quote"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/></svg>',
+    } as Record<string, string>;
+
+    const callouts = root.querySelectorAll(".md-callout:not([data-icon-hydrated])");
+    for (const callout of Array.from(callouts)) {
+      const type = (callout as HTMLElement).dataset.calloutType || "note";
+      const iconEl = callout.querySelector(".md-callout-icon");
+      if (iconEl && !iconEl.innerHTML.trim()) {
+        iconEl.innerHTML = calloutIcons[type] || calloutIcons.note;
+      }
+      (callout as HTMLElement).setAttribute("data-icon-hydrated", "true")    }
+  }, []);
+
+  const renderMermaid = React.useCallback(async (root: HTMLElement, force = false) => {
+    try {
+      const isDark = resolvedTheme === "dark";
+      
+      const themeVariables = isDark ? {
+        darkMode: true,
+        background: 'transparent',
+        mainBkg: 'transparent',
+        primaryColor: '#818cf8', 
+        primaryTextColor: '#f97316',
+        primaryBorderColor: '#6366f1', 
+        lineColor: '#6366f1',
+        secondaryColor: '#1e293b', 
+        tertiaryColor: '#0f172a', 
+        textColor: '#f97316',
+        nodeBkg: '#0a0a12', 
+        nodeTextColor: '#f97316', 
+        nodeBorder: '#4f46e5',
+        clusterBkg: 'rgba(30, 27, 75, 0.4)',
+        clusterBorder: '#818cf8',
+        titleColor: '#c084fc', 
+        edgeLabelBackground: '#020617',
+        actorBkg: '#1e1b4b',
+        actorTextColor: '#f97316',
+        actorLineColor: '#818cf8',
+        signalColor: '#818cf8',
+        signalTextColor: '#f97316',
+        labelBoxBkgColor: '#1e293b',
+        labelTextColor: '#f97316',
+        loopTextColor: '#f97316',
+        noteBkgColor: '#1e293b',
+        noteTextColor: '#f97316',
+        sectionBkgColor: '#1e1b4b',
+        sectionBkgColor2: '#1e293b',
+        taskBkgColor: '#4338ca',
+        taskTextColor: '#f97316',
+        activeTaskBkgColor: '#6366f1',
+        gridColor: '#334155'
+      } : {
+        darkMode: false,
+        background: 'transparent',
+        mainBkg: 'transparent',
+        primaryColor: '#513bb2', 
+        primaryTextColor: '#1e293b',
+        primaryBorderColor: '#64748b', 
+        lineColor: '#475569', 
+        secondaryColor: '#f8fafc',
+        tertiaryColor: '#f1f5f9',
+        textColor: '#0f172a', 
+        nodeBkg: '#ffffff', 
+        nodeTextColor: '#0f172a',
+        nodeBorder: '#94a3b8', 
+        clusterBkg: 'rgba(241, 245, 249, 0.5)',
+        clusterBorder: '#64748b', 
+        titleColor: '#513bb2',
+        edgeLabelBackground: '#ffffff',
+        actorBkg: '#f8fafc',
+        actorTextColor: '#0f172a',
+        actorLineColor: '#64748b',
+        signalColor: '#0f172a',
+        signalTextColor: '#0f172a',
+        labelBoxBkgColor: '#f1f5f9',
+        labelTextColor: '#0f172a',
+        noteBkgColor: '#fffbeb', 
+        noteTextColor: '#0f172a'
+      };
+
+      mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: "base", 
+        themeVariables,
+        securityLevel: "loose",
+        fontFamily: "Inter, var(--font-pingfang-sc), sans-serif",
+        flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+        sequence: { useMaxWidth: true, showSequenceNumbers: true },
+        gantt: { useMaxWidth: true }
+      });
+
+      await new Promise(r => requestAnimationFrame(r));
+      
+      const blocks = root.querySelectorAll(`
+        pre.language-mermaid, 
+        pre code.language-mermaid, 
+        div.mermaid, 
+        [data-language='mermaid'],
+        [data-lang='mermaid']
+      `);
+      
+      for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i] as HTMLElement;
+        let targetNode = block;
+        if (targetNode.tagName === "CODE") {
+           targetNode = targetNode.closest('figure') || targetNode.closest('pre') || targetNode;
+        } else if (targetNode.tagName === "PRE") {
+           targetNode = targetNode.closest('figure') || targetNode;
+        }
+
+        let content = targetNode.dataset.mermaidContent;
+        const themeRendered = targetNode.dataset.renderedTheme;
+
+        if (!force && themeRendered === String(isDark)) {
+          continue;
+        }
+        
+        if (!content) {
+          const codeNode = block.tagName === "CODE" ? block : block.querySelector('code');
+          if (codeNode) {
+              const clone = codeNode.cloneNode(true) as HTMLElement;
+              clone.querySelectorAll('.line-number, .line-numbers, [data-prefix], .prefix').forEach(n => { n.remove(); });
+              const lines = clone.querySelectorAll('.line');
+              if (lines.length > 0) {
+                  content = Array.from(lines).map(line => line.textContent || "").join('\n');
+              } else {
+                  content = clone.innerText || clone.textContent || "";
+              }
+          } else {
+              const clone = (block as HTMLElement).cloneNode(true) as HTMLElement;
+              clone.querySelectorAll('.line-number, .line-numbers, [data-prefix], .prefix').forEach(n => { n.remove(); });
+              content = clone.innerText || clone.textContent || "";
+          }
+          
+          content = content.trim()
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'");
+
+          targetNode.dataset.mermaidContent = content;
+        }
+
+        if (!content || !content.match(/^(graph|flowchart|sequenceDiagram|gantt|classDiagram|stateDiagram|erDiagram|journey|pie|quadrantChart|requirementDiagram|gitGraph|C4Context|mindmap|timeline)/i)) {
+            continue;
+        }
+        
+        targetNode.dataset.renderedTheme = String(isDark);
+        targetNode.style.display = 'none'; 
+
+        const id = `mermaid-${generateContentHash(content)}-${i}`;
+        const { svg } = await mermaid.render(id, content);
+        
+        const existingContainer = targetNode.nextElementSibling;
+        if (existingContainer?.classList.contains('mermaid-render-container')) {
+            existingContainer.innerHTML = svg;
+        } else {
+            const div = document.createElement("div");
+            div.className = "mermaid-render-container my-10 flex justify-center overflow-x-auto transition-all group/mermaid";
+            div.innerHTML = svg;
+            targetNode.parentNode?.insertBefore(div, targetNode.nextSibling);
+        }
+      }
+    } catch (err) { console.error("Mermaid error:", err); }
+  }, [resolvedTheme]);
+
+  const hydrateWikiEmbeds = React.useCallback(async (root: HTMLElement) => {
+    const embeds = root.querySelectorAll(".wiki-embed:not(.hydrated)");
+    for (const embed of Array.from(embeds)) {
+      const el = embed as HTMLElement;
+      const kind = el.dataset.embedKind;
+      const src = el.dataset.src || el.dataset.target; 
+      if (!src) { continue; }
+
+      if (el.querySelector(".wiki-image-wrapper") || el.querySelector(".wiki-embed-content")?.innerHTML.trim()) {
+         el.classList.add("hydrated");
+         continue; 
+      }
+
+      if (kind === "image") {
+        const r2PublicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://cdn.sparkle.codes";
+        const label = el.dataset.alt || "";
+        
+        let widthStyle = "max-width: 100%;";
+        let displayAlt = label;
+        if (label && /^\d+(x\d+)?$/.test(label)) {
+           const [w] = label.split('x');
+           widthStyle = `width: ${w}px; max-width: 100%;`;
+           displayAlt = ""; 
+        }
+
+        const encodedSrc = encodeURIComponent(src).replace(/%2F/g, "/");
+        const primaryUrl = src.startsWith("http") ? src : `${r2PublicUrl.replace(/\/$/, "")}/${encodedSrc}`;
+        const localUrl = `/obsidian-assets/${encodedSrc}`;
+        
+        el.innerHTML = `
+          <div class="wiki-image-wrapper group/img relative my-10 flex flex-col items-center">
+            <div class="relative transition-all duration-700 group-hover/img:scale-[1.01]" style="${widthStyle}">
+              <img 
+                src="${primaryUrl}" 
+                alt="${displayAlt || src}" 
+                class="block w-full h-auto rounded-xl shadow-ambient group-hover/img:shadow-[0_24px_70px_rgba(0,0,0,0.4)] transition-all duration-700"
+                loading="lazy"
+                onerror="if(this.src !== '${window.location.origin}${localUrl}') { this.src='${localUrl}'; } else { this.style.display='none'; this.nextElementSibling.style.display='block'; }"
+              />
+              <div class="wiki-image-error p-4 rounded-xl bg-red-500/5 border border-red-500/10 text-red-500/60 text-[10px] text-center font-black uppercase tracking-widest my-4" style="display: none;">
+                 ⚠️ Image Sync Failed: ${src}
+              </div>
+              <div class="img-toolbar absolute top-3 right-3 flex items-center gap-2 opacity-0 translate-y-[-10px] group-hover/img:opacity-100 group-hover/img:translate-y-0 transition-all duration-500 z-10 sm:top-4 sm:right-4">
+                <button 
+                  class="img-action-btn copy-img-btn flex h-10 w-10 items-center justify-center rounded-xl bg-background/55 backdrop-blur-xl border border-white/10 text-foreground/70 hover:text-primary hover:border-primary/30 transition-all pointer-events-auto shadow-ambient sm:h-9 sm:w-9"
+                  data-url="${primaryUrl}"
+                  title="Copy Link"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                </button>
+                <button 
+                  class="img-action-btn download-img-btn flex h-10 w-10 items-center justify-center rounded-xl bg-background/55 backdrop-blur-xl border border-white/10 text-foreground/70 hover:text-primary hover:border-primary/30 transition-all pointer-events-auto shadow-ambient sm:h-9 sm:w-9"
+                  data-url="${primaryUrl}"
+                  data-filename="${src}"
+                  title="Download"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                </button>
+              </div>
+            </div>
+            ${displayAlt ? `
+              <div class="mt-5 text-center">
+                  <span class="px-4 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-[9px] text-primary/60 font-black tracking-[0.3em] uppercase">
+                      ${displayAlt}
+                  </span>
+              </div>
+            ` : ''}
+          </div>`;
+        el.classList.add("hydrated");
+        continue;
+      }
+
+      try {
+        const [path, frag] = src.split("#");
+        const res = await fetch(path);
+        if (res.ok) {
+          const txt = await res.text();
+          const content = frag ? extractSection(txt, frag) : txt;
+          const contentEl = el.querySelector(".wiki-embed-content");
+          if (contentEl) {
+            contentEl.innerHTML = content;
+            el.classList.add("hydrated");
+            contentEl.querySelectorAll(".math-block, .math-inline").forEach(m => { mathHub?.register(m as HTMLElement); });
+          }
+        }
+      } catch (e) { console.error("Wiki embed error:", e); }
+    }
+  }, []);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) { return; }
-    const isFinePointer = supportsFinePointer();
-
-    // --- Sub-transformers ---
-    const transformCalloutIcons = (root: HTMLElement) => {
-      const calloutIcons = {
-        info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-        todo: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 11 3 3 6-6"/></svg>',
-        success: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-        check: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-        done: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-        warning: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-triangle"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-        caution: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-octagon"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>',
-        danger: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-zap"><path d="M4 14.89 14 3.11V10h6L10 20.89V14H4z"/></svg>',
-        tip: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lightbulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .5 2.2 1.5 3.1.7.9 1.2 1.7 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>',
-        help: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-help-circle"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
-        question: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-help-circle"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
-        note: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sticky-note"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v5h6"/></svg>',
-        abstract: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>',
-        example: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-beaker"><path d="M4.5 3h15"/><path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3"/><path d="M6 14h12"/></svg>',
-        quote: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-quote"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/></svg>',
-      } as Record<string, string>;
-
-      const callouts = root.querySelectorAll(".md-callout:not([data-icon-hydrated])");
-      callouts.forEach(callout => {
-        const type = (callout as HTMLElement).dataset.calloutType || "note";
-        const iconEl = callout.querySelector(".md-callout-icon");
-        if (iconEl && !iconEl.innerHTML.trim()) {
-          iconEl.innerHTML = calloutIcons[type] || calloutIcons.note;
-        }
-        (callout as HTMLElement).setAttribute("data-icon-hydrated", "true");
-      });
-    };
-
-    // NOTE: Callouts are now handled by the Rust core parser for improved performance and SSR consistency.
-    // transformCallouts removed to prevent hydration conflicts.
-
-
-    // transformBadgesAndHashtags removed - replaced by server-side regex pre-rendering (lib/blog.ts).
-    // transformCodeBlocks removed - replaced by server-side pre-rendering (lib/blog.ts).
-
-    const renderMermaid = async (root: HTMLElement) => {
-      try {
-        const isDark = resolvedTheme === "dark";
-        
-        // Premium Starry Night Palette
-        const themeVariables = isDark ? {
-          darkMode: true,
-          background: 'transparent',
-          mainBkg: 'transparent',
-          primaryColor: '#818cf8', // Indigo 400
-          // Use #f97316 (Orange 500) for text to contrast against both dark backgrounds and white blocks
-          primaryTextColor: '#f97316',
-          primaryBorderColor: '#6366f1', // Indigo 500
-          lineColor: '#6366f1',
-          secondaryColor: '#1e293b', // Slate 900
-          tertiaryColor: '#0f172a', // Slate 950
-          textColor: '#f97316',
-          nodeBkg: '#0a0a12', 
-          nodeTextColor: '#f97316', 
-          nodeBorder: '#4f46e5',
-          clusterBkg: 'rgba(30, 27, 75, 0.4)',
-          clusterBorder: '#818cf8',
-          titleColor: '#c084fc', // Purple 400
-          edgeLabelBackground: '#020617',
-          // Sequence Diagrams
-          actorBkg: '#1e1b4b',
-          actorTextColor: '#f97316',
-          actorLineColor: '#818cf8',
-          signalColor: '#818cf8',
-          signalTextColor: '#f97316',
-          labelBoxBkgColor: '#1e293b',
-          labelTextColor: '#f97316',
-          loopTextColor: '#f97316',
-          noteBkgColor: '#1e293b',
-          noteTextColor: '#f97316',
-          // Gantt & Others
-          sectionBkgColor: '#1e1b4b',
-          sectionBkgColor2: '#1e293b',
-          taskBkgColor: '#4338ca',
-          taskTextColor: '#f97316',
-          activeTaskBkgColor: '#6366f1',
-          gridColor: '#334155'
-        } : {
-          darkMode: false,
-          background: 'transparent',
-          mainBkg: 'transparent',
-          primaryColor: '#513bb2', // Imperial Purple
-          primaryTextColor: '#1e293b',
-          primaryBorderColor: '#64748b', // Slate 500 (More distinct)
-          lineColor: '#475569', // Slate 600
-          secondaryColor: '#f8fafc',
-          tertiaryColor: '#f1f5f9',
-          textColor: '#0f172a', // Deep Slate
-          nodeBkg: '#ffffff', 
-          nodeTextColor: '#0f172a',
-          nodeBorder: '#94a3b8', // Slate 400 (More distinct)
-          clusterBkg: 'rgba(241, 245, 249, 0.5)',
-          clusterBorder: '#64748b', // Slate 500
-          titleColor: '#513bb2',
-          edgeLabelBackground: '#ffffff',
-          // Sequence Diagrams
-          actorBkg: '#f8fafc',
-          actorTextColor: '#0f172a',
-          actorLineColor: '#64748b',
-          signalColor: '#0f172a',
-          signalTextColor: '#0f172a',
-          labelBoxBkgColor: '#f1f5f9',
-          labelTextColor: '#0f172a',
-          noteBkgColor: '#fffbeb', // Light amber tint for notes
-          noteTextColor: '#0f172a'
-        };
-
-        mermaid.initialize({ 
-          startOnLoad: false, 
-          theme: "base", 
-          themeVariables,
-          securityLevel: "loose",
-          fontFamily: "Inter, var(--font-pingfang-sc), sans-serif",
-          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-          sequence: { useMaxWidth: true, showSequenceNumbers: true },
-          gantt: { useMaxWidth: true }
-        });
-
-        // Add a micro-delay to allow Mermaid internal state to sync with initialize
-        await new Promise(r => requestAnimationFrame(r));
-        
-        const blocks = root.querySelectorAll(`
-          pre.language-mermaid, 
-          pre code.language-mermaid, 
-          div.mermaid, 
-          [data-language='mermaid'],
-          [data-lang='mermaid']
-        `);
-        
-        for (const block of Array.from(blocks)) {
-          // Find outermost wrapper to replace (figure > header + pre)
-          let targetNode = block as HTMLElement;
-          if (targetNode.tagName === "CODE") {
-             targetNode = targetNode.closest('figure') || targetNode.closest('pre') || targetNode;
-          } else if (targetNode.tagName === "PRE") {
-             targetNode = targetNode.closest('figure') || targetNode;
-          }
-
-          let content = targetNode.dataset.mermaidContent;
-          const themeRendered = targetNode.dataset.renderedTheme;
-
-          // Force re-render if theme changed
-          if (themeRendered === String(isDark)) {
-            continue;
-          }
-          
-          if (!content) {
-            // Robust extraction: Handle Shiki (.line), our custom mockup-code (.mockup-code > pre > code), or raw.
-            const codeNode = block.tagName === "CODE" ? block : block.querySelector('code');
-            if (codeNode) {
-                const clone = codeNode.cloneNode(true) as HTMLElement;
-                clone.querySelectorAll('.line-number, .line-numbers, [data-prefix], .prefix').forEach(n => { n.remove(); });
-                const lines = clone.querySelectorAll('.line');
-                if (lines.length > 0) {
-                    content = Array.from(lines).map(line => line.textContent || "").join('\n');
-                } else {
-                    content = clone.innerText || clone.textContent || "";
-                }
-            } else {
-                const clone = (block as HTMLElement).cloneNode(true) as HTMLElement;
-                clone.querySelectorAll('.line-number, .line-numbers, [data-prefix], .prefix').forEach(n => { n.remove(); });
-                content = clone.innerText || clone.textContent || "";
-            }
-            
-            content = content.trim()
-              .replace(/&amp;/g, '&')
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/&quot;/g, '"')
-              .replace(/&#39;/g, "'");
-
-            targetNode.dataset.mermaidContent = content;
-          }
-
-          if (!content || !content.match(/^(graph|flowchart|sequenceDiagram|gantt|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|quadrantChart|requirementDiagram|gitGraph|C4Context|mindmap|timeline)/i)) {
-              continue;
-          }
-          
-          targetNode.dataset.renderedTheme = String(isDark);
-          targetNode.style.display = 'none'; // Hide the original block
-
-          // Use unique stable ID prefix from content
-          const id = `mermaid-${generateContentHash(content)}`;
-          const { svg } = await mermaid.render(id, content);
-          
-          // Look for an existing render container sibling
-          const existingContainer = targetNode.nextElementSibling;
-          if (existingContainer?.classList.contains('mermaid-render-container')) {
-              existingContainer.innerHTML = svg;
-          } else {
-              const div = document.createElement("div");
-              div.className = "mermaid-render-container my-10 flex justify-center overflow-x-auto transition-all group/mermaid";
-              div.innerHTML = svg;
-              targetNode.parentNode?.insertBefore(div, targetNode.nextSibling);
-          }
-        }
-      } catch (err) { console.error("Mermaid error:", err); }
-    };
-
-    const hydrateWikiEmbeds = async (root: HTMLElement) => {
-      const embeds = root.querySelectorAll(".wiki-embed:not(.hydrated)");
-      for (const embed of Array.from(embeds)) {
-        const el = embed as HTMLElement;
-        const kind = el.dataset.embedKind;
-        const src = el.dataset.src || el.dataset.target; // Support both
-        if (!src) { continue; }
-
-        // 1. Handle Images (R2 Integration with Local Fallback)
-        if (kind === "image") {
-          const r2PublicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://cdn.sparkle.codes";
-          const label = el.dataset.alt || "";
-          
-          let widthStyle = "max-width: 100%;";
-          let displayAlt = label;
-          if (label && /^\d+(x\d+)?$/.test(label)) {
-             const [w] = label.split('x');
-             widthStyle = `width: ${w}px; max-width: 100%;`;
-             displayAlt = ""; 
-          }
-
-          const encodedSrc = encodeURIComponent(src).replace(/%2F/g, "/");
-          // primaryUrl is R2, secondaryUrl is local public assets
-          const primaryUrl = src.startsWith("http") ? src : `${r2PublicUrl.replace(/\/$/, "")}/${encodedSrc}`;
-          const localUrl = `/obsidian-assets/${encodedSrc}`;
-          
-          el.innerHTML = `
-            <div class="wiki-image-wrapper group/img relative my-10 flex flex-col items-center">
-              <div class="relative transition-all duration-700 group-hover/img:scale-[1.01]" style="${widthStyle}">
-                <img 
-                  src="${primaryUrl}" 
-                  alt="${displayAlt || src}" 
-                  class="block w-full h-auto rounded-xl shadow-ambient group-hover/img:shadow-[0_24px_70px_rgba(0,0,0,0.4)] transition-all duration-700"
-                  loading="lazy"
-                  onerror="if(this.src !== '${window.location.origin}${localUrl}') { this.src='${localUrl}'; } else { this.style.display='none'; this.nextElementSibling.style.display='block'; }"
-                />
-                <div class="wiki-image-error p-4 rounded-xl bg-red-500/5 border border-red-500/10 text-red-500/60 text-[10px] text-center font-black uppercase tracking-widest my-4" style="display: none;">
-                   ⚠️ Image Sync Failed: ${src}
-                </div>
-
-                <!-- Floating Toolbar: Premium Glass Interface -->
-                <div class="img-toolbar absolute top-3 right-3 flex items-center gap-2 opacity-0 translate-y-[-10px] group-hover/img:opacity-100 group-hover/img:translate-y-0 transition-all duration-500 z-10 sm:top-4 sm:right-4">
-                  <button 
-                    class="img-action-btn copy-img-btn flex h-10 w-10 items-center justify-center rounded-xl bg-background/55 backdrop-blur-xl border border-white/10 text-foreground/70 hover:text-primary hover:border-primary/30 transition-all pointer-events-auto shadow-ambient sm:h-9 sm:w-9"
-                    data-url="${primaryUrl}"
-                    title="Copy Link"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                  </button>
-                  <button 
-                    class="img-action-btn download-img-btn flex h-10 w-10 items-center justify-center rounded-xl bg-background/55 backdrop-blur-xl border border-white/10 text-foreground/70 hover:text-primary hover:border-primary/30 transition-all pointer-events-auto shadow-ambient sm:h-9 sm:w-9"
-                    data-url="${primaryUrl}"
-                    data-filename="${src}"
-                    title="Download"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                  </button>
-                </div>
-              </div>
-              
-              ${displayAlt ? `
-                <div class="mt-5 text-center">
-                    <span class="px-4 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-[9px] text-primary/60 font-black tracking-[0.3em] uppercase">
-                        ${displayAlt}
-                    </span>
-                </div>
-              ` : ''}
-            </div>`;
-          el.classList.add("hydrated");
-          continue;
-        }
-
-        // 2. Handle Notes (Transclusion)
-        try {
-          const [path, frag] = src.split("#");
-          // For now, assume path is relative or absolute to the root
-          const res = await fetch(path);
-          if (res.ok) {
-            const txt = await res.text();
-            const content = frag ? extractSection(txt, frag) : txt;
-            const contentEl = el.querySelector(".wiki-embed-content");
-            if (contentEl) {
-              contentEl.innerHTML = content;
-              el.classList.add("hydrated");
-              contentEl.querySelectorAll(".math-block, .math-inline").forEach(m => { mathHub?.register(m as HTMLElement); });
-            }
-          }
-        } catch (e) { console.error("Wiki embed error:", e); }
-      }
-    };
 
     const handleInteraction = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -1017,14 +1002,24 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
         
         const currentPath = window.location.pathname;
         const currentPathDecoded = decodeURIComponent(currentPath);
-        const currentSlug = decodeURIComponent(currentPath.split("/").pop() || "");
+        const currentSlugLocal = decodeURIComponent(currentPath.split("/").pop() || "");
         
-        // Local logic: Path matches current slug, or empty path, or matches filename suffix
-        // Obsidian Style: [[测试]] should be local if current page is [[Folder/测试]]
+        // Extract the filename (last path segment) from the full Obsidian vault path.
+        // data-target may be a deep path like "Documents/I.P.A.R.A/工作领域/项目/测试"
+        // while the URL slug is just "测试".
+        const pathFileName = decodeURIComponent((pathPart.split("/").pop() || ""));
+        const pageFileName = decodeURIComponent((dataPage.split("/").pop() || ""));
+        
+        // Local logic: Path matches current slug, or empty path, or filename matches
+        // Obsidian Style: [[Folder/测试#heading]] should be local if current page slug is "测试"
         const isLocal = !pathPart || 
-                        pathPart === currentSlug || 
+                        pathPart === currentSlugLocal || 
+                        pathFileName === currentSlugLocal ||
+                        pageFileName === currentSlugLocal ||
                         currentPathDecoded.endsWith(`-${pathPart}`) ||
                         currentPathDecoded.endsWith(`/${pathPart}`) ||
+                        currentPathDecoded.endsWith(`-${pathFileName}`) ||
+                        currentPathDecoded.endsWith(`/${pathFileName}`) ||
                         currentPathDecoded.endsWith(`-${encodeURIComponent(pathPart)}`) ||
                         currentPathDecoded.endsWith(`/${encodeURIComponent(pathPart)}`);
         
@@ -1081,9 +1076,19 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
           }
         } else if (!isLocal && pathPart) {
           // Navigation logic for cross-page wiki-links
-          // We assume /blog/ as the base route for notes unless instructed otherwise
           e.preventDefault();
-          const targetUrl = `${window.location.origin}/blog/${encodeURIComponent(pathPart)}${fragment ? `#${fragment}` : ""}`;
+
+          // If path starts with /, it's already a resolved internal path (e.g. from Sentinel)
+          if (pathPart.startsWith('/')) {
+            window.location.assign(`${window.location.origin}${pathPart}${fragment ? `#${fragment}` : ""}`);
+            return;
+          }
+
+          // Extract just the filename from the full Obsidian vault path.
+          // e.g. "Documents/I.P.A.R.A/工作领域/项目/知识提取" -> "知识提取"
+          // The blog route uses filename-only slugs: /blog/[slug]
+          const targetFileName = pathPart.split("/").pop() || pathPart;
+          const targetUrl = `${window.location.origin}/blog/${encodeURIComponent(targetFileName)}${fragment ? `#${fragment}` : ""}`;
           window.location.assign(targetUrl);
           return;
         }
@@ -1143,17 +1148,12 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
 
     // --- Execution ---
     const init = async () => {
-      // Initial sequence optimization
       requestAnimationFrame(() => {
         hydrateWikiEmbeds(container);
         transformCalloutIcons(container);
         
-        // Mermaid is heavy, background it on initial mount but react quickly on theme change
-        if (mounted.current) {
-           renderMermaid(container);
-        } else {
-           ric(() => renderMermaid(container), { timeout: 1000 });
-        }
+        // Initial Mermaid render (uses current theme)
+        renderMermaid(container);
         
         // Register all math blocks for incremental rendering
         container.querySelectorAll(".math-block, .math-inline").forEach(m => {
@@ -1166,10 +1166,10 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
 
     const jumpTimer = handleInitialHash();
     init();
-    mounted.current = true;
-      container.addEventListener("click", handleInteraction);
-      container.addEventListener("dblclick", handleDblClick);
-      container.addEventListener("mousedown", handleMouseDown);
+
+    container.addEventListener("click", handleInteraction);
+    container.addEventListener("dblclick", handleDblClick);
+    container.addEventListener("mousedown", handleMouseDown);
 
     return () => {
       if (jumpTimer) { clearTimeout(jumpTimer); }
@@ -1180,7 +1180,24 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
         mathHub?.unregister(el as HTMLElement);
       });
     };
-  }, [sanitizedHtml, resolvedTheme]);
+  }, [sanitizedHtml]); // REMOVED resolvedTheme - This prevents re-running hydration on theme change
+
+  // Effect 3: Theme-only updates (Mermaid Diagrams)
+  useEffect(() => {
+    if (!mounted.current || !containerRef.current) { return; }
+    
+    // We only re-trigger Mermaid when theme changes.
+    // Images/Math stay as-is in the DOM, avoiding flickering.
+    const container = containerRef.current;
+    
+    // Slight delay to ensure CSS variables have updated
+    const timer = setTimeout(() => {
+      // Force re-render of all mermaid diagrams in the container with new theme variables
+      renderMermaid(container, true);
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [resolvedTheme, renderMermaid]);
 
   if (!html) { return null; }
 
@@ -1243,6 +1260,7 @@ export function MarkdownInteractivity({ html }: MarkdownInteractivityProps) {
           </div>
         </div>
       ) : null}
+      <WikiLinkPreviewManager containerRef={containerRef} currentSlug={currentSlug} currentPostMeta={currentPostMeta} />
     </>
   );
 }

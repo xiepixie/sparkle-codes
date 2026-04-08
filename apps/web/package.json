@@ -9,7 +9,7 @@
 		"lint": "biome lint",
 		"format": "biome format --write",
 		"type-check": "tsc --noEmit",
-		"clean": "rm -rf .next .content-collections node_modules"
+		"clean": "rm -rf .next .turbo .cache dist next-env.d.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/google": "^3.0.55",
@@ -40,9 +40,6 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.13",
-		"@content-collections/core": "^0.12.0",
-		"@content-collections/mdx": "^0.2.2",
-		"@content-collections/next": "^0.2.9",
 		"@repo/tailwind-config": "workspace:*",
 		"@repo/tsconfig": "workspace:*",
 		"@shikijs/rehype": "^3.15.0",

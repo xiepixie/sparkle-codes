@@ -17,8 +17,6 @@
         flex-direction: column;
         gap: 0.5rem;
         box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.1);
-        contain: layout;
-        overflow: hidden;
     }
 
     .dark blockquote.md-callout {

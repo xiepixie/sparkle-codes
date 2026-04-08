@@ -30,12 +30,12 @@ export default async function BlogIndexPage({ searchParams }: BlogIndexPageProps
     query: resolvedSearchParams.search || "",
     tags: toTagList(resolvedSearchParams.tag),
     page: Number.parseInt(resolvedSearchParams.page || "1", 10) || 1,
-    pageSize: 5,
+    pageSize: 7,
   });
 
   return (
     <div className="relative min-h-screen flex flex-col font-sans overflow-hidden">
-      <div className="container relative z-10 mx-auto max-w-5xl px-5 py-24 sm:px-6 sm:py-28 lg:py-32">
+      <div className="container relative z-10 mx-auto max-w-6xl px-5 py-24 sm:px-6 sm:py-28 lg:py-32">
         <header className="mb-12 space-y-4 text-center animate-in fade-in slide-in-from-bottom-8 duration-1000 sm:mb-14">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/90">
              Writing archive

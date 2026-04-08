@@ -153,10 +153,7 @@
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border-radius: var(--radius-xl, 16px);
-        margin-top: -2rem !important; /* 'Lift' the editor to occupy the container's padding zone */
-        margin-bottom: 0 !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
+        margin: 0 !important; /* Removed fixed negative margin lift to fix callout clipping */
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
     
@@ -322,22 +319,34 @@
         color: var(--md-primary) !important;
     }
 
+    .math-inline.source-mode {
+        display: inline !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+    }
+
     .math-source-content {
         font-family: var(--font-mono, 'JetBrains Mono', monospace);
-        font-size: 0.9em;
-        padding: 0.3rem 0.6rem;
+        font-size: 0.85em;
+        padding: 0.2rem 0.5rem;
         background: color-mix(in srgb, var(--md-primary), transparent 94%);
         color: var(--md-primary);
         border-radius: 6px;
-        display: inline-flex;
-        align-items: center;
-        border: 1px solid color-mix(in srgb, var(--md-primary), transparent 80%);
-        white-space: nowrap;
-        line-height: 1.5;
+        display: inline; /* Changed to inline for natural wrapping with text */
+        border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%);
+        white-space: normal; /* Allow wrapping */
+        word-break: break-all;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+        line-height: 1.6;
+        cursor: text;
+        transition: all 0.2s ease;
     }
 
     .math-block.source-mode {
-        padding: 2rem 0; /* Restored: Maintain original box model for alignment anchor */
+        padding: 0 !important; /* Zero padding in source mode to allow accurate height calculation */
         border: none;
         background: transparent;
         box-shadow: none;
@@ -369,8 +378,7 @@
         }
 
         .latex-source {
-            margin-top: -1rem !important; /* Mobile lift matches 1rem padding */
-            margin-bottom: 0.5rem !important;
+            margin: 0 !important;
             border-radius: var(--radius-xl, 14px);
         }
 

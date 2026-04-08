@@ -143,41 +143,43 @@
         }
     }
 
-    /* Enhanced High-Contrast Search Highlights */
-    mark {
+    /* Enhanced Search Highlights - Minimalist integrated style */
+    mark:not(.search-hit) {
         border-radius: 0.35rem;
         padding: 0.04rem 0.25rem;
     }
 
     .search-hit {
-        background: color-mix(in srgb, var(--primary), transparent 75%);
         color: var(--primary);
-        font-weight: 700;
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary), transparent 50%);
-    }
-
-    .search-hit[data-hit-kind="title"] {
-        background: color-mix(in srgb, var(--primary), transparent 65%);
-        color: var(--primary);
-    }
-
-    .search-hit[data-hit-kind="description"] {
-        background: color-mix(in srgb, var(--primary), transparent 80%);
-    }
-
-    .search-hit[data-hit-kind="body"] {
-        background: color-mix(in srgb, var(--primary), transparent 85%);
-        color: color-mix(in srgb, var(--primary), var(--foreground) 60%);
+        font-weight: 800; /* Extra bold for visibility without background */
+        background: transparent !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
     }
 
     .dark .search-hit {
-        background: color-mix(in srgb, var(--primary), transparent 70%);
-        color: color-mix(in srgb, white, var(--primary) 10%);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary), transparent 60%);
+        color: var(--primary);
+        filter: brightness(1.2);
     }
 
-    .dark .search-hit[data-hit-kind="body"] {
-        color: color-mix(in srgb, white, var(--primary) 30%);
+    .jump-highlight {
+        animation: jump-flash 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    @keyframes jump-flash {
+        0% {
+            background-color: var(--primary);
+            box-shadow: 0 0 20px 5px var(--primary);
+            border-radius: 0.5rem;
+        }
+        20% {
+            background-color: var(--primary);
+            box-shadow: 0 0 15px 2px var(--primary);
+        }
+        100% {
+            background-color: transparent;
+            box-shadow: 0 0 0 0 transparent;
+        }
     }
 
     .animate-search-loader {
@@ -215,6 +217,148 @@
 
     .search-katex :where(.katex) {
         font-size: 1em;
+    }
+
+    /* --- Wiki Link Preview Styles --- */
+    .preview-context-heading {
+        border-bottom: 1px solid color-mix(in srgb, var(--primary), transparent 92%);
+        padding-bottom: 4px;
+    }
+    
+    .preview-context-heading :where(h1, h2, h3, h4, h5, h6) {
+        font-size: 11px !important;
+        font-weight: 800 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.12rem !important;
+        color: var(--primary) !important;
+        opacity: 0.6 !important;
+        margin: 0 !important;
+    }
+
+    .highlight-target {
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        animation: highlight-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+    }
+
+    @keyframes highlight-pulse {
+        from { 
+            background-color: color-mix(in srgb, var(--primary), transparent 97%);
+            box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--primary), transparent 40%);
+        }
+        to { 
+            background-color: color-mix(in srgb, var(--primary), transparent 93%);
+            box-shadow: inset 5px 0 0 0 var(--primary);
+        }
+    }
+
+    /* Reference indicator for blocks in preview */
+    .wiki-block-highlight {
+        border-left: 2px solid var(--primary);
+        background: color-mix(in srgb, var(--primary), transparent 96%);
+        border-radius: 0 4px 4px 0;
+        position: relative;
+    }
+
+    .dark .wiki-block-highlight {
+        background: color-mix(in srgb, var(--primary), transparent 92%);
+    }
+
+    /* Hide redundant inline anchors in all preview contexts */
+    .preview-context-heading .block-anchor,
+    .wiki-block-highlight .block-anchor {
+        display: none !important;
+    }
+
+    .preview-section-context :where(h1, h2, h3),
+    .preview-context-heading :where(h1, h2, h3) {
+        font-size: 1.5rem !important; /* Matches text-2xl */
+        font-weight: 900 !important;
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.25rem !important;
+        color: var(--foreground) !important;
+        letter-spacing: -0.025em !important;
+        line-height: 1.2 !important;
+    }
+
+    .preview-section-context :where(h4, h5, h6),
+    .preview-context-heading :where(h4, h5, h6) {
+        font-size: 1.125rem !important;
+        font-weight: 800 !important;
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.25rem !important;
+        color: var(--foreground) !important;
+        letter-spacing: -0.01em !important;
+        line-height: 1.3 !important;
+    }
+
+    .preview-section-context :where(h1, h2, h3, h4, h5, h6):first-child {
+        margin-top: 0 !important;
+    }
+
+    .dark :where(.preview-section-context, .preview-context-heading) :where(h1, h2, h3, h4, h5, h6) {
+        color: var(--foreground) !important;
+    }
+
+    .preview-section-context :where(p) {
+        margin-bottom: 1rem !important;
+        line-height: 1.7 !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* Style for the block anchor indicator in content */
+    .block-anchor {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.5rem;
+        font-size: 0.65rem;
+        font-family: var(--font-mono);
+        font-weight: 700;
+        color: var(--primary);
+        opacity: 0.8 !important; /* Always visible */
+        vertical-align: baseline;
+        user-select: none;
+        padding: 1px 6px;
+        background: color-mix(in srgb, var(--primary), transparent 94%);
+        border: 1px solid color-mix(in srgb, var(--primary), transparent 85%);
+        border-radius: 4px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-transform: none;
+        cursor: default;
+    }
+
+    .block-anchor:hover {
+        opacity: 1 !important;
+        background: color-mix(in srgb, var(--primary), transparent 85%);
+        box-shadow: 0 0 12px color-mix(in srgb, var(--primary), transparent 70%);
+        transform: translateY(-1px);
+    }
+
+    .block-anchor::before {
+        content: attr(id);
+    }
+
+    /* Style for Wiki Links that target a specific block */
+    .wiki-link[data-fragment^="^"] {
+        background: color-mix(in srgb, var(--primary), transparent 94%);
+        padding: 0 4px;
+        border-radius: 4px;
+        border-bottom: 1.5px dashed color-mix(in srgb, var(--primary), transparent 50%);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-underline-offset: 4px;
+    }
+
+    .wiki-link[data-fragment^="^"]:hover {
+        background: color-mix(in srgb, var(--primary), transparent 88%);
+        border-bottom-color: var(--primary);
+        border-bottom-style: solid;
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--primary), transparent 90%);
+        transform: translateY(-0.5px);
+    }
+
+    .dark .block-anchor {
+        opacity: 0.6 !important;
+        background: color-mix(in srgb, var(--primary), transparent 80%);
+        border-color: color-mix(in srgb, var(--primary), transparent 60%);
     }
 }
 /* --- Global Markdown Token Mapping --- */

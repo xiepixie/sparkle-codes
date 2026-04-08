@@ -1,0 +1,27 @@
+use serde::Serialize;
+
+#[derive(Serialize, Debug, Clone)]
+pub struct HeadingNode {
+    pub id: String,
+    pub text: String,
+    pub level: i32,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct SectionNode {
+    pub heading_id: Option<String>,
+    pub heading_text: String,
+    pub heading_level: i32,
+    pub section_index: i32,
+    pub html: String,
+    pub text_content: String,
+    pub is_first_section: bool,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct BlockNode {
+    pub block_id: String,
+    pub section_index: i32,
+    pub html: String,
+    pub text_content: String,
+}

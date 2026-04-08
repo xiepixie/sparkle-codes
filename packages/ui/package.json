@@ -26,7 +26,7 @@
 	"main": "./index.ts",
 	"name": "@repo/ui",
 	"scripts": {
-		"clean": "rm -rf .cache .turbo dist node_modules",
+		"clean": "rm -rf .cache .turbo dist",
 		"type-check": "tsc --noEmit",
 		"shadcn-ui": "pnpm dlx shadcn@latest"
 	},

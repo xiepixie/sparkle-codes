@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf .cache .turbo dist node_modules pkg"
+    "clean": "rm -rf .cache .turbo dist pkg"
   },
   "peerDependencies": {
     "react": ">=18.0.0",

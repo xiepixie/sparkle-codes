@@ -15,6 +15,13 @@
       "when": 1775271636936,
       "tag": "0001_dear_screwball",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775612282928,
+      "tag": "0002_shallow_joystick",
+      "breakpoints": true
     }
   ]
 }

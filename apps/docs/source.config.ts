@@ -1,12 +1,12 @@
 import {
-	defineConfig,
-	defineDocs,
-	frontmatterSchema,
-	metaSchema,
-} from "fumadocs-mdx/config";
-import { z } from "zod";
+	transformerNotationDiff,
+	transformerNotationFocus,
+	transformerNotationHighlight,
+} from "@shikijs/transformers";
+import { defineConfig, defineDocs, metaSchema } from "fumadocs-mdx/config";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
+import { z } from "zod";
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -33,11 +33,6 @@ export const docs = defineDocs({
 	},
 });
 
-import {
-	transformerNotationDiff,
-	transformerNotationFocus,
-	transformerNotationHighlight,
-} from "@shikijs/transformers";
 
 /**
  * Rehype Plugin: Convert HTML style strings to React style objects.
@@ -92,9 +87,15 @@ export default defineConfig({
 						const lang = node.properties?.className as string[] | undefined;
 						if (lang) {
 							node.properties.className = lang.map((c) => {
-								if (c === "language-meta-bind-embed") return "language-markdown";
-								if (c === "language-assembly") return "language-asm";
-								if (c === "language-verilog") return "language-cpp"; // Shiki's v/verilog can be tricky, using cpp as fallback or asm
+								if (c === "language-meta-bind-embed") {
+									return "language-markdown";
+								}
+								if (c === "language-assembly") {
+									return "language-asm";
+								}
+								if (c === "language-verilog") {
+									return "language-cpp"; // Shiki's v/verilog can be tricky, using cpp as fallback or asm
+								}
 								return c;
 							});
 						}

@@ -10,7 +10,6 @@ packages/sentinel/target
 
 # 源代码管理
 .git
-.gitignore
 .agents
 AGENTS.md
 DOCS

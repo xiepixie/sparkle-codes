@@ -46,6 +46,7 @@ ARG NEXT_PUBLIC_WEB_URL
 # 2. apps/web/.next/cache (Web 增量生成缓存)
 # 3. apps/docs/.next/cache (Docs 增量生成缓存)
 # 4. .turbo (Turbo 任务指纹缓存)
+# 使用严格串行构建，防止 4G 内存死机
 RUN --mount=type=cache,target=/app/node_modules/.cache \
     --mount=type=cache,target=/app/apps/web/.next/cache \
     --mount=type=cache,target=/app/apps/docs/.next/cache \
@@ -53,7 +54,8 @@ RUN --mount=type=cache,target=/app/node_modules/.cache \
     DATABASE_URL=$DATABASE_URL \
     NEXT_PUBLIC_DOCS_URL=$NEXT_PUBLIC_DOCS_URL \
     NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
-    npx turbo run build --filter=web --filter=docs
+    NODE_OPTIONS="--max-old-space-size=2048" \
+    npx turbo run build --filter=web --filter=docs --concurrency=1
 
 # --- Web Runner ---
 FROM node:20-alpine AS runner-web

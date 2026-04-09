@@ -83,6 +83,7 @@ pub struct DocumentMetadata {
     pub content_hash: String,
     pub parser_version: String,
     pub updated_at: DateTime<Utc>,
+    pub date: Option<DateTime<Utc>>,
     pub aliases: Vec<String>,
     pub tags: Vec<String>,
     pub is_published: bool,

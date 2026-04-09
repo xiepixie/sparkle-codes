@@ -29,9 +29,9 @@ pub async fn upsert_document(
         r#"
         INSERT INTO documents (
             "id", "title", "slug", "vaultPath", "area", "content", "html",
-            "contentHash", "parserVersion", "aliases", "metadata", "updatedAt", "lastSyncedAt", "isPublished"
+            "contentHash", "parserVersion", "aliases", "metadata", "updatedAt", "publishedAt", "lastSyncedAt", "isPublished"
         )
-        VALUES ($1, $2, $3, $4, CAST($5 AS "Area"), $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, CAST($5 AS "Area"), $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         ON CONFLICT ("vaultPath") DO UPDATE SET
             "title" = EXCLUDED."title",
             "slug" = EXCLUDED."slug",
@@ -43,6 +43,7 @@ pub async fn upsert_document(
             "aliases" = EXCLUDED."aliases",
             "metadata" = EXCLUDED."metadata",
             "updatedAt" = EXCLUDED."updatedAt",
+            "publishedAt" = EXCLUDED."publishedAt",
             "lastSyncedAt" = EXCLUDED."lastSyncedAt",
             "isPublished" = EXCLUDED."isPublished"
         RETURNING id
@@ -58,8 +59,12 @@ pub async fn upsert_document(
     .bind(&ctx.content_hash)
     .bind(&meta.parser_version)
     .bind(serde_json::to_value(&meta.aliases).unwrap_or_default())
-    .bind(serde_json::json!({ "tags": meta.tags }))
+    .bind(serde_json::json!({ 
+        "tags": meta.tags, 
+        "date": meta.date.map(|d| d.to_rfc3339()) 
+    }))
     .bind(meta.updated_at)
+    .bind(meta.date)
     .bind(now)
     .bind(meta.is_published)
     .fetch_one(pool)

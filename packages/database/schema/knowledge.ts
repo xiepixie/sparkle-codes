@@ -74,14 +74,34 @@ export const documents = pgTable(
 		// --- EXTENSIBLE METADATA (Low-frequency fields) ---
 		metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
 
+		/** 
+		 * 🆔 系统入库时间 (System Creation)
+		 * 该记录首次被写入数据库的时间。主要用于系统审计，不建议作为文章展示日期。
+		 */
 		createdAt: timestamp("createdAt").defaultNow().notNull(),
+
+		/** 
+		 * 🔄 记录物理更新时间 (Record Modification)
+		 * 数据库层记录发生任何变更的时间（由 Drizzle $onUpdate 自动维护）。
+		 * 当内容、标题或元数据改变时，该值会自动刷新。
+		 */
 		updatedAt: timestamp("updatedAt")
 			.defaultNow()
 			.$onUpdate(() => new Date())
 			.notNull(),
+
+		/** 
+		 * 📝 内容发布/创作日期 (Content Authoring Date)
+		 * 映射自 Obsidian Frontmatter 中的 `date` 字段。
+		 * 【重要】：这是博客前端展示日期、文章列表排序的核心依据（第一优先级）。
+		 */
 		publishedAt: timestamp("publishedAt"),
 		
 		// --- SYNC STATUS ---
+		/** 
+		 * 🚀 Sentinel 最后同步时间 (Last Sync Success)
+		 * Sentinel 同步任务成功处理并完成该文件解析的时间戳。
+		 */
 		lastSyncedAt: timestamp("lastSyncedAt"),
 	},
 	(table) => [

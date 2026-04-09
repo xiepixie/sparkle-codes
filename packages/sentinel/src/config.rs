@@ -1,6 +1,8 @@
 use std::env;
 use std::path::PathBuf;
 
+pub const PARSER_VERSION: &str = "v1.3.6";
+
 use crate::types::VaultArea;
 
 #[derive(Clone, Debug)]
@@ -90,8 +92,7 @@ impl SyncConfig {
                     .unwrap_or_else(|_| "apps/web/content/notes".to_string()),
             ),
             pool_size,
-            parser_version: env::var("SENTINEL_PARSER_VERSION")
-                .unwrap_or_else(|_| "v1.3.4".to_string()),
+            parser_version: PARSER_VERSION.to_string(),
             vault_root: PathBuf::from(
                 env::var("IPARA_VAULT_ROOT")
                     .expect("IPARA_VAULT_ROOT must be set"),

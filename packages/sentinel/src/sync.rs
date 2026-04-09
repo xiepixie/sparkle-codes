@@ -5,7 +5,7 @@ use tokio::sync::Semaphore;
 use sqlx::{Pool, Postgres};
 use tokio::fs;
 use sha2::Digest;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDate, NaiveDateTime};
 use tracing::{info, error, debug, warn};
 use markdown_parser::parse_content_native;
 use cuid2::cuid;
@@ -13,9 +13,10 @@ use walkdir::WalkDir;
 use tokio::task::JoinSet;
 use reqwest::Client as HttpClient;
 use url::Url;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::config::SyncConfig;
-use crate::types::{FileContext, SyncAction, DocumentMetadata, LinkInstance, SectionMetadata, BlockMetadata};
+use crate::types::{FileContext, SyncAction, DocumentMetadata, LinkInstance, SectionMetadata, BlockMetadata, VaultArea};
 use crate::utils::{path, frontmatter, mdx};
 use crate::db::{documents, links, sections};
 
@@ -25,6 +26,7 @@ pub struct SyncEngine {
     pub semaphore: Arc<Semaphore>,
     pub r2_client: Arc<crate::utils::r2::R2Client>,
     pub http_client: HttpClient,
+    pub work_area_updated: AtomicBool,
 }
 
 impl SyncEngine {
@@ -47,6 +49,7 @@ impl SyncEngine {
                 .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Sentinel/1.0")
                 .build()
                 .unwrap_or_else(|_| HttpClient::new()),
+            work_area_updated: AtomicBool::new(false),
         }
     }
 
@@ -239,6 +242,7 @@ impl SyncEngine {
         };
 
         // 5. Database Persistence
+        info!("💾 Persisting: {} (Updated: {})", meta.slug, meta.updated_at);
         if let Err(e) = self.persist_sync(&ctx, &meta, &clean_body, &html, &links, &sections, &blocks).await {
             error!("❌ Database persistence failed for {}: {}", vault_path, e);
             return Ok(());
@@ -259,6 +263,11 @@ impl SyncEngine {
     }
 
     pub async fn trigger_revalidation(&self) {
+        // 🛡️ [Optimization] Only revalidate if WORK area content changed
+        if !self.work_area_updated.swap(false, Ordering::SeqCst) {
+            return;
+        }
+
         let urls_str = match &self.config.revalidate_url {
             Some(u) => u,
             None => return,
@@ -308,6 +317,8 @@ impl SyncEngine {
         let hash = hex::encode(sha2::Sha256::digest(content.as_bytes()));
         let mtime = abs_path.metadata()?.modified()?;
 
+        debug!("📄 File Read: {} [Hash: {}..., MTime: {:?}]", vault_path, &hash[..8], mtime);
+
         let ctx = FileContext {
             vault_path: vault_path.to_string(),
             full_path: abs_path.to_path_buf(),
@@ -319,6 +330,10 @@ impl SyncEngine {
 
     fn extract_metadata(&self, ctx: &FileContext, content: &str) -> anyhow::Result<(String, DocumentMetadata)> {
         let fm = frontmatter::parse_frontmatter(content);
+        
+        // Diagnostic: list discovered keys
+        let keys: Vec<_> = fm.fields.keys().collect();
+        debug!("📄 Metadata keys for {}: {:?}", ctx.vault_path, keys);
 
         let slug = fm.fields.get("slug")
             .and_then(|v| v.as_str())
@@ -328,17 +343,28 @@ impl SyncEngine {
         let area = path::detect_area(&ctx.vault_path);
         let section = path::detect_section(&ctx.vault_path);
 
-        // Publication state: explicit frontmatter > folder-based default
         let is_published = fm.fields.get("published")
             .and_then(|v| v.as_bool())
             .unwrap_or_else(|| path::default_is_published(&ctx.vault_path));
 
-        // Prefer explicit 'updated' or 'date' from frontmatter, otherwise fallback to FS mtime.
-        let updated_at = fm.fields.get("updated")
-            .or_else(|| fm.fields.get("date"))
-            .and_then(|v| v.as_str())
-            .and_then(|s| DateTime::parse_from_rfc3339(s).ok().or_else(|| DateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").ok()))
-            .map(|dt| dt.with_timezone(&Utc))
+        let parse_dt = |val: &serde_json::Value| -> Option<DateTime<Utc>> {
+            let s_raw = if let Some(s) = val.as_str() {
+                s.to_string()
+            } else {
+                val.to_string()
+            };
+            let s = s_raw.trim().trim_matches('"');
+            
+            DateTime::parse_from_rfc3339(s).ok().map(|dt| dt.with_timezone(&Utc))
+                .or_else(|| NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").ok().map(|dt| dt.and_utc()))
+                .or_else(|| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok().map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc()))
+        };
+
+        let explicit_date = fm.fields.get("date").and_then(parse_dt);
+        let explicit_updated = fm.fields.get("updated").and_then(parse_dt);
+
+        let updated_at = explicit_updated
+            .or(explicit_date)
             .unwrap_or(ctx.last_modified);
 
         let mut meta = DocumentMetadata {
@@ -352,6 +378,7 @@ impl SyncEngine {
             content_hash: ctx.content_hash.clone(),
             parser_version: self.config.parser_version.clone(),
             updated_at,
+            date: explicit_date,
             aliases: vec![],
             tags: vec![],
             is_published,
@@ -371,6 +398,9 @@ impl SyncEngine {
             } else if let Some(s) = val.as_str() {
                 meta.tags = s.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
             }
+            // 🏷️ Tag Stability: Sort and deduplicate
+            meta.tags.sort();
+            meta.tags.dedup();
         }
 
         Ok((fm.clean_body, meta))
@@ -379,19 +409,35 @@ impl SyncEngine {
     async fn compute_sync_plan(&self, ctx: &FileContext, meta: &DocumentMetadata) -> anyhow::Result<SyncAction> {
         let db_info = documents::get_document_sync_info(&self.pool, &ctx.vault_path).await?;
 
-        if let Some((db_hash, db_ver, _)) = db_info {
+        if let Some((db_hash, db_ver, slug)) = db_info {
             if db_hash == ctx.content_hash && db_ver == meta.parser_version {
-                // Content unchanged — check if MDX output still needs generating
-                if !self.config.should_emit_mdx(&meta.area) {
+                // 🛡️ [Dual-Gated Publication Logic]
+                // We only expect a physical MDX file to exist if:
+                // 1. The area is configured to emit MDX (e.g., LEARN area).
+                // 2. AND the document is explicitly marked as published (meta.is_published).
+                //
+                // This prevents the "Infinite Regeneration Loop" where a non-published file 
+                // (like a Resource note) would be flagged as "missing" by the plan,
+                // but then skipped by the output generator.
+                if !self.config.should_emit_mdx(&meta.area) || !meta.is_published {
+                    info!("⏩ [Plan] Skipped {} (Hash match: {})", slug, &db_hash[..8]);
                     return Ok(SyncAction::Skip);
                 }
+                
                 let dest = path::get_dest_path_for_vault(&self.config, &ctx.vault_path, &meta.slug);
                 if dest.exists() {
+                    info!("⏩ [Plan] Skipped {} (MDX exists & Hash match)", slug);
                     return Ok(SyncAction::Skip);
                 }
+                info!("🔄 [Plan] Regenerating {} (MDX file missing, but required for published content)", slug);
+            } else if db_hash == ctx.content_hash {
+                info!("🔄 [Plan] Re-syncing {} (Parser version mismatch: {} -> {})", slug, db_ver, meta.parser_version);
+            } else {
+                info!("🔄 [Plan] Update needed for {}: Hash {} -> {}", slug, &db_hash[..8], &ctx.content_hash[..8]);
             }
             Ok(SyncAction::Update)
         } else {
+            info!("🆕 [Plan] Create new document: {}", ctx.vault_path);
             Ok(SyncAction::Create)
         }
     }
@@ -408,6 +454,7 @@ impl SyncEngine {
             all_tags.insert(t.trim_start_matches('#').to_string());
         }
         meta.tags = all_tags.into_iter().collect();
+        meta.tags.sort(); // Ensure stable order
 
         // 1. Resolve Links (Batch lookup)
         let unique_targets: Vec<String> = result.links.iter()
@@ -508,6 +555,11 @@ impl SyncEngine {
         sections: &[SectionMetadata],
         blocks: &[BlockMetadata],
     ) -> anyhow::Result<()> {
+        // 🎯 [Optimization] Mark for revalidation if this is a blog post (WORK area)
+        if meta.area == VaultArea::Work {
+            self.work_area_updated.store(true, Ordering::SeqCst);
+        }
+
         let doc_id = documents::upsert_document(&self.pool, ctx, meta, body, html_content).await?;
 
         links::persist_links(&self.pool, &doc_id, link_instances).await?;
@@ -521,7 +573,15 @@ impl SyncEngine {
         if self.config.should_emit_mdx(&meta.area) && meta.is_published {
             let dest = path::get_dest_path_for_vault(&self.config, &ctx.vault_path, &meta.slug);
             mdx::publish_mdx(&dest, meta, mdx_source).await?;
+            
+            // 🧪 [Verification] Confirm the file actually exists and log its absolute location
+            if dest.exists() {
+                debug!("🎯 [Verification] File confirmed at: {:?}", dest);
+            } else {
+                warn!("⚠️ [Verification] File written but CANNOT be verified at {:?}", dest);
+            }
         }
+        
         Ok(())
     }
 

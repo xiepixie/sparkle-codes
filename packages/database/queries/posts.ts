@@ -78,9 +78,11 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
   const isSearch = !!options.query?.trim();
   const rank = buildSearchRank(options.query);
 
+  const sortDate = sql`coalesce(${documents.publishedAt}, ${documents.createdAt})`;
+
   const orderBy = isSearch
-    ? [desc(rank), desc(documents.createdAt)]
-    : [desc(documents.createdAt)];
+    ? [desc(rank), desc(sortDate)]
+    : [desc(sortDate)];
 
   return await db
     .select({
@@ -94,6 +96,7 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
       metadata: documents.metadata,
       createdAt: documents.createdAt,
       updatedAt: documents.updatedAt,
+      publishedAt: documents.publishedAt,
       contentLength: sql<number>`char_length(${documents.content})`,
       totalCount: sql<number>`count(*) over()`,
       rank: rank.as('search_rank'), // Give it an alias for clarity
@@ -127,11 +130,12 @@ export async function getAllPostSummariesQuery() {
       metadata: documents.metadata,
       createdAt: documents.createdAt,
       updatedAt: documents.updatedAt,
+      publishedAt: documents.publishedAt,
       contentLength: sql<number>`char_length(${documents.content})`,
     })
     .from(documents)
     .where(basePostFilter)
-    .orderBy(desc(documents.createdAt));
+    .orderBy(desc(sql`coalesce(${documents.publishedAt}, ${documents.createdAt})`));
 }
 
 /**
@@ -147,10 +151,11 @@ export async function getAllPostsForSearchQuery() {
       content: documents.content,
       createdAt: documents.createdAt,
       updatedAt: documents.updatedAt,
+      publishedAt: documents.publishedAt,
     })
     .from(documents)
     .where(basePostFilter)
-    .orderBy(desc(documents.createdAt));
+    .orderBy(desc(sql`coalesce(${documents.publishedAt}, ${documents.createdAt})`));
 }
 
 /**
@@ -197,6 +202,7 @@ export async function getPostBySlugQuery(slug: string) {
       metadata: documents.metadata,
       createdAt: documents.createdAt,
       updatedAt: documents.updatedAt,
+      publishedAt: documents.publishedAt,
       isPublished: documents.isPublished,
       area: documents.area,
       html: documents.html,
@@ -227,7 +233,7 @@ export async function getPostBySlugQuery(slug: string) {
       sql`${documents.aliases} @> ${JSON.stringify([searchTarget])}::jsonb`
     )
   )
-  .orderBy(sql`match_priority`, desc(documents.isPublished), desc(documents.createdAt))
+  .orderBy(sql`match_priority`, desc(documents.isPublished), desc(sql`coalesce(${documents.publishedAt}, ${documents.createdAt})`))
   .limit(1);
 
   return results[0] || null;

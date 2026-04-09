@@ -157,7 +157,7 @@ Stage 3: compute_sync_plan   → 查 DB 比对 hash/parserVersion → Skip / Cre
 Stage 4: parse_and_resolve   → transform_obsidian_to_mdx → parse_content_native
                                 → resolve_targets_batch → 分段/Block解析 → resolve_placeholders_in_html
 Stage 5: persist_sync        → upsert_document + persist_links + upsert_sections + upsert_blocks
-Stage 6: publish_outputs     → (非 WORK 区域) publish_mdx 输出到文件系统
+Stage 6: publish_outputs     → (Dual-Gated) publish_mdx 仅在 Area 允许且 is_published=true 时输出
 ```
 
 **不应该做的事**：不管理 watcher 的 channel 逻辑、不直接构造 SQL 字符串（委托给 `db/*`）。
@@ -174,7 +174,7 @@ Stage 6: publish_outputs     → (非 WORK 区域) publish_mdx 输出到文件�
 | `docs_dest` | `SYNC_DOCS_DEST` | `apps/docs/content/docs` |
 | `notes_dest` | `SYNC_NOTES_DEST` | `apps/web/content/notes` |
 | `pool_size` | `SENTINEL_POOL_SIZE` | `10` |
-| `parser_version` | (硬编码) | `v1.2.7` |
+| `parser_version` | (硬编码) | `v1.3.6` |
 | `r2_bucket` | `R2_BUCKET_NAME` | `sparkle-assets` |
 | `r2_public_domain` | `R2_PUBLIC_DOMAIN` | `cdn.sparkle.codes` |
 
@@ -282,12 +282,13 @@ Stage 6: publish_outputs     → (非 WORK 区域) publish_mdx 输出到文件�
 
 **PARA 路由规则**（LEARN 区域）：
 
-| 中文目录关键词 | 映射 |
-|----------------|------|
-| `项目` | `projects` |
-| `资源` | `resources` |
-| `存档` / `Archives` | `archives` |
-| (其他) | `misc` |
+| 中文目录关键词 | 映射 | 默认发布状态 | 说明 |
+|----------------|------|--------------|------|
+| `项目` | `projects` | ✅ Yes | 高质量、完整性的产出 |
+| `资源` | `resources` | ❌ No | 外部参考、深度研究，需手动开启 |
+| `收集` | `collect` | ❌ No | 碎片化灵感、原始摘录，需手动开启 |
+| `存档` / `Archives` | `archives` | ✅ Yes | 已完成的历史项目 |
+| (其他) | `misc` | ❌ No | 无法分类的杂项 |
 
 **Area → 输出目录映射**：
 
@@ -531,11 +532,22 @@ Area 检测（`工作领域` / `学习领域`）和 PARA 子分类（`项目` / 
 
 * `compute_sync_plan` 的 Skip / Create / Update 决策
 * `delete_file` 流程（DB 删除 + MDX 清理）
-* 完整流水线（新文档 → DB + MDX 输出）
+### 8.8 [新增] 发布一致性测试
+*   **双重门禁校验**：验证 `Area::Learn` + `is_published: false` 时，MDX 是否既不被生成也不被计划标记为“缺失”。
 
 ---
 
-## 9. 已知技术债务与改进方向
+## 9. 核心业务逻辑备注
+
+### 9.1 双重门禁发布机制 (Dual-Gated Publication)
+为了防止同步引擎陷入“计划要补齐文件 vs 执行阶段拒绝写入”的死循环，MDX 生成遵循以下逻辑：
+1. **Emit 检查**：只有 `LEARN` 等配置了 MDX 输出的领域才会进入检查流。
+2. **Publish 检查**：只有 `meta.is_published` 为 `true` 的文档才会被写入磁盘并要求磁盘存在。
+3. **默认状态**：`项目` 和 `存档` 默认 `published: true`；**`资源`** 和 **`收集`** 默认 `published: false`。
+
+---
+
+## 10. 已知技术债务与改进方向
 
 | 编号 | 问题 | 影响 | 建议 |
 |------|------|------|------|

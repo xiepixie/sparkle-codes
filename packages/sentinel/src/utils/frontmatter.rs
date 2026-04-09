@@ -107,6 +107,15 @@ fn yaml_to_json(yaml: &Yaml) -> Option<Value> {
             }
             Some(Value::Object(obj))
         },
-        _ => None,
+        Yaml::Real(s) => Some(Value::String(s.clone())),
+        other => {
+            // Attempt to stringify unknown types as a last resort
+            // This captures Dates or Alias if handled by the parser but not explicitly by us
+            if let Some(s) = other.as_str() {
+                Some(Value::String(s.to_string()))
+            } else {
+                None
+            }
+        }
     }
 }

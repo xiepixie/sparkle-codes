@@ -363,13 +363,12 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
      * 📝 显示日期优先级逻辑 (Show Date Priority)
      * 
      * 为什么这样做：
-     * 1. 数据库中的 createdAt 仅代表“入库时间”，无法准确反映笔记在 Obsidian 中的真实创作时间。
-     * 2. Sentinel 会将 YAML 中的 `date`/`updated` 字段（或文件修改时间）同步到数据库的 `updatedAt`。
-     * 3. 优先使用 updatedAt 可以让用户通过 YAML 完美自定义文章显示的发布日期，且不会被同步覆盖。
-     * 
-     * 约束与影响：如果修改为仅使用 createdAt，用户在 Obsidian 中自定义的日期将失效。
+     * 1. 数据库中的 createdAt 仅代表“入库时间”。
+     * 2. Sentinel 现在会将 YAML 中的 `date` 同步到 `publishedAt`。
+     * 3. 优先使用 publishedAt 以确保用户指定的发布日期（创作日期）具有最高权威。
+     *    如果未定义，回退到 updatedAt（同步时间）。
      */
-    date: (doc.updatedAt || doc.createdAt).toISOString(),
+    date: (doc.publishedAt || doc.updatedAt || doc.createdAt).toISOString(),
     tags: metadata.tags || [],
     authorName: metadata.authorName || "xpx",
     readingTime: metadata.readingTime || calculatedReadingTime,
@@ -413,9 +412,9 @@ function mapDocumentToSummary(doc: any): BlogPostSummary {
 
     /**
      * 📝 显示日期优先级逻辑 (与 mapDocumentToPost 保持一致)
-     * 优先使用 updatedAt 以尊重用户在 YAML 中定义的 content date。
+     * 优先使用 publishedAt 以尊重用户指定的发布/创作日期。
      */
-    date: (doc.updatedAt || doc.createdAt).toISOString(),
+    date: (doc.publishedAt || doc.updatedAt || doc.createdAt).toISOString(),
     tags: metadata.tags || [],
     authorName: metadata.authorName || "xpx",
     readingTime: metadata.readingTime || calculatedReadingTime,

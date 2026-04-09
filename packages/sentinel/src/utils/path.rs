@@ -59,13 +59,14 @@ pub fn detect_section(vault_path: &str) -> VaultSection {
 /// - Learn/Project | Learn/Archive => published
 /// - Everything else => private
 ///
-/// Important:
-/// This is only the *default* publication state.
-/// Frontmatter `published: true/false` overrides this.
 pub fn default_is_published(vault_path: &str) -> bool {
     let area = detect_area(vault_path);
     let section = detect_section(vault_path);
 
+    // 🧠 [Business Rules] Default Publication State
+    // - Projects & Archives (Work/Learn): Published by default (High-quality results).
+    // - Resources & Collections: Private by default (Raw snippets, sensitive research).
+    // - Users can override this by setting `published: true` in the frontmatter.
     matches!(
         (area, section),
         (VaultArea::Work, VaultSection::Project)

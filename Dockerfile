@@ -51,9 +51,9 @@ RUN --mount=type=cache,target=/app/node_modules/.cache \
     --mount=type=cache,target=/app/apps/web/.next/cache \
     --mount=type=cache,target=/app/apps/docs/.next/cache \
     --mount=type=cache,target=/app/.turbo \
-    DATABASE_URL=$DATABASE_URL \
-    NEXT_PUBLIC_DOCS_URL=$NEXT_PUBLIC_DOCS_URL \
-    NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
+    DATABASE_URL="$DATABASE_URL" \
+    NEXT_PUBLIC_DOCS_URL="$NEXT_PUBLIC_DOCS_URL" \
+    NEXT_PUBLIC_WEB_URL="$NEXT_PUBLIC_WEB_URL" \
     NODE_OPTIONS="--max-old-space-size=2048" \
     npx turbo run build --filter=web --filter=docs --concurrency=1
 

@@ -250,13 +250,18 @@ export async function generateMetadata({ params }: PostPageProps) {
  * Uses cached shared summaries for maximum build performance.
  */
 export async function generateStaticParams() {
-   const allPosts = await getAllPostSummaries();
+  try {
+    const allPosts = await getAllPostSummaries();
 
-   if (allPosts.length === 0) {
-     return [{ slug: BUILD_PLACEHOLDER_SLUG }];
-   }
+    if (allPosts.length === 0) {
+      return [{ slug: BUILD_PLACEHOLDER_SLUG }];
+    }
 
-   return allPosts.map((post) => ({
-     slug: post.path,
-   }));
+    return allPosts.map((post) => ({
+      slug: post.path,
+    }));
+  } catch (err) {
+    console.error("[BUILD] generateStaticParams failed, falling back to empty paths to allow build to continue.", err);
+    return [{ slug: BUILD_PLACEHOLDER_SLUG }];
+  }
 }

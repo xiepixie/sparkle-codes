@@ -1,4 +1,4 @@
-import { db, documents, documentSections, and, or, eq, desc, sql } from "../index";
+import { and, desc, documents, documentSections, eq, or, sql, db } from "../index";
 
 /**
  * Common Post Filter - Work Area & Published
@@ -93,6 +93,7 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
       html: documents.html,
       metadata: documents.metadata,
       createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
       contentLength: sql<number>`char_length(${documents.content})`,
       totalCount: sql<number>`count(*) over()`,
       rank: rank.as('search_rank'), // Give it an alias for clarity
@@ -125,6 +126,7 @@ export async function getAllPostSummariesQuery() {
       banner: documents.banner,
       metadata: documents.metadata,
       createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
       contentLength: sql<number>`char_length(${documents.content})`,
     })
     .from(documents)
@@ -144,6 +146,7 @@ export async function getAllPostsForSearchQuery() {
       description: documents.description,
       content: documents.content,
       createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
     })
     .from(documents)
     .where(basePostFilter)
@@ -193,6 +196,7 @@ export async function getPostBySlugQuery(slug: string) {
       content: documents.content,
       metadata: documents.metadata,
       createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
       isPublished: documents.isPublished,
       area: documents.area,
       html: documents.html,

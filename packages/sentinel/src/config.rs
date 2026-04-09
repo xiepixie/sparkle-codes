@@ -48,6 +48,12 @@ pub struct SyncConfig {
 
     /// Cloudflare R2 Public Domain (for serving assets).
     pub r2_public_domain: String,
+
+    /// Webhook URL for Next.js cache revalidation.
+    pub revalidate_url: Option<String>,
+
+    /// Secret token for Next.js cache revalidation.
+    pub revalidate_secret: Option<String>,
 }
 
 impl SyncConfig {
@@ -66,6 +72,9 @@ impl SyncConfig {
             .ok()
             .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false);
+
+        let revalidate_url = env::var("NEXTJS_REVALIDATE_URL").ok();
+        let revalidate_secret = env::var("NEXTJS_REVALIDATE_SECRET").ok();
 
         Self {
             blog_dest: PathBuf::from(
@@ -101,6 +110,8 @@ impl SyncConfig {
                 .unwrap_or_else(|_| "cdn.sparkle.codes".to_string()),
             ingest_inbox_to_db,
             ingest_other_to_db,
+            revalidate_url,
+            revalidate_secret,
         }
     }
 

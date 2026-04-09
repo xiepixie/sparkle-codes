@@ -20,13 +20,15 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2.5. Ensure Single Instance
     ensure_single_instance();
-
     let config = Arc::new(SyncConfig::from_env());
 
     // 3. Database
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
         .max_connections(config.pool_size)
+        .min_connections(0)
+        .idle_timeout(std::time::Duration::from_secs(15))
+        .max_lifetime(std::time::Duration::from_secs(30 * 60))
         .connect(&database_url)
         .await?;
 

@@ -11,6 +11,8 @@ use markdown_parser::parse_content_native;
 use cuid2::cuid;
 use walkdir::WalkDir;
 use tokio::task::JoinSet;
+use reqwest::Client as HttpClient;
+use url::Url;
 
 use crate::config::SyncConfig;
 use crate::types::{FileContext, SyncAction, DocumentMetadata, LinkInstance, SectionMetadata, BlockMetadata};
@@ -22,6 +24,7 @@ pub struct SyncEngine {
     pub config: Arc<SyncConfig>,
     pub semaphore: Arc<Semaphore>,
     pub r2_client: Arc<crate::utils::r2::R2Client>,
+    pub http_client: HttpClient,
 }
 
 impl SyncEngine {
@@ -40,6 +43,10 @@ impl SyncEngine {
             config: Arc::new(config),
             semaphore: Arc::new(Semaphore::new(pool_size as usize)),
             r2_client: Arc::new(r2_client),
+            http_client: HttpClient::builder()
+                .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Sentinel/1.0")
+                .build()
+                .unwrap_or_else(|_| HttpClient::new()),
         }
     }
 
@@ -62,15 +69,15 @@ impl SyncEngine {
             if p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("md") {
                 if let Ok(rel) = p.strip_prefix(vault_root) {
                     let vault_path = rel.to_string_lossy().to_string();
-                    found_paths.insert(vault_path.clone());
-                    
-                    let engine = Arc::clone(&self);
-                    let abs_path = p.to_path_buf();
+                    if found_paths.insert(vault_path.clone()) {
+                        let engine = Arc::clone(&self);
+                        let abs_path = p.to_path_buf();
 
-                    set.spawn(async move {
-                        engine.sync_file(&vault_path, &abs_path).await;
-                    });
-                    count += 1;
+                        set.spawn(async move {
+                            engine.sync_file(&vault_path, &abs_path).await;
+                        });
+                        count += 1;
+                    }
                 }
             }
         }
@@ -124,6 +131,7 @@ impl SyncEngine {
         }
 
         info!("✨ Initial sync completed successfully.");
+        self.trigger_revalidation().await;
     }
 
     /// Entry point for syncing a single file.
@@ -246,8 +254,51 @@ impl SyncEngine {
             }
         }
         
+        self.trigger_revalidation().await;
         Ok(())
+    }
 
+    pub async fn trigger_revalidation(&self) {
+        let urls_str = match &self.config.revalidate_url {
+            Some(u) => u,
+            None => return,
+        };
+
+        let secret = self.config.revalidate_secret.as_deref().unwrap_or("");
+        
+        // 🚀 支持多环境刷新：支持以逗号分隔的多个 URL
+        // 为什么这样做：用户希望本地同步后，测试环境和生产环境能同时更新。
+        for url_raw in urls_str.split(',') {
+            let url_trimmed = url_raw.trim();
+            if url_trimmed.is_empty() { continue; }
+
+            let mut target_url = match Url::parse(url_trimmed) {
+                Ok(u) => u,
+                Err(e) => {
+                    error!("❌ Invalid REVALIDATE_URL [{}]: {}", url_trimmed, e);
+                    continue;
+                }
+            };
+
+            target_url.query_pairs_mut()
+                .append_pair("tag", "posts")
+                .append_pair("secret", secret);
+
+            debug!("📡 Triggering cache revalidation: {}", target_url);
+
+            match self.http_client.get(target_url).send().await {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        info!("⚡ Cache revalidated successfully for {}", url_trimmed);
+                    } else {
+                        warn!("⚠️ Cache revalidation for {} returned status: {}", url_trimmed, resp.status());
+                    }
+                }
+                Err(e) => {
+                    error!("❌ Failed to send revalidation request to {}: {}", url_trimmed, e);
+                }
+            }
+        }
     }
 
     async fn read_context(&self, vault_path: &str, abs_path: &Path) -> anyhow::Result<(String, FileContext)> {

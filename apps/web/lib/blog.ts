@@ -116,6 +116,15 @@ export interface BlogPostFeedResult {
  * Helper to parse a long hyphenated slug into a title and metadata badges.
  */
 export function parseSlug(slug: string, title?: string) {
+  // If an explicit title is provided (from YAML frontmatter), use it as the primary display title.
+  // This prevents the slug-parsing heuristic from mangling long, descriptive titles.
+  if (title && title.trim().length > 0) {
+    return {
+      displayTitle: title,
+      badges: [],
+    };
+  }
+
   const segments = slug.split("-");
   if (segments.length <= 1) {
     return {
@@ -349,7 +358,18 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
     badges,
     description: optimizedDesc,
     banner: doc.banner || null,
-    date: doc.createdAt.toISOString(),
+
+    /**
+     * 📝 显示日期优先级逻辑 (Show Date Priority)
+     * 
+     * 为什么这样做：
+     * 1. 数据库中的 createdAt 仅代表“入库时间”，无法准确反映笔记在 Obsidian 中的真实创作时间。
+     * 2. Sentinel 会将 YAML 中的 `date`/`updated` 字段（或文件修改时间）同步到数据库的 `updatedAt`。
+     * 3. 优先使用 updatedAt 可以让用户通过 YAML 完美自定义文章显示的发布日期，且不会被同步覆盖。
+     * 
+     * 约束与影响：如果修改为仅使用 createdAt，用户在 Obsidian 中自定义的日期将失效。
+     */
+    date: (doc.updatedAt || doc.createdAt).toISOString(),
     tags: metadata.tags || [],
     authorName: metadata.authorName || "xpx",
     readingTime: metadata.readingTime || calculatedReadingTime,
@@ -390,7 +410,12 @@ function mapDocumentToSummary(doc: any): BlogPostSummary {
     badges,
     description: doc.description || null,
     banner: doc.banner || null,
-    date: doc.createdAt.toISOString(),
+
+    /**
+     * 📝 显示日期优先级逻辑 (与 mapDocumentToPost 保持一致)
+     * 优先使用 updatedAt 以尊重用户在 YAML 中定义的 content date。
+     */
+    date: (doc.updatedAt || doc.createdAt).toISOString(),
     tags: metadata.tags || [],
     authorName: metadata.authorName || "xpx",
     readingTime: metadata.readingTime || calculatedReadingTime,
@@ -410,11 +435,16 @@ export async function getPostsPage(page = 1, pageSize = 5, query?: string): Prom
     return { posts: [], totalCount: 0 };
   }
 
-  const results = await getPostsPageQuery(page, pageSize, query);
-  const totalCount = results.length > 0 ? Number(results[0].totalCount) : 0;
-  const posts = results.map(mapDocumentToSummary);
+  try {
+    const results = await getPostsPageQuery(page, pageSize, query);
+    const totalCount = results.length > 0 ? Number(results[0].totalCount) : 0;
+    const posts = results.map(mapDocumentToSummary);
 
-  return { posts, totalCount };
+    return { posts, totalCount };
+  } catch (err) {
+    console.error(`[DB ERROR] getPostsPage failed (page: ${page}):`, err);
+    return { posts: [], totalCount: 0 };
+  }
 }
 
 export async function queryBlogPostFeed(params: BlogPostFeedParams = {}): Promise<BlogPostFeedResult> {
@@ -509,8 +539,13 @@ export async function getAllPostSummaries(): Promise<BlogPostSummary[]> {
     return [];
   }
 
-  const results = await getAllPostSummariesQuery();
-  return results.map(mapDocumentToSummary);
+  try {
+    const results = await getAllPostSummariesQuery();
+    return results.map(mapDocumentToSummary);
+  } catch (err) {
+    console.warn("[BLOG LIB] getAllPostSummaries failed. This is expected during some build stages if DB is unreachable.", err);
+    return [];
+  }
 }
 
 /**
@@ -526,14 +561,19 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
     return null;
   }
 
-  // Fetch the raw document from DB
-  const doc = await getPostBySlugQuery(slug);
-  if (!doc) {
+  try {
+    // Fetch the raw document from DB
+    const doc = await getPostBySlugQuery(slug);
+    if (!doc) {
+      return null;
+    }
+
+    // Render MDX to optimized HTML (includes KaTeX, Shiki, etc.)
+    return await mapDocumentToPost(doc);
+  } catch (err) {
+    console.error(`[BLOG LIB] getPostBySlug failed for slug: ${slug}`, err);
     return null;
   }
-
-  // Render MDX to optimized HTML (includes KaTeX, Shiki, etc.)
-  return await mapDocumentToPost(doc);
 }
 
 /**

@@ -1,3 +1,4 @@
+// Post Page Component - High Performance Server Component with PPR.
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Calendar, ChevronLeft } from "lucide-react";

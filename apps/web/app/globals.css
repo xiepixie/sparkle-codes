@@ -68,6 +68,18 @@
 
 		stroke-width: 1.75;
 	}
+
+    /* Fix KaTeX font-display to prevent layout shifts and invisible text */
+    @font-face {
+        font-family: 'KaTeX_Main';
+        src: local('KaTeX_Main'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Main-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Math';
+        src: local('KaTeX_Math'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Math-Italic.woff2') format('woff2');
+        font-display: swap;
+    }
 }
 
 /* =========================================

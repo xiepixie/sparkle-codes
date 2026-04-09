@@ -1,3 +1,4 @@
+export const revalidate = 3600;
 import { Suspense } from "react";
 import { queryBlogPostFeed } from "@/lib/blog";
 import { BlogClientShell } from "@/components/Blog/BlogClientShell";

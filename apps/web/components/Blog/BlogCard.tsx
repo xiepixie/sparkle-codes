@@ -1,6 +1,7 @@
 'use client';
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Calendar, ArrowRight, Clock } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog";
 
@@ -26,6 +27,8 @@ function stripHtml(value?: string | null) {
 }
 
 export function BlogCard({ post, index, activeTags = [], onTagSelect }: BlogCardProps) {
+  const router = useRouter();
+
   const selectedTags = new Set(activeTags.map((tag) => tag.toLowerCase()));
   const hasDescription = Boolean(post.highlightedDescription || post.description);
   const normalizedDescription = stripHtml(post.highlightedDescription || post.description);
@@ -48,8 +51,14 @@ export function BlogCard({ post, index, activeTags = [], onTagSelect }: BlogCard
     <article
       className="h-full animate-in fade-in slide-in-from-bottom-4"
       style={{ animationDelay: `${index * 70}ms` }}
+      onMouseEnter={() => {
+        // Snappy Pre-warm: Explicitly trigger Next.js prefetch on hover
+        // This makes the transition feel instant as the RSC payload is warmed up.
+        router.prefetch(`/blog/${post.path}`);
+      }}
     >
       <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-border/40 bg-background/40 shadow-sm transition-all duration-300 hover:border-primary/25 hover:bg-muted/10 hover:shadow-glow-sm hover:-translate-y-0.5 backdrop-blur-3xl">
+
           {/* Top Decorative Scanning Line */}
           <div className="pointer-events-none absolute left-0 top-0 h-[1px] w-full bg-gradient-to-r from-transparent via-primary/20 to-transparent z-10" />
           

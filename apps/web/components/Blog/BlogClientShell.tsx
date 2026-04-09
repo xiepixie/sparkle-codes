@@ -12,15 +12,7 @@ interface BlogClientShellProps {
   initialFeed: BlogPostFeedResult;
 }
 
-interface CachedFeedEntry {
-  expiresAt: number;
-  result: BlogPostFeedResult;
-}
-
-const FEED_CACHE_TTL_MS = 5 * 60 * 1000;
-const FEED_CACHE_LIMIT = 32;
-const feedCache = new Map<string, CachedFeedEntry>();
-const inflightFeedRequests = new Map<string, Promise<BlogPostFeedResult>>();
+import { getPrefetchedFeed, prefetchBlogFeed } from "@/lib/client-prefetch";
 
 interface FeedFilters {
   query: string;
@@ -42,81 +34,16 @@ function buildFeedKey(filters: FeedFilters) {
   });
 }
 
-function getCachedFeed(key: string) {
-  const cached = feedCache.get(key);
-  if (!cached) {
-    return null;
-  }
 
-  if (cached.expiresAt <= Date.now()) {
-    feedCache.delete(key);
-    return null;
-  }
 
-  feedCache.delete(key);
-  feedCache.set(key, cached);
-  return cached.result;
+
+
+
+
+async function fetchFeed(filters: FeedFilters) {
+  return await prefetchBlogFeed(filters);
 }
 
-function setCachedFeed(key: string, result: BlogPostFeedResult) {
-  feedCache.set(key, {
-    expiresAt: Date.now() + FEED_CACHE_TTL_MS,
-    result,
-  });
-
-  if (feedCache.size > FEED_CACHE_LIMIT) {
-    const oldestKey = feedCache.keys().next().value;
-    if (oldestKey) {
-      feedCache.delete(oldestKey);
-    }
-  }
-}
-
-function buildFeedUrl(filters: FeedFilters) {
-  const params = new URLSearchParams();
-  if (filters.query.trim()) {
-    params.set("query", filters.query.trim());
-  }
-  for (const tag of filters.tags) {
-    params.append("tag", tag);
-  }
-  params.set("page", String(filters.page));
-  params.set("pageSize", String(filters.pageSize));
-  return `/api/blog-search?${params.toString()}`;
-}
-
-async function fetchFeed(filters: FeedFilters, signal: AbortSignal) {
-  const cacheKey = buildFeedKey(filters);
-  const cached = getCachedFeed(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  const existingRequest = inflightFeedRequests.get(cacheKey);
-  if (existingRequest) {
-    return existingRequest;
-  }
-
-  const request = (async () => {
-    const response = await fetch(buildFeedUrl(filters), {
-      signal,
-    });
-    if (!response.ok) {
-      throw new Error(`Feed request failed with status ${response.status}`);
-    }
-    const data = await response.json();
-    setCachedFeed(cacheKey, data);
-    return data;
-  })();
-
-  inflightFeedRequests.set(cacheKey, request);
-
-  try {
-    return await request;
-  } finally {
-    inflightFeedRequests.delete(cacheKey);
-  }
-}
 
 export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
   const searchParams = useSearchParams();
@@ -162,45 +89,37 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
   }, [searchParams]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    setIsSearching(true);
-    setSearchError(null);
-
-    const cachedFeed = getCachedFeed(currentFeedKey);
+    const cachedFeed = getPrefetchedFeed(currentFeedKey);
     if (cachedFeed) {
       setFeed(cachedFeed);
       setIsSearching(false);
-      return () => {
-        controller.abort();
-      };
+      return;
     }
 
     if (currentFeedKey === initialFeedKey) {
-      setCachedFeed(initialFeedKey, initialFeed);
       setFeed(initialFeed);
       setIsSearching(false);
-      return () => {
-        controller.abort();
-      };
+      return;
     }
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const result = await fetchFeed(currentFilters, controller.signal);
-        setFeed(result);
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          setSearchError("Search is temporarily unavailable. Try again in a moment.");
+        const result = await fetchFeed(currentFilters);
+        if (result) {
+          setFeed(result);
         }
+      } catch (_error) {
+        setSearchError("Search is temporarily unavailable. Try again in a moment.");
+
       } finally {
         setIsSearching(false);
       }
     }, 120);
 
     return () => {
-      controller.abort();
       window.clearTimeout(timeoutId);
     };
+
   }, [currentFeedKey, currentFilters, initialFeed, initialFeedKey, retryKey]);
 
   useEffect(() => {
@@ -213,15 +132,12 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
       page: currentPage + 1,
     };
     const nextKey = buildFeedKey(nextFilters);
-    if (getCachedFeed(nextKey) || inflightFeedRequests.has(nextKey)) {
+    if (getPrefetchedFeed(nextKey)) {
       return;
     }
 
-    const controller = new AbortController();
-    void fetchFeed(nextFilters, controller.signal).catch(() => {});
-    return () => {
-      controller.abort();
-    };
+    void fetchFeed(nextFilters).catch(() => {});
+
   }, [currentFilters, currentPage, feed.hasNextPage]);
 
   // Update URL and state simultaneously

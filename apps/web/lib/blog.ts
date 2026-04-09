@@ -495,6 +495,10 @@ export async function queryBlogPostFeed(params: BlogPostFeedParams = {}): Promis
 /**
  * getAllPostSummaries - Retrieves a slim metadata array for search/navigation.
  * Globally cached to ensure Zero-DB-latency for routing.
+ * 
+ * 为什么这样做：
+ * 这是一个核心的数据聚合函数，结果被全站搜索和列表页共享。通过 'use cache'，
+ * 我们实现了毫秒级的响应，同时通过 cacheTag 允许在 Sentinel 同步时精准失效。
  */
 export async function getAllPostSummaries(): Promise<BlogPostSummary[]> {
   "use cache";

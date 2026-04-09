@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
 	output: "standalone",
 	outputFileTracingRoot: path.join(__dirname, "../../"),
-	transpilePackages: ["@repo/util", "@repo/database", "@repo/ui"],
+	transpilePackages: ["@repo/util", "@repo/database", "@repo/ui", "katex"],
 	images: {
 		remotePatterns: [
 			{
@@ -58,7 +58,12 @@ const nextConfig = {
 		return config;
 	},
   turbopack: {},
+  bundlePagesRouterDependencies: true,
+  serverExternalPackages: ["shiki"],
   cacheComponents: true,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "framer-motion", "@repo/ui"],
+  },
 };
 
 export default nextConfig;

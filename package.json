@@ -42,5 +42,12 @@
         "tsx": "^4.21.0",
         "unified": "^11.0.5",
         "unist-util-visit": "^5.1.0"
-    }
+    },
+    "browserslist": [
+        "last 1 Chrome versions",
+        "last 1 Firefox versions",
+        "last 1 Safari versions",
+        "last 1 Edge versions",
+        "supports es6-module"
+    ]
 }

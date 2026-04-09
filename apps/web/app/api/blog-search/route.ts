@@ -23,7 +23,12 @@ export async function GET(request: Request) {
       pageSize: Number.isFinite(pageSize) ? pageSize : 5,
       tags,
     });
-    return NextResponse.json(results);
+    return NextResponse.json(results, {
+      headers: {
+        "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=600",
+      },
+    });
+
   } catch (error) {
     console.error("Blog Search Error:", error);
     return NextResponse.json({

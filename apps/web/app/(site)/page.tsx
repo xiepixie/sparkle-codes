@@ -79,6 +79,8 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
 }
 
 import { warm } from "@/lib/blog";
+import { BlogWarmup } from "@/components/Blog/BlogWarmup";
+
 
 export default async function HomePage() {
   // Pre-warm the global blog post cache in the background.
@@ -87,7 +89,9 @@ export default async function HomePage() {
 
   return (
     <div className="relative overflow-hidden selection:bg-primary/20">
+      <BlogWarmup />
       {/* Hero Section */}
+
       <section className="relative z-10 mx-auto w-full max-w-7xl px-5 pb-12 pt-24 sm:px-6 sm:pb-16 sm:pt-28 lg:pb-24 lg:pt-36">
         <div className="grid gap-12 lg:grid-cols-12 items-center">
           <div className="lg:col-span-7 xl:col-span-8 flex flex-col items-start">

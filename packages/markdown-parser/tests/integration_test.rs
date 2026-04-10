@@ -127,7 +127,7 @@ $$
     assert!(res.html.contains("wiki-link"));
     assert!(res.html.contains("md-callout"));
     assert!(res.html.contains("obsidian-task"));
-    assert!(res.html.contains("id=\"^paragraph-id\""));
+    assert!(res.html.contains("id=\"paragraph-id\""));
     
     // Table & Code
     assert!(res.has_table);

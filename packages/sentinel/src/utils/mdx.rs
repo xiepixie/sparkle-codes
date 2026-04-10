@@ -12,7 +12,7 @@ static PROTECT_RE: Lazy<Regex> = Lazy::new(|| {
         (?P<math_block>\$\$[\s\S]*?\$\$) |
         (?P<placeholder>__SENTINEL_METABIND_\$\[[\s\S]*?\]\$__) |
         (?P<inline_code>`+[^`\n]+`+) |
-        (?P<inline_math>\$[^$ \n][^$\n]*?\$|(?m)\$[^$\n]+?\$(\s|$))
+        (?P<inline_math>\$[^$\s(][^$\n]*?\$|(?m)\$[^$\s(][^$\n]+?\$(\s|$))
     ").unwrap()
 });
 

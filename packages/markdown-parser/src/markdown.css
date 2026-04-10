@@ -1,42 +1,111 @@
-@import "./styles/typography.css";
-@import "./styles/code-fence.css";
-@import "./styles/math-block.css";
-@import "./styles/callout.css";
-@import "./styles/tasks.css";
-@import "./styles/academic.css";
-@import "./styles/tables.css";
-@import "./styles/wiki-embed.css";
-@import "./styles/preview.css";
+@import "katex/dist/katex.min.css" layer(base);
+@import "./styles/utilities.css" layer(utilities);
+@import "./styles/typography.css" layer(typography);
+@import "./styles/code-fence.css" layer(components);
+@import "./styles/math-block.css" layer(components);
+@import "./styles/callout.css" layer(components);
+@import "./styles/tasks.css" layer(components);
+@import "./styles/academic.css" layer(components);
+@import "./styles/tables.css" layer(components);
+@import "./styles/wiki-embed.css" layer(components);
+@import "./styles/preview.css" layer(components);
+@import "./styles/overrides.css" layer(overrides);
 
-/* Shared Markdown Theme Tokens */
+/* =========================================================================
+   Sparkle.codes Markdown Core Tokens ✦ 
+   The central mapping between global app tokens and markdown domains.
+   ========================================================================= */
+
 @layer theme {
-    .starry-night-theme {
-        /* Map directly to the global theme.css tokens */
+    .markdown-body {
+        /* Base Text & Container */
         --md-primary: var(--primary, #513bb2);
-        --md-bg: var(--background, #fff);
-        --md-foreground: var(--foreground, #222);
+        --md-leading: 2.0; /* Increased line-height for better readability as requested */
+        --md-p-space: 1.5rem; /* Standardized paragraph spacing */
+        --md-max-width: none;
+        --md-bg: transparent; 
+        --md-bg-soft: color-mix(in oklab, var(--background, white) 88%, var(--md-primary) 4%, var(--aurora, #7dd3fc) 2%);
+        --md-foreground: var(--foreground, #202020);
         --md-muted: var(--muted-foreground, #666);
-        --md-border: var(--border, rgba(0,0,0,0.1));
-        --md-card: var(--card, #f9f9f9);
-        --md-card-header: var(--muted, #f0f0f0);
+        --md-card: color-mix(in oklab, var(--card, white) 92%, var(--md-primary) 3%);
         
-        /* Fallbacks & Effects */
-        --glass-border: rgba(255, 255, 255, 0.08);
-        --shadow-premium-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-        --shadow-premium-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-        --primary-glow: color-mix(in srgb, var(--md-primary), transparent 85%);
+        /* Borders & Lines */
+        --md-border: var(--border, rgba(0,0,0,0.1));
+        --md-code-border: color-mix(in srgb, var(--md-primary), transparent 82%);
+        --md-border-strong: color-mix(in oklab, var(--md-primary) 20%, var(--aurora, #7dd3fc) 8%, transparent);
 
-        /* --- Interactive Constants --- */
-        --dur-smooth: 0.2s;
-        --ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1.1);
-        --code-gutter: 3.5rem;
+        /* Links (External & Fragments) - More vibrant blue for light mode */
+        --md-link: oklch(0.58 0.18 255);
+        --md-link-hover: oklch(0.48 0.22 260);
+        --md-internal-link: var(--md-primary);
+        
+        /* Specialized Backgrounds */
+        --md-code-bg: var(--background, #fff);
+        --md-code-header-bg: color-mix(in oklab, var(--background, #fff) 82%, var(--starlight, #f472b6) 3%, var(--md-primary) 4%);
+        --md-callout-bg: color-mix(in oklab, var(--background, #fff) 89%, var(--md-primary) 4%, var(--aurora, #7dd3fc) 1%);
+        --md-table-head-bg: color-mix(in oklab, var(--background, #fff) 80%, var(--md-primary) 8%, var(--aurora, #7dd3fc) 2%);
+        --md-table-row-hover: color-mix(in oklab, var(--background, #fff) 88%, var(--md-primary) 4%);
+        --md-katex-color: var(--md-foreground);
+        --md-selection-bg: color-mix(in oklab, var(--md-primary) 18%, var(--aurora, #7dd3fc) 8%, transparent);
+        --md-target-highlight: color-mix(in oklab, var(--md-primary) 24%, var(--starlight, #f472b6) 10%, transparent);
+        --md-shadow-sm: 0 8px 20px color-mix(in oklab, var(--md-primary) 6%, transparent);
+        --md-shadow-md: 0 18px 38px -18px color-mix(in oklab, var(--md-primary) 12%, var(--aurora, #7dd3fc) 6%, transparent);
+        --md-shadow-glow: 0 14px 32px -20px color-mix(in oklab, var(--starlight, #f472b6) 14%, transparent);
+        --md-glass-border: color-mix(in oklab, var(--md-primary) 14%, white 56%, transparent);
+        
+        /* Obsidian System Semantics (Callouts & Tasks) */
+        --md-note: var(--md-primary);
+        --md-info: var(--info, oklch(0.69 0.11 238));
+        --md-success: var(--success, oklch(0.69 0.12 160));
+        --md-warning: var(--warning, oklch(0.78 0.14 82));
+        --md-danger: var(--destructive, oklch(0.62 0.18 25));
+        --md-question: color-mix(in oklab, var(--md-primary) 74%, var(--starlight, #f472b6));
+        --md-cancelled: oklch(0.66 0.03 255);
+
+        /* Mermaid Diagram Logic Bindings */
+        --md-mermaid-node: var(--md-bg-soft);
+        --md-mermaid-text: var(--md-foreground);
+        --md-mermaid-border: var(--md-border);
+        --md-mermaid-line: var(--md-muted);
+        --md-mermaid-cluster: color-mix(in srgb, var(--md-primary), transparent 90%);
     }
 
-    .dark .starry-night-theme {
+    /* --- Dark Mode Absolute Contrast Overrides --- */
+    .dark .markdown-body {
+        --md-primary: var(--primary, oklch(0.75 0.22 295)); /* Neon Purple */
+        --md-bg-soft: color-mix(in oklab, var(--background, #111) 84%, var(--md-primary) 8%, var(--aurora, #38bdf8) 3%);
+        --md-foreground: var(--foreground, #eee);
+        --md-muted: var(--muted-foreground, #aaa);
+        --md-card: color-mix(in oklab, var(--card, #141724) 90%, var(--md-primary) 4%, var(--aurora, #38bdf8) 2%);
+        
         --md-border: var(--border, rgba(255,255,255,0.1));
-        --md-card: var(--card, oklch(0.16 0.02 270));
-        --md-card-header: oklch(0.13 0.015 265);
-        --shadow-premium-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-        --shadow-premium-md: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+        --md-code-border: color-mix(in srgb, var(--md-primary), transparent 70%);
+        --md-border-strong: color-mix(in oklab, var(--md-primary) 28%, var(--aurora, #38bdf8) 10%, transparent);
+
+        --md-link: color-mix(in oklab, var(--aurora, #38bdf8) 62%, var(--md-primary));
+        --md-link-hover: color-mix(in oklab, var(--md-link) 78%, white);
+        
+        --md-code-bg: color-mix(in oklab, var(--background, #111) 74%, var(--md-primary) 15%, var(--aurora, #38bdf8) 4%);
+        --md-code-header-bg: color-mix(in oklab, var(--background, #111) 70%, var(--starlight, #f472b6) 6%, var(--md-primary) 8%);
+        --md-callout-bg: color-mix(in oklab, var(--background, #111) 78%, var(--md-primary) 8%, var(--aurora, #38bdf8) 2%);
+        --md-table-head-bg: color-mix(in oklab, var(--background, #111) 62%, var(--md-primary) 18%, var(--aurora, #38bdf8) 5%);
+        --md-table-row-hover: color-mix(in oklab, var(--background, #111) 82%, var(--md-primary) 10%);
+
+        --md-selection-bg: color-mix(in oklab, var(--md-primary) 36%, var(--aurora, #38bdf8) 12%, transparent);
+        --md-target-highlight: color-mix(in oklab, var(--md-primary) 42%, var(--starlight, #f472b6) 16%, transparent);
+
+        --md-shadow-sm: 0 2px 4px rgba(0,0,0,0.5);
+        --md-shadow-md: 0 24px 48px -24px color-mix(in oklab, var(--md-primary) 28%, var(--aurora, #38bdf8) 10%, transparent);
+        --md-shadow-glow: 0 8px 28px color-mix(in oklab, var(--starlight, #f472b6) 16%, transparent);
+        --md-glass-border: color-mix(in oklab, var(--md-primary) 18%, white 18%, transparent);
+        
+        /* Dark mode safe semantics (OKLCH prioritized for visibility) */
+        --md-success: var(--success, oklch(0.78 0.13 160));
+        --md-warning: var(--warning, oklch(0.84 0.14 85));
+        --md-danger: var(--destructive, oklch(0.70 0.14 25));
+        --md-info: var(--info, oklch(0.80 0.12 235));
+
+        --md-mermaid-node: color-mix(in oklab, var(--background, #111) 86%, white 5%, var(--md-primary) 4%);
+        --md-mermaid-cluster: color-mix(in oklab, var(--background, #111) 90%, var(--md-primary) 5%);
     }
 }

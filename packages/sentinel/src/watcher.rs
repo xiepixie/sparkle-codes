@@ -35,32 +35,74 @@ pub async fn run(engine: Arc<SyncEngine>) {
 
     // 3. Event Loop
     while let Some(event) = rx.recv().await {
-        let is_remove = event.event.kind.is_remove();
+        // Collect additional events that arrived in the meantime to batch process
+        let mut events = vec![event];
+        while let Ok(next) = rx.try_recv() {
+            events.push(next);
+        }
 
-        for path in event.event.paths {
-            let engine = Arc::clone(&engine);
-            let vault_root = vault_root.clone();
-            let attachment_root = attachment_root.clone();
+        let mut set = tokio::task::JoinSet::new();
+        let mut vault_paths_to_sync = std::collections::HashSet::new();
+        let mut attachment_paths_to_sync = std::collections::HashSet::new();
+        let mut paths_to_delete = std::collections::HashSet::new();
 
-            tokio::spawn(async move {
-                // 1. Vault synchronization (MD files)
+        for event in events {
+            let is_remove = event.event.kind.is_remove();
+            for path in event.event.paths {
+                if is_remove {
+                    paths_to_delete.insert(path);
+                } else if path.strip_prefix(&vault_root).is_ok() {
+                    vault_paths_to_sync.insert(path);
+                } else if path.strip_prefix(&attachment_root).is_ok() {
+                    attachment_paths_to_sync.insert(path);
+                }
+            }
+        }
+
+        // Process deletions
+        for path in paths_to_delete {
+            if let Ok(rel) = path.strip_prefix(&vault_root) {
+                let vault_path = rel.to_string_lossy().to_string();
+                let engine = Arc::clone(&engine);
+                set.spawn(async move {
+                    engine.delete_file(&vault_path).await;
+                });
+            }
+        }
+
+        // Process vault syncs
+        for path in vault_paths_to_sync {
+            if path.extension().and_then(|s| s.to_str()) == Some("md") {
                 if let Ok(rel) = path.strip_prefix(&vault_root) {
-                    if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                        let vault_path = rel.to_string_lossy().to_string();
-                        if is_remove {
-                            engine.delete_file(&vault_path).await;
-                        } else if path.exists() {
+                    let vault_path = rel.to_string_lossy().to_string();
+                    let engine = Arc::clone(&engine);
+                    if path.exists() {
+                        set.spawn(async move {
                             engine.sync_file(&vault_path, &path).await;
-                        }
-                    }
-                } 
-                // 2. Attachment synchronization (Assets)
-                else if let Ok(_rel) = path.strip_prefix(&attachment_root) {
-                    if !is_remove && path.exists() && crate::sync::is_attachment_target(path.to_str().unwrap_or("")) {
-                        engine.sync_attachment(&path).await;
+                        });
                     }
                 }
-            });
+            }
         }
+
+        // Process attachment syncs
+        for path in attachment_paths_to_sync {
+            if path.exists() && crate::sync::is_attachment_target(path.to_str().unwrap_or("")) {
+                let engine = Arc::clone(&engine);
+                set.spawn(async move {
+                    engine.sync_attachment(&path).await;
+                });
+            }
+        }
+
+        // Wait for this batch to finish
+        while let Some(res) = set.join_next().await {
+            if let Err(e) = res {
+                tracing::error!("Watcher task panicked: {}", e);
+            }
+        }
+
+        // 🚀 Batch Revalidation: Trigger once after the entire event wave is processed
+        engine.trigger_revalidation().await;
     }
 }

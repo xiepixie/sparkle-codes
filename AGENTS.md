@@ -24,7 +24,7 @@ When requirements are unclear, follow existing patterns in the codebase rather t
 - **Next.js 16+ (App Router)** with **React 19**
 - **Neon Postgres + Drizzle ORM** (Primary content and metadata store)
 - **Sentinel (Rust)** (Native sync daemon; watches Obsidian vault and syncs to Neon)
-- **@v2/markdown-parser (Rust/WASM)** (High-performance Markdown engine with KaTeX/WikiLink support)
+- **@v2/markdown-parser (Rust/RLib)** (High-performance pre-rendering for Sentinel; React library for Web hydration)
 - **Fumadocs** (Used only for standalone developer documentation in `apps/docs`)
 - **Vercel AI SDK** (For generative AI features and chat)
 - **Biome** (Strict linter and formatter)
@@ -72,11 +72,46 @@ When requirements are unclear, follow existing patterns in the codebase rather t
 
 ### Architectural Rules
 
-- **Content Flow**: Content is **not** stored as local MDX files in `apps/web`. Content originates from the Obsidian vault, ingested by **Sentinel (Rust)** into **Neon Postgres**. Use the `@/lib/blog` helpers to fetch and render content.
+- **Content Flow**: Content is ingested by **Sentinel (Rust)** from Obsidian into **Neon Postgres**. Sentinel performs the initial Markdown-to-HTML conversion using the Rust parser. Use the `@/lib/blog` helpers to fetch the pre-rendered HTML.
 - **Database Access**: All DB interactions must be defined in `packages/database`. Page files should call exported query functions.
 - **Styling**: Adhere to **Starry Layered CSS (SLC)**. Use Tailwind variables for semantic mapping.
-- **Markdown Rendering**: Use the `@v2/markdown-parser` for consistency between the sync daemon and the web client.
-- **Sentinel Sync**: The `sentinel` package handles the logic for directory-to-database mapping (PARA category enforcement).
+- **Markdown Rendering**: Use the `@v2/markdown-parser` components for frontend hydration (KaTeX, Wiki-links, etc.) on top of the database HTML.
+- **Sentinel Sync**: The `sentinel` package handles the logic for directory-to-database mapping.
+    - **Dual-Gated Rule**: MDX files are only generated if the Area permits AND `published: true` is set.
+    - **Section Defaults**: `Projects` and `Archives` are public by default; `Resources` and `Collections` are **private** by default.
+
+---
+
+## Wiki-Link and Name Standards
+
+To ensure perfect synchronization between Obsidian, the Rust backend (Sentinel), and the Next.js frontend, all agents MUST adhere to the following name and link resolution protocols.
+
+### 1) Name Definitions
+
+| Term | Definition | Primary Source | Usage |
+| :--- | :--- | :--- | :--- |
+| **Vault Path** | Full path from vault root (e.g., `A/B/Note.md`) | Obsidian structure | Link resolution target |
+| **Filename** | Basename of the file (e.g., `Note.md`) | File system | Fallback for Title |
+| **Title** | Human-readable name | YAML Frontmatter `title` | UI Display, SEO |
+| **Slug** | Web-friendly entry path (e.g., `a-b-note`) | `slugifyPath(Vault Path)` | URL Routing, DB Key |
+
+### 2) Unified Resolution Protocol
+
+All links and path-to-slug conversions must use the **Two-Layer Protocol** provided in `@repo/utils/wikilink`:
+
+1.  **Layer 1: Structural Resolution** (`parseWikiLink`):
+    *   Decodes URI components.
+    *   Enforces `normalize('NFC')` for Unicode parity (crucial for Mac/Obsidian compatibility).
+    *   Separates path, fragment (#), and block IDs (^).
+2.  **Layer 2: Canonical Slugification** (`slugifyPath`):
+    *   Converts the resolved path into a kebab-case slug.
+    *   **Symmetry Rule**: This logic MUST perfectly mirror the Rust backend's `slugify_publish_path`. Any change to one requires a synchronized update to the other.
+
+### 3) Navigation and Comparison
+
+*   **Arrival Detection**: To check if a link points to the current page, compare `slugifyPath(target)` with `normalizeSlug(window.location.pathname)`.
+*   **Routing**: Always generate internal routes using `/blog/${slugifyPath(vaultPath)}`.
+*   **Fragile Logic Prohibition**: Never use `.split('/').pop()` or manual regex to extract filenames or slugs from paths. Use the workspace utilities.
 
 ---
 
@@ -159,9 +194,9 @@ app/
 
 Maximize static rendering and cacheable fetch requests. For Next.js 15/16+:
 
-1. **'use cache' Directive**: Use the standard `'use cache'` directive for data-fetching and Markdown processing functions. Pair with `cacheLife('hours' | 'days')` for declarative TTL management.
-2. **Singleton Engine Patterns**: Heavy WASM-backed engines (e.g., Shiki, Oniguruma) must be instantiated as module-level Singletons (using Promises) to prevent main-thread blocking and layout shifts during request-time rendering.
-3. **Database Search Boundaries**: High-frequency interactive search (e.g., Command Center) should perform SQL-level filtering on metadata fields (`title`, `description`, `slug`) rather than scanning large text blobs.
+1. **'use cache' Directive**: Use the standard `'use cache'` directive for data-fetching. Pair with `cacheLife` for TTL management. The pre-rendered HTML from the database should be the primary cache target.
+2. **Dynamic Hydration**: Since bulky WASM parsers have been removed from the frontend for SEO, use the React renderer's dynamic hydration (e.g., `MathRenderHub`) to process terminal elements like KaTeX.
+3. **Database Search Boundaries**: High-frequency interactive search should perform SQL-level filtering on metadata fields (`title`, `description`, `slug`) rather than scanning large text blobs.
 4. **API Pre-Warming**: Implement low-priority background fetches (`priority: low`) on client-side layout mounts to resolve Serverless cold starts and initialize module-level caches before user interaction.
 
 ---

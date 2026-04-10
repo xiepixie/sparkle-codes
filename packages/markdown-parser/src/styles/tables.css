@@ -1,63 +1,123 @@
-/* High-Fidelity Table Rendering - @layer components */
-@layer components {
-    .md-table-wrap {
-        overflow-x: auto;
-        border-radius: var(--radius-xl, 16px);
-        border: none;
-        margin: 3.5rem 0 !important;
-        background: transparent;
-        position: relative;
-        display: flow-root;
-        width: 100%;
-    }
+@scope (.markdown-body) {
+  /* Responsive Table Container */
+  .table-wrapper,
+  .premium-table-wrapper {
+    margin: 2.5rem 0;
+    position: relative;
+  }
 
-    .md-table-wrap table {
-        font-size: 1.0rem;
-        width: 100%;
-        margin-top: 3.5rem !important;
-        margin-bottom: 3.5rem !important;
-    }
+  .table-wrapper,
+  .premium-table-wrapper .overflow-x-auto {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-xl, 12px);
+    border: 1px solid var(--md-border);
+    background: var(--md-bg-soft);
+    box-shadow: var(--md-shadow-sm);
+    /* Premium Glassmorphism */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition:
+      transform 0.3s ease,
+      box-shadow 0.3s ease;
+  }
 
-    table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-        margin-bottom: 3.5rem !important;
-    }
+  .premium-table-wrapper:hover .overflow-x-auto {
+    box-shadow: var(--md-shadow-md);
+  }
 
-    th {
-        font-weight: 700;
-        color: var(--md-primary);
-        background: color-mix(in srgb, var(--md-primary), transparent 94%);
-        padding: 1.125rem 1.25rem !important;
-        font-size: 1.15rem;
-        text-transform: uppercase;
-        letter-spacing: -0.01em;
-        border: none !important;
-        text-align: left;
-        border-bottom: 2px solid color-mix(in srgb, var(--md-primary), transparent 90%) !important;
-    }
+  /* Fallback if no wrapper */
+  :where(table) {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+    margin: 2.5rem 0;
+    border-radius: var(--radius-xl, 12px);
+    border: 1px solid var(--md-border);
+    background: var(--md-bg-soft);
+  }
 
-    td {
-        padding: 1rem 1.25rem !important;
-        border-bottom: 1px solid color-mix(in srgb, var(--md-foreground, #000), transparent 95%);
-        font-size: 1rem;
-        line-height: 1.6;
-        transition: background var(--dur-smooth, 0.2s) ease;
-        color: var(--md-fg, inherit);
-    }
+  /* Reset table styles when inside a wrapper to prevent double-layering */
+  :where(.table-wrapper, .premium-table-wrapper) :where(table) {
+    border: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    display: table;
+    overflow: visible;
+    width: 100%;
+  }
 
-    /* Zebra Striping */
-    tr:nth-child(even) td {
-        background: color-mix(in srgb, var(--md-foreground, #000), transparent 99%);
-    }
+  :where(thead) {
+    background: var(--md-table-head-bg);
+  }
 
-    tr:hover td { 
-        background: color-mix(in srgb, var(--md-foreground, #000), transparent 96%); 
-        color: var(--md-foreground);
-        opacity: 1;
-    }
+  :where(th) {
+    padding: 1.25rem 1.5rem;
+    font-weight: 800;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--md-primary);
+    border-bottom: 2px solid var(--md-border-strong);
+    white-space: nowrap;
+    text-align: left;
+  }
 
+  :where(td) {
+    padding: 1.1rem 1.5rem;
+    border-bottom: 1px solid var(--md-border);
+    font-size: 0.9rem;
+    color: var(--md-foreground);
+    transition: background 0.2s ease;
+    vertical-align: middle;
+    line-height: 1.6;
+  }
 
-    tr:last-child td { border-bottom: none; }
+  :where(tr:last-child td) {
+    border-bottom: none;
+  }
+
+  /* Zebra Stripes (White Horse Pattern) ✦ */
+  :where(tbody tr:nth-child(even)) {
+    background: color-mix(in srgb, var(--md-primary), transparent 95%);
+  }
+
+  :where(tbody tr:hover) {
+    background: var(--md-table-row-hover);
+    /* Subtle glow on hover */
+    box-shadow: inset 3px 0 0 var(--md-primary);
+  }
+
+  /* Inner Column Alignment Fixes (Support for GFM alignment) */
+  :where(th[style*="text-align: center"], td[style*="text-align: center"]) {
+    text-align: center;
+  }
+  :where(th[style*="text-align: right"], td[style*="text-align: right"]) {
+    text-align: right;
+  }
+
+  /* Nested Protection */
+  :where(td) :where(p, pre, .math-display) {
+    margin: 0.5rem 0;
+  }
+  :where(td) :where(p:first-child) {
+    margin-top: 0;
+  }
+  :where(td) :where(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  /* Code and Math inside tables */
+  :where(td) code {
+    background: color-mix(in srgb, var(--md-primary), transparent 90%);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85em;
+    border: 1px solid color-mix(in srgb, var(--md-primary), transparent 80%);
+  }
 }

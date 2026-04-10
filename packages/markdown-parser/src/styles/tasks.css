@@ -1,123 +1,184 @@
-@layer components {
-    .obsidian-task {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.65rem;
-        margin-bottom: 0.4rem;
-        list-style-type: none !important;
-        position: relative;
-    }
+@scope (.markdown-body) {
+  .task-list-item {
+    display: flex !important;
+    align-items: center !important; /* Unified center-line for balance */
+    gap: 0.85rem !important;
+    margin-bottom: 0.9rem !important;
+    list-style: none !important;
+    position: relative;
+    padding-left: 0 !important;
+    line-height: 1.6;
+  }
 
-    .obsidian-task input[type="checkbox"] {
-        appearance: none;
-        width: 1.15rem;
-        height: 1.15rem;
-        border: 2px solid var(--md-border);
-        border-radius: 5px;
-        margin-top: 0.25rem;
-        flex-shrink: 0;
-        cursor: default;
-        position: relative;
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        background: color-mix(in srgb, var(--md-card), transparent 50%);
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
-    }
+  /* Core Checkbox Box - The Foundation */
+  .task-list-item::before {
+    position: static !important;
+    inset: auto !important;
+    display: inline-flex !important;
+    content: "\200b";
+    flex-shrink: 0 !important;
+    z-index: 1;
 
-    /* Tooltip-like behavior on hover if we want, but keeping it simple for now */
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1.5px solid var(--md-border);
+    border-radius: 4px;
+    margin: 0 !important;
+    background: var(--md-bg-soft);
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 900;
 
-    /* Rendering different task types */
-    
-    /* Important [!] - Red accent */
-    .obsidian-task[data-task="!"] input[type="checkbox"] { 
-        border-color: #ef4444; 
-        background: rgba(239, 68, 68, 0.08);
-        box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
-    }
-    .obsidian-task[data-task="!"] input[type="checkbox"]::after { 
-        content: "!"; 
-        position: absolute; 
-        inset: 0; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        color: #ef4444; 
-        font-size: 0.75rem; 
-        font-weight: 900; 
-    }
+    /* The Correction: Lift the icon UP relative to center-line for better optical balance */
+    transform: translateY(-0.15rem);
+  }
 
-    /* Ongoing [>] - Blue accent */
-    .obsidian-task[data-task=">"] input[type="checkbox"] { 
-        border-color: #3b82f6; 
-        background: rgba(59, 130, 246, 0.08);
-        box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
-    }
-    .obsidian-task[data-task=">"] input[type="checkbox"]::after { 
-        content: "→"; 
-        position: absolute; 
-        inset: 0; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        color: #3b82f6; 
-        font-size: 0.7rem; 
-        font-weight: 900; 
-        transform: scale(1.2);
-    }
+  /* Math Correction: Lift math slightly UP relative to current baseline to prevent sinking */
+  .task-list-item .math-inline {
+    position: relative !important;
+    top: -0.08em !important;
+    vertical-align: middle !important;
+  }
 
-    /* Cancelled [-] - Gray strike */
-    .obsidian-task[data-task="-"] { 
-        opacity: 0.5; 
-        text-decoration: line-through; 
-        text-decoration-color: var(--md-muted);
+  /* task-spin for progress - Sync with standard icon translateY */
+  @keyframes task-spin {
+    from {
+      transform: translateY(-0.15rem) rotate(0deg);
     }
-    .obsidian-task[data-task="-"] input[type="checkbox"] { 
-        border-color: var(--md-muted); 
-        background: rgba(0,0,0,0.1); 
+    to {
+      transform: translateY(-0.15rem) rotate(360deg);
     }
-    .obsidian-task[data-task="-"] input[type="checkbox"]::after { 
-        content: "×"; 
-        position: absolute; 
-        inset: 0; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        color: var(--md-muted); 
-        font-size: 0.85rem; 
-        font-weight: 900; 
-    }
+  }
 
-    /* Partial [/] - Purple accent */
-    .obsidian-task[data-task="/"] input[type="checkbox"] {
-        border-color: var(--md-primary);
-        background: rgba(var(--primary-rgb), 0.08);
-    }
-    .obsidian-task[data-task="/"] input[type="checkbox"]::after { 
-        content: ""; 
-        position: absolute; 
-        left: 3px; 
-        top: 50%; 
-        width: calc(100% - 6px); 
-        height: 2.5px; 
-        background: var(--md-primary); 
-        transform: translateY(-50%);
-        border-radius: 99px;
-    }
+  /* todo [ ] */
+  .task-list-item[data-task="todo"]::before {
+    border-radius: 50%;
+    border-color: color-mix(in oklab, var(--md-foreground) 20%, var(--md-border));
+  }
 
-    /* Question [?] - Amber accent */
-    .obsidian-task[data-task="?"] input[type="checkbox"] { 
-        border-color: #f59e0b; 
-        background: rgba(245, 158, 11, 0.08);
-        box-shadow: 0 0 8px rgba(245, 158, 11, 0.2);
-    }
-    .obsidian-task[data-task="?"] input[type="checkbox"]::after { 
-        content: "?"; 
-        position: absolute; 
-        inset: 0; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        color: #f59e0b; 
-        font-size: 0.75rem; 
-        font-weight: 900; 
-    }
+  /* done [x] */
+  .task-list-item[data-task="done"] {
+    color: var(--md-muted);
+  }
+  .task-list-item[data-task="done"]::before {
+    background: #22c55e;
+    border-color: #22c55e;
+    border-radius: 50%;
+    content: "✓" !important;
+    color: white;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+  }
+  .task-list-item[data-task="done"]::after {
+    content: "" !important;
+    position: absolute;
+    left: 2.1rem;
+    right: 0;
+    top: 0.85em; /* Precisely vertically centered to the text */
+    height: 1.5px;
+    background: currentColor;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* in-progress [/] - Rotating Dotted Circle */
+  .task-list-item[data-task="in-progress"]::before {
+    border: 2px dotted #22c55e;
+    border-radius: 50%;
+    background: transparent;
+    content: "" !important;
+    animation: task-spin 10s linear infinite;
+    box-shadow: none;
+  }
+
+  /* important [!] - Solid Warning */
+  .task-list-item[data-task="important"]::before {
+    background: #f97316;
+    border-color: #f97316;
+    border-radius: 50%;
+    color: white;
+    content: "!" !important;
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2);
+  }
+
+  /* question [?] - Solid Blue Square */
+  .task-list-item[data-task="question"]::before {
+    background: #0d9488;
+    border-color: #0d9488;
+    border-radius: 4px;
+    color: white;
+    content: "?" !important;
+    box-shadow: 0 4px 12px rgba(13, 148, 136, 0.2);
+  }
+
+  /* cancelled [-] - Red Cross */
+  .task-list-item[data-task="cancelled"] {
+    color: var(--md-muted);
+    opacity: 0.6;
+  }
+  .task-list-item[data-task="cancelled"]::before {
+    background: #f43f5e;
+    border-color: #f43f5e;
+    border-radius: 50%;
+    color: white;
+    content: "×" !important;
+    font-size: 0.9rem;
+  }
+  .task-list-item[data-task="cancelled"]::after {
+    content: "" !important;
+    position: absolute;
+    left: 2.1rem;
+    right: 0;
+    top: 0.85em;
+    height: 1.5px;
+    background: currentColor;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* star [*] - Golden Star */
+  .task-list-item[data-task="star"]::before {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    border-radius: 4px;
+    color: white;
+    content: "★" !important;
+    font-size: 0.7rem;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+  }
+
+  /* forward [>] - Cyan Arrow Square */
+  .task-list-item[data-task="forward"]::before {
+    background: #06b6d4;
+    border-color: #06b6d4;
+    border-radius: 4px;
+    color: white;
+    content: "↗" !important;
+    font-size: 0.8rem;
+  }
+
+  /* location [l] - Location Pin Square */
+  .task-list-item[data-task="location"]::before {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    border-radius: 4px;
+    color: white;
+    content: "📍" !important;
+    font-size: 0.7rem;
+    background: var(--md-bg-soft);
+    border: 1.5px solid #3b82f6;
+  }
+
+  /* bookmark [b] - Green ribbon ribbon ribbon ribbon */
+  .task-list-item[data-task="bookmark"]::before {
+    background: #10b981;
+    border-color: #10b981;
+    border-radius: 2px 2px 6px 6px;
+    color: white;
+    content: "" !important;
+    height: 1.4rem;
+    width: 0.9rem;
+    transform: translateY(-0.05rem);
+  }
 }

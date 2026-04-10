@@ -40,19 +40,30 @@ export function ThemeToggle({ className }: { className?: string }) {
 		}
 
 		const transitionDocument = document as ViewTransitionDocument;
-		if (!transitionDocument.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+		if (
+			!transitionDocument.startViewTransition ||
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches
+		) {
 			setTheme(nextTheme);
 			return;
 		}
 
 		transitionLock = true;
+		document.documentElement.classList.add("theme-transitioning");
+
 		if (typeof window !== "undefined") {
-			(window as { __SPARKLE_THEME_TRANSITION__?: boolean }).__SPARKLE_THEME_TRANSITION__ = true;
+			(
+				window as { __SPARKLE_THEME_TRANSITION__?: boolean }
+			).__SPARKLE_THEME_TRANSITION__ = true;
 		}
 
-		const x = event.clientX;
-		const y = event.clientY;
-		const endRadius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+		// Fallback for keyboard events where clientX/Y might be 0
+		const x = event.clientX || window.innerWidth / 2;
+		const y = event.clientY || window.innerHeight / 2;
+		const endRadius = Math.hypot(
+			Math.max(x, window.innerWidth - x),
+			Math.max(y, window.innerHeight - y),
+		);
 
 		setIsAnimating(true);
 		setTimeout(() => setIsAnimating(false), 500);
@@ -64,7 +75,10 @@ export function ThemeToggle({ className }: { className?: string }) {
 		});
 
 		transition.ready.then(() => {
-			const clipPath = [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`];
+			const clipPath = [
+				`circle(0px at ${x}px ${y}px)`,
+				`circle(${endRadius}px at ${x}px ${y}px)`,
+			];
 
 			document.documentElement.animate(
 				{
@@ -79,8 +93,11 @@ export function ThemeToggle({ className }: { className?: string }) {
 		});
 
 		transition.finished.finally(() => {
+			document.documentElement.classList.remove("theme-transitioning");
 			if (typeof window !== "undefined") {
-				(window as { __SPARKLE_THEME_TRANSITION__?: boolean }).__SPARKLE_THEME_TRANSITION__ = false;
+				(
+					window as { __SPARKLE_THEME_TRANSITION__?: boolean }
+				).__SPARKLE_THEME_TRANSITION__ = false;
 			}
 			transitionLock = false;
 		});
@@ -103,7 +120,10 @@ export function ThemeToggle({ className }: { className?: string }) {
 				<Horizon
 					duration={500}
 					toggled={isDark}
-					className={cn("text-primary [&_svg]:h-5 [&_svg]:w-5 transition-transform duration-300", isDark ? "rotate-0" : "rotate-180")}
+					className={cn(
+						"text-primary [&_svg]:h-5 [&_svg]:w-5 transition-transform duration-300",
+						isDark ? "rotate-0" : "rotate-180",
+					)}
 				/>
 			</div>
 

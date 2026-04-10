@@ -38,13 +38,13 @@
 		--fd-popover: var(--popover);
 		--fd-popover-foreground: var(--popover-foreground);
 		
-		/* 亮色模式下，稍微加深一下背景色以提高代码块与页面的对比度 */
-		--fd-muted: color-mix(in oklab, var(--muted), black 2%);
+		/* 亮色模式下让文档界面的中性色带一点星云色温，避免 Fumadocs 默认灰感过重 */
+		--fd-muted: color-mix(in oklab, var(--muted), var(--aurora) 4%);
 		--fd-muted-foreground: var(--muted-foreground);
-		--fd-secondary: color-mix(in oklab, var(--secondary), black 3%);
+		--fd-secondary: color-mix(in oklab, var(--secondary), var(--starlight) 4%);
 		--fd-secondary-foreground: var(--secondary-foreground);
 		
-		--fd-border: color-mix(in oklab, var(--border), black 4%);
+		--fd-border: color-mix(in oklab, var(--border), var(--primary) 8%);
 		--fd-input: var(--input);
 		--fd-ring: var(--ring);
 
@@ -108,6 +108,23 @@
 	/* 侧边栏选中态：保持标准风格 */
 	.fd-sidebar-item-active {
 		border-radius: var(--radius-md) !important;
+		background:
+			linear-gradient(135deg, color-mix(in oklab, var(--fd-primary) 12%, transparent), transparent 72%),
+			color-mix(in oklab, var(--fd-secondary), transparent 16%) !important;
+		border: 1px solid color-mix(in oklab, var(--fd-primary), transparent 78%) !important;
+		box-shadow:
+			inset 0 1px 0 color-mix(in oklab, white 45%, transparent),
+			0 10px 24px color-mix(in oklab, var(--fd-primary) 10%, transparent) !important;
+	}
+
+	.fd-sidebar-item-active :where(span, svg) {
+		color: color-mix(in oklab, var(--fd-primary) 76%, var(--foreground)) !important;
+	}
+
+	.fd-page-toc a:hover,
+	.fd-toc a:hover,
+	nav a:hover {
+		color: color-mix(in oklab, var(--fd-primary) 72%, var(--fd-foreground)) !important;
 	}
 
 	/* 侧边栏底部容器：改为水平同行并列排列，添加上边框增强结构感 */
@@ -125,7 +142,11 @@
 		width: fit-content !important; 
 		margin: 0 !important;     /* 移除之前的强制居中 */
 		border-radius: 9999px !important; 
-		background: color-mix(in oklab, var(--fd-secondary), transparent 60%) !important;
+		background:
+			linear-gradient(180deg, color-mix(in oklab, white 38%, transparent), transparent 70%),
+			color-mix(in oklab, var(--fd-secondary), transparent 52%) !important;
+		border: 1px solid color-mix(in oklab, var(--fd-primary), transparent 84%) !important;
+		box-shadow: 0 8px 18px color-mix(in oklab, var(--fd-primary) 8%, transparent) !important;
 		padding: 2px !important; 
 		min-width: unset !important;
 	}

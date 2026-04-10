@@ -1,26 +1,29 @@
 "use server";
 
 import { getCachedPreviewPost, getCachedFragmentPreview } from "../../lib/preview-cache";
+import { parseWikiLink, slugifyPath } from "@repo/utils";
 
 export async function getPostPreview(slug: string) {
   try {
-    let mainSlug = slug;
-    let fragment = "";
+    // 1. 使用协议层统一解析 (Layer 1: Resolution)
+    // 注意：这里的 slug 可能是原始引用，也可能是已经处理过的 slug
+    const linkInfo = parseWikiLink(slug);
+    const mainPath = linkInfo.path;
+    const fragment = linkInfo.fragment || "";
     
-    if (slug.includes('#')) {
-      const parts = slug.split('#');
-      mainSlug = parts[0];
-      fragment = parts.slice(1).join('#');
-    }
+    // 2. 转换规范路径为 Web Slug (Layer 2: Slugify)
+    const normalizedSlug = slugifyPath(mainPath);
 
-    // The slug may be a full Obsidian vault path (e.g. "Documents/I.P.A.R.A/工作领域/项目/知识提取")
-    // but the DB stores slugified filenames (e.g. "知识提取").
-    // Try the full slug first (exact match), then fall back to the filename portion.
-    let post = await getCachedPreviewPost(mainSlug);
+    // 3. 尝试匹配文档
+    // 优先尝试完整的 normalizedSlug（对应文件夹+文件名的层级 Slug）
+    // 其次尝试纯文件名 Slug（Obsidian 习惯的短链匹配）
+    let post = await getCachedPreviewPost(normalizedSlug);
     
-    if (!post && mainSlug.includes('/')) {
-      const fileNameSlug = mainSlug.split('/').pop() || mainSlug;
-      post = await getCachedPreviewPost(fileNameSlug);
+    if (!post && linkInfo.basename) {
+      const fileNameSlug = slugifyPath(linkInfo.basename);
+      if (fileNameSlug !== normalizedSlug) {
+        post = await getCachedPreviewPost(fileNameSlug);
+      }
     }
     
     if (!post) {

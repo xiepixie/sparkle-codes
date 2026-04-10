@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
 	output: "standalone",
 	outputFileTracingRoot: path.join(__dirname, "../../"),
-	transpilePackages: ["@repo/util", "@repo/database", "@repo/ui", "katex"],
+	transpilePackages: ["@repo/utils", "@repo/database", "@repo/ui", "katex", "@v2/markdown-parser", "mermaid", "sonner"],
 	images: {
 		remotePatterns: [
 			{
@@ -24,6 +24,11 @@ const nextConfig = {
 				// placeholder images
 				protocol: "https",
 				hostname: "picsum.photos",
+			},
+			{
+				// sparkle cdn
+				protocol: "https",
+				hostname: "cdn.sparkle.codes",
 			},
 		],
 	},
@@ -47,7 +52,12 @@ const nextConfig = {
 		];
 	},
 	async rewrites() {
-		return [];
+		return [
+			{
+				source: "/obsidian-assets/:path*",
+				destination: "https://cdn.sparkle.codes/:path*",
+			},
+		];
 	},
 	webpack: (config, { webpack }) => {
 		config.plugins.push(
@@ -62,7 +72,7 @@ const nextConfig = {
   serverExternalPackages: ["shiki"],
   cacheComponents: true,
   experimental: {
-    optimizePackageImports: ["lucide-react", "framer-motion", "@repo/ui"],
+    optimizePackageImports: ["lucide-react", "framer-motion", "@repo/ui", "@v2/markdown-parser"],
   },
 };
 

@@ -217,10 +217,10 @@ export async function getPostBySlugQuery(slug: string) {
       CASE 
         WHEN ${documents.slug} = ${searchTarget} AND ${documents.area} = 'WORK' THEN 1
         WHEN ${documents.aliases} @> ${JSON.stringify([searchTarget])}::jsonb AND ${documents.area} = 'WORK' THEN 2
-        WHEN ${documents.title} = ${searchTarget} AND ${documents.area} = 'WORK' THEN 3
+        WHEN ${documents.title} ILIKE ${searchTarget} AND ${documents.area} = 'WORK' THEN 3
         WHEN ${documents.slug} = ${searchTarget} THEN 4
         WHEN ${documents.aliases} @> ${JSON.stringify([searchTarget])}::jsonb THEN 5
-        WHEN ${documents.title} = ${searchTarget} THEN 6
+        WHEN ${documents.title} ILIKE ${searchTarget} THEN 6
         ELSE 7
       END
     `.as('match_priority')
@@ -229,8 +229,10 @@ export async function getPostBySlugQuery(slug: string) {
   .where(
     or(
       eq(documents.slug, searchTarget),
-      eq(documents.title, searchTarget),
-      sql`${documents.aliases} @> ${JSON.stringify([searchTarget])}::jsonb`
+      sql`${documents.title} ILIKE ${searchTarget}`,
+      sql`${documents.aliases} @> ${JSON.stringify([searchTarget])}::jsonb`,
+      // Extra safety: handle cases where searchTarget was normalized but title is still literal
+      sql`LOWER(${documents.title}) = LOWER(${searchTarget})`
     )
   )
   .orderBy(sql`match_priority`, desc(documents.isPublished), desc(sql`coalesce(${documents.publishedAt}, ${documents.createdAt})`))

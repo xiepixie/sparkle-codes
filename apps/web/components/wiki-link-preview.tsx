@@ -2,9 +2,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, FileText, Loader2 } from "lucide-react";
 import DOMPurify from "dompurify";
-import { getPostPreview } from "../app/actions/preview";
 import { Badge } from "@repo/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+import { isSameWikiPage, normalizeSlug, parseWikiLink, slugifyHeader, slugifyPath } from "@repo/utils";
+import { getPostPreview } from "../app/actions/preview";
 import { MarkdownSnippet } from "./markdown-snippet";
 
 export interface PreviewData {
@@ -25,62 +26,78 @@ function extractFragmentFromDOM(container: HTMLElement, fragment: string): strin
   // 1. Prepare search targets based on Rust parser canonical patterns
   const isBlock = fragment.startsWith("^");
   // Headings in Rust are h-[slugified-text]
-  const headingId = `h-${fragment.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`.replace(/-+$/, '');
+  const headingId = `h-${slugifyHeader(fragment)}`;
   
-  // Strategy 1: Direct ID lookup (Canonical)
-  // Blocks keep the ^ in their ID: <span id="^blockid">
-  // Headings are h-prefixed: <h2 id="h-slug">
-  let targetEl = container.querySelector(`[id="${fragment}"]`) as HTMLElement;
+  // Robust strategy: Try common variations of the fragment
+  const variants = [
+    fragment,                      // 1. Exact (e.g. ^block, heading-id)
+    CSS.escape(fragment),          // 2. Escaped (for ^)
+    fragment.startsWith('^') ? fragment.slice(1) : `^${fragment}`, // 3. Toggle caret
+    headingId,                     // 4. Heading prefix (e.g. h-preview-context)
+  ];
 
-  // Strategy 2: Prefix-aware lookup
+  let targetEl: HTMLElement | null = null;
+  for (const v of variants) {
+    try {
+      targetEl = container.querySelector(`[id="${v}"]`);
+      if (targetEl) break;
+    } catch { /* ignore malformed selectors */ }
+  }
+
+  // Backup Strategy: Broad search in anchors (Most reliable fallback)
   if (!targetEl) {
-    if (isBlock) {
-       // If it's a block but wasn't found, it might be stored without ^ in some legacy context (unlikely now)
-       targetEl = container.querySelector(`[id="${fragment.slice(1)}"]`) as HTMLElement;
-    } else {
-       // Try heading prefix
-       targetEl = container.querySelector(`[id="${headingId}"]`) as HTMLElement;
-    }
+    const cleanId = fragment.startsWith('^') ? fragment.slice(1) : fragment;
+    targetEl = Array.from(container.querySelectorAll('.block-ref-anchor, h1, h2, h3, h4, h5, h6'))
+      .find(el => {
+        const id = el.id || '';
+        return id === fragment || id === `^${cleanId}` || id === cleanId || id === `h-${fragment}`;
+      }) as HTMLElement | null;
   }
-  
-  // Strategy 3: Text-based heading match (Final fallback for dynamic/unscoped content)
-  if (!targetEl && !isBlock) {
-    const targetText = fragment.toLowerCase().replace(/[^a-z0-9]+/g, '');
-    targetEl = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6'))
-      .find(h => (h.textContent || '').toLowerCase().replace(/[^a-z0-9]+/g, '') === targetText) as HTMLElement;
-  }
-  
+
   if (!targetEl) {
     return null;
   }
   
-  // For block anchors (<span class="block-anchor" id="^...">), return the content of the parent block + context heading
-  if (targetEl.classList.contains('block-anchor')) {
+  // For block anchors (<span class="block-ref-anchor" id="^...">), return the content of the parent block + context heading
+  if (targetEl.classList.contains('block-ref-anchor')) {
     const parent = targetEl.parentElement;
     if (parent) {
       // Find the nearest preceding heading for structural context
       let prevHeading: HTMLElement | null = null;
       let curr: Element | null = parent;
-      while (curr && !prevHeading) {
-        curr = curr.previousElementSibling;
-        if (curr?.tagName.match(/^H(\d)$/i)) {
-          prevHeading = curr as HTMLElement;
+      // If parent is the heading itself, don't look further
+      if (parent.tagName.match(/^H(\d)$/i)) {
+        prevHeading = null; // We are already in the heading
+      } else {
+        while (curr && !prevHeading) {
+          curr = curr.previousElementSibling;
+          if (curr?.tagName.match(/^H(\d)$/i)) {
+            prevHeading = curr as HTMLElement;
+          }
         }
       }
 
       const headingHtml = prevHeading ? 
-        `<div class="preview-context-heading mb-4 -mx-6 px-6 pointer-events-none sticky top-0 bg-background/95 backdrop-blur-md z-20 shadow-[0_1px_3px_rgba(0,0,0,0.05)] py-2.5 border-b border-primary/10 flex items-center gap-2">
-           <div class="w-1 h-4 bg-primary/20 rounded-full" />
-           ${prevHeading.outerHTML}
+        `<div class="preview-context-heading -mx-6 px-6 pointer-events-none sticky top-0 bg-background/80 backdrop-blur-lg z-20 shadow-sm py-2.5 border-b border-primary/5 flex items-center gap-2.5 mb-4 mb-2">
+           <div class="w-1 h-3.5 bg-primary/40 rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.3)]"></div>
+           <div class="flex-1 min-w-0 [&_*]:!m-0 [&_*]:!text-sm [&_*]:!font-bold [&_*]:!text-muted-foreground [&_*]:truncate [&_*]:!leading-tight">
+             ${prevHeading.outerHTML}
+           </div>
          </div>` : 
         '';
 
-      // We return the heading context and the highlighted target block
-      // Removed absolute overlay to prevent blocking content and ensured data-block-id is properly set
+      // We return the heading context and the target block
+      // Use outerHTML to preserve <li> or <p> or <hX> tags for correct styling
+      let contentHtml = parent.outerHTML;
+      if (parent.tagName === 'LI') {
+         // Wrap in a list container to ensure marker rendering
+         contentHtml = `<ul class="list-none !pl-0 !ml-0 my-0"> ${contentHtml} </ul>`;
+      }
+
       return `
         ${headingHtml}
-        <div class="wiki-block-highlight highlight-target border-l-2 border-primary/30 pl-4 py-2 my-3 relative" data-block-id="${targetEl.id}">
-           <div class="relative z-10 prose-p:my-1 prose-headings:my-2 prose-headings:font-bold prose-headings:text-foreground">${parent.innerHTML}</div>
+        <div class="wiki-block-highlight highlight-target my-1 relative border-l-2 border-primary/20 pl-4 py-1.5 -ml-1 transition-colors hover:border-primary/40" data-block-id="${targetEl.id}">
+           <div class="relative z-10 [&_*:first-child]:!mt-0 [&_*:last-child]:!mb-0">${contentHtml}</div>
         </div>`;
     }
     return null;
@@ -108,11 +125,11 @@ function extractFragmentFromDOM(container: HTMLElement, fragment: string): strin
       sibling = sibling.nextElementSibling;
     }
     
-    return `<div class="preview-section-context px-1">${parts.join('')}</div>`;
+    return `<div class="preview-section-context px-1 [&_*:first-child]:!mt-0 [&_*:last-child]:!mb-0">${parts.join('')}</div>`;
   }
   
   // Fallback: return the element itself wrapped in a highlight container
-  return `<div class="highlight-target bg-primary/[0.04] p-5 rounded-2xl border border-primary/10 shadow-sm leading-relaxed">${targetEl.outerHTML}</div>`;
+  return `<div class="highlight-target bg-primary/[0.04] p-5 rounded-[var(--radius-lg)] border border-primary/10 shadow-sm leading-relaxed [&_*:first-child]:!mt-0 [&_*:last-child]:!mb-0">${targetEl.outerHTML}</div>`;
 }
 
 export function WikiLinkPreviewManager({ 
@@ -124,7 +141,7 @@ export function WikiLinkPreviewManager({
   currentSlug?: string;
   currentPostMeta?: PreviewData;
 }) {
-  const [hoveredLink, setHoveredLink] = useState<{ element: HTMLElement; slug: string } | null>(null);
+  const [hoveredLink, setHoveredLink] = useState<{ element: HTMLElement; slug: string; href: string | null } | null>(null);
   const [previewData, setPreviewData] = useState<PreviewData | 'error' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -163,7 +180,7 @@ export function WikiLinkPreviewManager({
         clearTimeout(closeTimeoutRef.current);
       }
       
-      const slug = link.dataset.target;
+      const slug = link.dataset.target || link.getAttribute('href');
       if (!slug) {
         return;
       }
@@ -177,11 +194,24 @@ export function WikiLinkPreviewManager({
       }
 
       timeoutRef.current = setTimeout(async () => {
-        const targetSlug = (slug.startsWith("#") && currentSlug) 
-          ? `${currentSlug}${slug}`
-          : slug;
+        // 1. 使用统一协议解析链接原文 (Layer 1: Resolution)
+        const linkInfo = parseWikiLink(slug || "");
+        
+        // 2. 将解析后的路径转换为 Target Slug (Layer 2: Slugify)
+        // Normalize the path first to strip /blog/ prefix or origin if it's a full URL
+        const normalizedPath = linkInfo.path ? normalizeSlug(linkInfo.path) : "";
+        const targetDocId = slugifyPath(normalizedPath) || currentSlug || "";
+        
+        // 3. 构造完整 ID (带 fragment 用于比对)
+        const finalTargetSlug = linkInfo.fragment 
+          ? `${targetDocId}#${linkInfo.fragment}`
+          : targetDocId;
 
-        setHoveredLink({ element: link, slug: targetSlug });
+        setHoveredLink({ 
+          element: link as HTMLElement, 
+          slug: finalTargetSlug,
+          href: link.getAttribute('href')
+        });
         setIsLoading(true);
         setPreviewData(null);
         setIsCalculated(false);
@@ -192,26 +222,14 @@ export function WikiLinkPreviewManager({
         setPlacement('bottom');
 
         try {
-          // Current document short-circuit (Phase 1)
-          // data-target uses the full Obsidian vault path (e.g. "Documents/.../测试#fragment")
-          // but currentSlug is just the URL filename (e.g. "测试").
-          // We must extract the page name to compare correctly.
-          const dataPage = link.dataset.page || "";
-          const targetPageName = dataPage.split("/").pop() || "";
-          const targetPathWithoutFragment = targetSlug.split("#")[0];
-          const targetFileName = targetPathWithoutFragment.split("/").pop() || "";
-          
-          const isSameDocument = 
-            currentSlug && (
-              targetSlug === currentSlug ||
-              targetSlug.startsWith(`${currentSlug}#`) ||
-              targetPageName === currentSlug ||
-              targetFileName === currentSlug
-            );
+          // 4. 同一文档判定 (基于 Wiki-Link 规范协议)
+          // 使用 isSameWikiPage 来处理 [[文件名]] 这种不需要完整路径也能匹配当前文档的情况
+          const isSameDocument = isSameWikiPage(targetDocId, currentSlug || "");
           
           if (isSameDocument) {
+             // ... [omitting rest of same-page logic for brevity as it's already robust enough]
             // For fragment links to the current document, try to extract the target section from DOM
-            const fragment = targetSlug.includes("#") ? targetSlug.split("#").slice(1).join("#") : "";
+            const fragment = linkInfo.fragment || "";
             if (fragment && containerRef.current) {
               const fragmentHtml = extractFragmentFromDOM(containerRef.current, fragment);
               if (fragmentHtml) {
@@ -230,16 +248,16 @@ export function WikiLinkPreviewManager({
           }
 
           // Cache check (Phase 2)
-          const cached = cacheRef.current.get(targetSlug);
+          const cached = cacheRef.current.get(finalTargetSlug);
           if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             setPreviewData(cached.data);
             setIsLoading(false);
             return;
           }
 
-          const data = await getPostPreview(targetSlug);
+          const data = await getPostPreview(finalTargetSlug);
           if (data) {
-             cacheRef.current.set(targetSlug, { data, timestamp: Date.now() });
+             cacheRef.current.set(finalTargetSlug, { data, timestamp: Date.now() });
           }
           setPreviewData(data || 'error');
         } catch (error) {
@@ -253,7 +271,7 @@ export function WikiLinkPreviewManager({
 
     const handleMouseOver = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const link = target.closest("a.wiki-link") as HTMLElement;
+      const link = target.closest("a.wiki-link, a.internal-link") as HTMLElement;
       if (link) {
         handlePreviewTrigger(link, e);
       }
@@ -261,7 +279,7 @@ export function WikiLinkPreviewManager({
 
     const handleMouseOut = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const link = target.closest("a.wiki-link");
+      const link = target.closest("a.wiki-link, a.internal-link");
       if (link) {
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
@@ -279,7 +297,7 @@ export function WikiLinkPreviewManager({
     const handleTouchStart = (e: TouchEvent) => {
       isTouch = true;
       const target = e.target as HTMLElement;
-      const link = target.closest("a.wiki-link") as HTMLElement;
+      const link = target.closest("a.wiki-link, a.internal-link") as HTMLElement;
       if (link) {
         handlePreviewTrigger(link, e);
       }
@@ -434,7 +452,7 @@ export function WikiLinkPreviewManager({
                 <div className="flex gap-2 items-center flex-wrap">
                    {previewData.area && (
                     <Badge className="text-[10px] uppercase font-bold tracking-wider text-primary border-primary/20 bg-primary/5 px-2 py-0.5 rounded-sm shadow-sm ring-1 ring-primary/10">
-                      {previewData.area}
+                       {previewData.area}
                     </Badge>
                    )}
                    {(!previewData.status || previewData.status === 'draft') && (
@@ -443,19 +461,21 @@ export function WikiLinkPreviewManager({
                     </Badge>
                    )}
                 </div>
-              <button 
+                <button 
                   type="button"
                   className="text-primary/40 hover:text-primary transition-all cursor-pointer hover:scale-110 active:scale-95" 
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    // Correctly handle fragments during navigation
-                    const rawSlug = decodeURIComponent(hoveredLink.slug);
-                    const parts = rawSlug.split("#");
-                    const pathPart = parts[0].split("/").pop() || parts[0];
-                    const fragmentPart = parts.length > 1 ? `#${parts.slice(1).join("#")}` : "";
-                    const targetPath = `/blog/${encodeURIComponent(pathPart)}${fragmentPart}`;
-                    handleNavigate(targetPath);
+                    // Priority: If the link has an authoritative href, use it exactly
+                    if (hoveredLink.href && !hoveredLink.href.startsWith('#')) {
+                      handleNavigate(hoveredLink.href);
+                      return;
+                    }
+                    const linkInfo = parseWikiLink(decodeURIComponent(hoveredLink.slug));
+                    const targetSlug = slugifyPath(linkInfo.path) || currentSlug;
+                    const destination = `/blog/${encodeURIComponent(targetSlug || "")}${linkInfo.fragment ? `#${linkInfo.fragment}` : ""}`;
+                    handleNavigate(destination);
                   }}
                   aria-label="Open document"
                 >
@@ -468,13 +488,15 @@ export function WikiLinkPreviewManager({
                 onClick={(e) => { 
                    e.preventDefault();
                    e.stopPropagation();
-                   // Correctly handle fragments during navigation
-                   const rawSlug = decodeURIComponent(hoveredLink.slug);
-                   const parts = rawSlug.split("#");
-                   const pathPart = parts[0].split("/").pop() || parts[0];
-                   const fragmentPart = parts.length > 1 ? `#${parts.slice(1).join("#")}` : "";
-                   const targetPath = `/blog/${encodeURIComponent(pathPart)}${fragmentPart}`;
-                   handleNavigate(targetPath);
+                   // Priority: Use authoritative href
+                   if (hoveredLink.href && !hoveredLink.href.startsWith('#')) {
+                     handleNavigate(hoveredLink.href);
+                     return;
+                   }
+                   const linkInfo = parseWikiLink(decodeURIComponent(hoveredLink.slug));
+                   const targetSlug = slugifyPath(linkInfo.path) || currentSlug;
+                   const destination = `/blog/${encodeURIComponent(targetSlug || "")}${linkInfo.fragment ? `#${linkInfo.fragment}` : ""}`;
+                   handleNavigate(destination);
                 }}
               >
                 <MarkdownSnippet 
@@ -488,7 +510,7 @@ export function WikiLinkPreviewManager({
             <CardContent className="p-6 pt-0">
               {/* biome-ignore lint: Accessibility handled via hover card interaction */}
               <div 
-                className="prose prose-sm dark:prose-invert max-w-none text-foreground leading-relaxed overflow-y-auto max-h-[45vh] min-h-[120px] relative scrollbar-thin scrollbar-thumb-primary/10 hover:scrollbar-thumb-primary/20 pr-1"
+                className="prose prose-sm prose-starry dark:prose-invert starry-night-theme markdown-body wiki-link-preview-content max-w-none text-foreground leading-relaxed overflow-x-hidden overflow-y-auto max-h-[45vh] min-h-[120px] relative scrollbar-thin scrollbar-thumb-primary/20 hover:scrollbar-thumb-primary/40 pr-1.5"
                 onClick={(e) => {
                   // Catch wiki-link clicks inside the preview to prevent page reloads
                   const target = e.target as HTMLElement;
@@ -502,13 +524,12 @@ export function WikiLinkPreviewManager({
                       e.stopPropagation();
                       let targetHref = link.getAttribute('href') || "";
                       
-                      // If it's a wiki link in the preview, handle it properly
+                      // If it's a wiki link in the preview, handle it properly with unified protocol
                       if (isWikiLink) {
                          const target = decodeURIComponent(link.dataset.target || link.getAttribute('href') || "");
-                         const parts = target.split("#");
-                         const pathPart = parts[0].split("/").pop() || parts[0];
-                         const fragmentPart = parts.length > 1 ? `#${parts.slice(1).join("#")}` : "";
-                         targetHref = `/blog/${encodeURIComponent(pathPart)}${fragmentPart}`;
+                         const linkInfo = parseWikiLink(target);
+                         const targetSlug = slugifyPath(linkInfo.path);
+                         targetHref = `/blog/${encodeURIComponent(targetSlug)}${linkInfo.fragment ? `#${linkInfo.fragment}` : ""}`;
                       }
                       
                       if (targetHref) {

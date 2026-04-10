@@ -258,7 +258,6 @@ impl SyncEngine {
             }
         }
         
-        self.trigger_revalidation().await;
         Ok(())
     }
 

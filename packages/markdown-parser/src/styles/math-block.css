@@ -1,430 +1,287 @@
-/* Math Rendering (KaTeX & Numbering) - @layer components */
-@layer components {
-    /* Global counter initialization if not already handled */
-    :where(.markdown-body) {
-        counter-reset: math-eq-counter;
-    }
+@scope (.markdown-body) {
+  /* 1. Global State & Context Initialization
+     Why: Using :scope ensures the counter reset is tied to the document container properly. */
+  :scope {
+    counter-reset: math-eq-counter;
+  }
 
-    .math-block, .math-display {
-        display: block !important;
-        width: 100% !important;
-        overflow-x: auto !important;
-        margin: 2rem 0 !important; 
-        padding: 2rem 0;
-        font-size: 1.1rem !important; 
-        text-align: left !important;
-        position: relative;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        border-radius: 12px;
-        counter-increment: math-eq-counter;
-        background: transparent;
-        border: none !important;
-        cursor: pointer;
-        -webkit-overflow-scrolling: touch;
-        touch-action: pan-x pan-y pinch-zoom;
-    }
+  /* 2. Base Math Elements */
+  .math-block,
+  .math-display,
+  .math-inline {
+    cursor: pointer;
+    position: relative;
+  }
 
-    .math-block:hover {
-        background-color: color-mix(in srgb, var(--md-primary), transparent 97%);
-        box-shadow: inset 0 0 60px color-mix(in srgb, var(--md-primary), transparent 98%);
-    }
+  .math-block,
+  .math-display {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    margin: var(--md-p-space) 0 !important;
+    padding: 1.5rem 0;
+    font-size: 1.1rem !important;
+    text-align: left !important;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease;
+    border-radius: var(--radius-xl);
+    counter-increment: math-eq-counter;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y pinch-zoom;
+    /* Prevent CLS during hydration or theme switches */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 120px;
+  }
 
-    .math-block .katex-display {
-        margin: 0 !important;
-        padding: 0.75rem 0 !important;
-    }
+  .math-block:hover,
+  .math-display:hover {
+    background-color: var(--md-bg-soft) !important;
+    border-color: color-mix(in srgb, var(--md-primary), transparent 85%) !important;
+    box-shadow: none !important;
+  }
 
-    /* Target display math inside containers to prevent "too tall" look */
-    :where(blockquote, .md-callout, .md-quote, ul, ol, li) .math-block,
-    :where(blockquote, .md-callout, .md-quote, ul, ol, li) .math-display {
-        margin: 1rem 0 !important;
-        padding: 0.5rem !important;
-        font-size: 1.1rem !important;
-    }
+  /* 3. KaTeX Specific Formatting */
+  .katex-render-content {
+    display: block;
+    width: 100%;
+  }
 
-    :where(blockquote, .md-callout, .md-quote, ul, ol, li) .math-block .katex-display {
-        padding: 0.25rem 0 !important;
-    }
+  span.katex-render-content {
+    display: inline-flex;
+    vertical-align: middle;
+    width: auto;
+  }
 
-    /* Math Controls & Badges (Premium) */
-    .math-controls .math-copy-btn {
-        backdrop-filter: blur(8px);
-        box-shadow: 0 4px 12px color-mix(in srgb, var(--md-primary), transparent 90%);
-    }
+  .math-block .katex-display {
+    margin: 0 !important;
+    padding: 0.75rem 0 !important;
+  }
 
-    .math-badge {
-        text-shadow: 0 0 10px color-mix(in srgb, var(--md-primary), transparent 80%);
-    }
+  /* Nested Context Protection (Callouts, Lists, Tables) */
+  :where(blockquote, .md-callout, .callout, ul, ol, li, td, p) .math-block,
+  :where(blockquote, .md-callout, .callout, ul, ol, li, td, p) .math-display {
+    margin: 0.85rem 0 !important;
+    padding: 1.5rem 1rem !important;
+    font-size: 0.95rem !important;
+    width: 100% !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--radius-lg);
+  }
 
-    /* Ensure large formulas don't get cut off but still center */
-    .math-block .katex {
-        white-space: nowrap;
-        color: inherit !important;
-    }
+  :where(blockquote, .md-callout, .callout, ul, ol, li, td, p) .math-block:hover,
+  :where(blockquote, .md-callout, .callout, ul, ol, li, td, p) .math-display:hover {
+    background: color-mix(in srgb, var(--md-primary), transparent 98.5%) !important;
+    border: 1px solid color-mix(in srgb, var(--md-primary), transparent 92%) !important;
+  }
 
-    .math-block .katex-html {
-        color: inherit !important;
-    }
+  /* Fix for block math incorrectly wrapped in <p> by parsers */
+  p:has(> .math-block),
+  p:has(> .math-display) {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    display: contents; /* Strip paragraph styling */
+  }
+
+  /* Table cell specific tweaks */
+  td .math-block,
+  td .math-display {
+    margin: 0.25rem 0 !important;
+    padding: 0.5rem !important;
+    font-size: 0.9rem !important;
+  }
+
+  :where(blockquote, .md-callout, .callout, ul, ol, li, td) .math-block .katex-display {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 4. Responsive & Layout Handling */
+  .math-block,
+  .math-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-border) transparent;
+  }
+
+  .math-block .katex {
+    white-space: nowrap;
+    color: inherit !important;
+  }
+
+  .math-block .katex-html {
+    color: inherit !important;
+  }
+
+  /* Inline Math Alignment and Style */
+  .math-inline {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: -0.15em;
+    margin: 0 0.125rem;
+    padding: 0.1em 0.3em;
+    font-size: 1.16em !important;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+    transition: color 0.25s var(--ease-spring);
+    cursor: pointer;
+    background: transparent !important;
+    border: none !important;
+    color: inherit;
+    position: relative;
+    white-space: nowrap;
+  }
+
+  :where(h1, h2, h3, h4, .callout-title) .math-inline {
+    vertical-align: middle;
+    font-size: 0.92em !important;
+  }
+
+  .math-inline:hover {
+    color: var(--md-primary);
+    background: transparent !important;
+  }
+
+  /* 5. Source Mode Integration */
+  .math-inline .shiki-inline {
+    display: none;
+  }
+
+  .math-inline.source-mode .katex-render-content {
+    display: none;
+  }
+
+  .math-inline.source-mode .shiki-inline {
+    display: inline-flex;
+    align-items: center;
+    background: color-mix(in srgb, var(--md-primary), transparent 92%);
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.88em;
+    line-height: 1;
+    border: 1px solid var(--md-code-border);
+    box-shadow: 
+      inset 0 1px 1px color-mix(in srgb, white, transparent 94%),
+      0 1px 3px color-mix(in srgb, black, transparent 96%);
+    transition: all 0.2s var(--ease-spring);
+    /* Why: Vertically center the box with surrounding text */
+    vertical-align: middle;
+    margin-top: -2px;
+    margin-left: 1px;
+    margin-right: 1px;
+  }
+
+  .dark .math-inline.source-mode .shiki-inline {
+    background: color-mix(in srgb, var(--md-primary), transparent 88%);
+    border-color: color-mix(in srgb, var(--md-primary), transparent 75%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .math-inline.source-mode .shiki-inline:hover {
+    background: color-mix(in srgb, var(--md-primary), transparent 86%);
+    border-color: var(--md-primary);
+    box-shadow:
+      0 4px 12px color-mix(in srgb, var(--md-primary), transparent 85%),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transform: translateY(-0.5px);
+  }
+
+  .math-inline.source-mode .shiki-inline .shiki {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
 
 
-    .math-inline {
-        display: inline-block;
-        vertical-align: middle;
-        margin: 0 0.125rem;
-        padding: 2px 4px;
-        border-radius: 4px;
-        transition: all 0.2s;
-        cursor: pointer;
-        background: transparent !important;
-        border: none !important;
-        color: inherit;
-    }
+  .math-block.source-mode,
+  .math-display.source-mode {
+    padding: 0 !important;
+    background: transparent !important;
+    border: 1px solid var(--md-code-border) !important;
+    border-radius: var(--radius-lg, 8px) !important;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1) !important;
+    overflow: hidden !important;
+  }
 
-    .math-inline:hover {
-        background: color-mix(in srgb, var(--md-primary, #6366f1), transparent 92%);
-        color: var(--md-primary);
-    }
+  /* LaTeX Source Block Headers */
+  .latex-source {
+    display: none;
+    margin: 0 !important;
+  }
 
-    /* KaTeX Double-margin fix */
-    .math-block .katex-display {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
+  .math-block.source-mode .latex-source,
+  .math-display.source-mode .latex-source {
+    display: block !important;
+  }
 
-    /* Long/complex math formula box */
-    .math-block-long {
-        background: transparent !important;
-        border: 1px solid transparent;
-        border-radius: var(--radius-xl, 14px);
-        padding: 2rem 1.5rem;
-        margin: 3rem 0;
-        transition: all 0.3s ease;
-    }
+  .math-block.source-mode .katex-render-content,
+  .math-inline.source-mode .katex-render-content {
+    display: none !important;
+  }
 
-    .math-block-long:hover {
-        box-shadow: var(--shadow-premium-md);
-        border-color: color-mix(in srgb, var(--md-primary), transparent 40%);
-        background: color-mix(in srgb, var(--md-card), transparent 3%) !important;
-    }
+  .math-block.source-mode::after {
+    display: none !important;
+  }
 
-    /* Equation numbering */
+  .latex-source .format-toggle-btn[data-active="true"] {
+    color: var(--md-primary);
+    background: color-mix(in srgb, var(--md-primary), transparent 92%);
+    border-color: color-mix(in srgb, var(--md-primary), transparent 80%);
+    opacity: 1;
+  }
+
+  /* LaTeX Source Alignment & Code Fence Parity */
+  .math-block .code-fence-container,
+  .math-display .code-fence-container {
+    margin: 0 !important;
+  }
+
+  .latex-source .mockup-code pre {
+    font-family: var(--font-mono, monospace) !important;
+    font-size: 0.98rem !important;
+    line-height: 1.8 !important;
+    margin: 0 !important; /* Ensure no gaps between source lines */
+  }
+
+  /* 6. Equation Numbering */
+  .math-block::after {
+    content: "(" counter(math-eq-counter) ")";
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    opacity: 0.2;
+    color: var(--md-muted);
+    font-weight: 500;
+    transition: all 0.3s ease;
+  }
+
+  .math-block:hover::after {
+    opacity: 0.6;
+    right: 1rem;
+    color: var(--md-primary);
+  }
+
+  @media (max-width: 768px) {
     .math-block::after {
-        content: "(" counter(math-eq-counter) ")";
-        position: absolute;
-        right: 0.5rem;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 0.8rem;
-        opacity: 0.2;
-        color: var(--md-muted);
-        font-weight: 500;
-        transition: all 0.3s ease;
+      display: none;
     }
-
-    .math-block:hover::after {
-        opacity: 0.6;
-        right: 1rem;
-        color: var(--md-primary);
+    .math-block,
+    .math-display {
+      padding: 1.5rem 0.5rem !important;
+      font-size: 1rem !important;
     }
+  }
 
-    /* Mobile numbering hide */
-    @media (max-width: 768px) {
-        .math-block::after {
-            display: none;
-        }
-    }
-
-    .math-highlight {
-        background: color-mix(in srgb, var(--md-primary), transparent 94%);
-        box-shadow: 0 0 10px color-mix(in srgb, var(--md-primary), transparent 90%);
-        border-radius: 4px;
-        padding: 2px 4px;
-        transition: all 0.3s ease;
-        border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%);
-        color: var(--md-primary);
-    }
-
-    /* LaTeX Source Highlighting (Premium Mode) */
-    .latex-source {
-        border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%) !important;
-        box-shadow: 0 10px 40px -10px color-mix(in srgb, var(--md-primary), transparent 90%),
-                    0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 95%);
-        background: color-mix(in srgb, var(--background), transparent 10%) !important;
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-radius: var(--radius-xl, 16px);
-        margin: 0 !important; /* Removed fixed negative margin lift to fix callout clipping */
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    
-    .latex-source:hover {
-        border-color: color-mix(in srgb, var(--md-primary), transparent 70%) !important;
-        box-shadow: 0 15px 40px -10px color-mix(in srgb, var(--md-primary), transparent 85%),
-                    0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 85%);
-    }
-
-    .latex-source .code-fence-header {
-        background: transparent;
-        padding: 6px 12px;
-        min-height: 30px;
-        border-bottom: 1px solid color-mix(in srgb, var(--md-border), transparent 60%);
-        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
-    }
-
-    .latex-source .code-dots {
-        gap: 6px;
-    }
-
-    .latex-source .code-dot {
-        width: 10px;
-        height: 10px;
-    }
-
-    .latex-header-actions {
-        min-width: 0;
-    }
-
-    .latex-header-label {
-        padding-inline: 0.5rem;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
-        opacity: 0.8;
-    }
-
-    .latex-source .format-toggle-btn,
-    .latex-source .code-copy-btn-math,
-    .latex-source .code-close-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 1.75rem;
-        padding: 0.25rem 0.6rem;
-        border-radius: 0.4rem;
-        border: 1px solid transparent;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-    }
-
-    .latex-source .format-toggle-btn {
-        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
-        background: transparent;
-        border-color: transparent;
-    }
-
-    .latex-source .format-toggle-btn[data-active="true"] {
-        color: var(--md-primary);
-        background: color-mix(in srgb, var(--md-primary), transparent 92%);
-        border-color: color-mix(in srgb, var(--md-primary), transparent 80%);
-        box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--md-primary), transparent 85%);
-    }
-
-    .latex-source .format-toggle-btn[data-active="false"]:hover,
-    .latex-source .code-copy-btn-math:hover,
-    .latex-source .code-close-btn:hover {
-        background: color-mix(in srgb, var(--md-foreground), transparent 94%);
-        color: var(--md-foreground);
-    }
-
-    .latex-source .code-copy-btn-math,
-    .latex-source .code-close-btn {
-        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
-        background: transparent;
-        border-color: transparent;
-    }
-
-    .latex-source .code-dots {
-        opacity: 0.9;
-    }
-
-    .dark .latex-source {
-        background: rgba(12, 12, 17, 0.6) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
-                    0 10px 40px -10px rgba(0, 0, 0, 0.5);
-    }
-
-    .dark .latex-source .code-fence-header {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        color: color-mix(in srgb, var(--md-foreground), transparent 40%);
-    }
-
-    .dark .latex-source:hover {
-        border-color: color-mix(in srgb, var(--md-primary), transparent 50%) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 
-                    0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 80%),
-                    0 15px 40px -10px color-mix(in srgb, var(--md-primary), transparent 90%);
-    }
-
-    .dark .latex-source .code-fence-header {
-        background: color-mix(in srgb, var(--md-card-header), transparent 60%);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        color: white;
-    }
-
-    .dark .latex-header-label {
-        color: rgba(255, 255, 255, 0.4);
-    }
-
-    .dark .latex-source .format-toggle-btn,
-    .dark .latex-source .code-copy-btn-math,
-    .dark .latex-source .code-close-btn {
-        border-color: transparent;
-    }
-
-    .dark .latex-source .format-toggle-btn {
-        color: rgba(255, 255, 255, 0.42);
-        background: transparent;
-    }
-
-    .dark .latex-source .format-toggle-btn[data-active="true"] {
-        color: var(--md-primary);
-        background: transparent;
-        border-color: transparent;
-        box-shadow: none;
-    }
-
-    .dark .latex-source .format-toggle-btn[data-active="false"]:hover,
-    .dark .latex-source .code-copy-btn-math:hover,
-    .dark .latex-source .code-close-btn:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: rgba(255, 255, 255, 0.9);
-        border-color: transparent;
-    }
-
-    .dark .latex-source .code-copy-btn-math {
-        color: var(--md-primary);
-        background: transparent;
-    }
-
-    .dark .latex-source .code-close-btn {
-        color: rgba(255, 255, 255, 0.5);
-        background: transparent;
-    }
-
-    .latex-source .mockup-code pre,
-    .latex-source .mockup-code pre code {
-        font-family: var(--font-mono, 'JetBrains Mono', 'Fira Code', monospace) !important;
-        font-variant-ligatures: contextual;
-    }
-
-    .latex-source .mockup-code pre {
-        font-size: 0.85rem !important;
-        line-height: 2 !important; /* Generous line height for clarity */
-        color: var(--md-primary) !important;
-    }
-
-    .math-inline.source-mode {
-        display: inline !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: transparent !important;
-        border: none !important;
-    }
-
-    .math-source-content {
-        font-family: var(--font-mono, 'JetBrains Mono', monospace);
-        font-size: 0.85em;
-        padding: 0.2rem 0.5rem;
-        background: color-mix(in srgb, var(--md-primary), transparent 94%);
-        color: var(--md-primary);
-        border-radius: 6px;
-        display: inline; /* Changed to inline for natural wrapping with text */
-        border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%);
-        white-space: normal; /* Allow wrapping */
-        word-break: break-all;
-        box-decoration-break: clone;
-        -webkit-box-decoration-break: clone;
-        line-height: 1.6;
-        cursor: text;
-        transition: all 0.2s ease;
-    }
-
-    .math-block.source-mode {
-        padding: 0 !important; /* Zero padding in source mode to allow accurate height calculation */
-        border: none;
-        background: transparent;
-        box-shadow: none;
-    }
-
-    .math-block.math-transitioning,
-    .math-display.math-transitioning {
-        transition: height 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
-        will-change: height;
-    }
-
-    .math-block.source-mode::after {
-        display: none;
-    }
-
-    @media (max-width: 768px) {
-        .math-block, .math-display {
-            margin: 1.5rem 0 !important;
-            padding: 1rem 0 0.5rem;
-            font-size: 1rem !important;
-        }
-
-        .math-block .katex {
-            min-width: max-content;
-        }
-
-        .math-block .katex-display {
-            padding-inline: 0.25rem !important;
-        }
-
-        .latex-source {
-            margin: 0 !important;
-            border-radius: var(--radius-xl, 14px);
-        }
-
-        .latex-source .code-fence-header {
-            align-items: flex-start;
-            padding: 0.75rem 0.9rem;
-        }
-
-        .latex-source .code-header-right {
-            flex: 1;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 0.4rem;
-        }
-
-        .latex-source .latex-header-actions {
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 0.25rem;
-            opacity: 1 !important;
-        }
-
-        .latex-source .latex-header-actions .format-toggle-btn,
-        .latex-source .latex-header-actions .code-copy-btn-math,
-        .latex-source .latex-header-actions .code-close-btn {
-            min-height: 2rem;
-            padding-inline: 0.55rem;
-            font-size: 8px;
-            letter-spacing: 0.08em;
-        }
-
-        .latex-source .code-dots {
-            gap: 5px;
-        }
-
-        .latex-source .code-dot {
-            width: 8px;
-            height: 8px;
-        }
-    }
-
-    @media (hover: none) and (pointer: coarse) {
-        .math-block:active,
-        .math-inline:active {
-            background-color: color-mix(in srgb, var(--md-primary), transparent 94%);
-            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 82%);
-        }
-    }
+  :where(blockquote, .md-callout, .callout, ul, ol, li, td) .math-block::after {
+    display: none !important;
+  }
 }

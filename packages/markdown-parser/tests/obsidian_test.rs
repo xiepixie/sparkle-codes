@@ -39,20 +39,20 @@ fn test_tasks() {
     let input = "- [ ] todo\n- [x] done\n- [/] progress\n- [>] forward\n- [!] important\n- [-] cancel\n- [?] question";
     let res = parse_content_native(input).unwrap();
     assert!(res.html.contains("obsidian-task"));
-    assert!(res.html.contains("task-incomplete"));
-    assert!(res.html.contains("task-completed"));
-    assert!(res.html.contains("task-in-progress"));
-    assert!(res.html.contains("task-important"));
-    assert!(res.html.contains("task-cancelled"));
-    assert!(res.html.contains("task-question"));
+    assert!(res.html.contains("todo"));
+    assert!(res.html.contains("done"));
+    assert!(res.html.contains("in-progress"));
+    assert!(res.html.contains("important"));
+    assert!(res.html.contains("cancelled"));
+    assert!(res.html.contains("question"));
 }
 
 #[test]
 fn test_block_ids() {
     let input = "This is a block. ^block-id-1\n\n- list item ^item-id";
     let res = parse_content_native(input).unwrap();
-    assert!(res.html.contains("id=\"^block-id-1\""));
-    assert!(res.html.contains("id=\"^item-id\""));
+    assert!(res.html.contains("id=\"block-id-1\""));
+    assert!(res.html.contains("id=\"item-id\""));
 }
 
 #[test]

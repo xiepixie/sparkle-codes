@@ -1,12 +1,130 @@
-/* Markdown Preview & Effect Utilities - @layer utilities */
-@layer utilities {
-    @keyframes preview-fade-in {
-        from { opacity: 0; transform: translateY(-4px) scale(0.98); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
-    }
+/* Base Preview and Block Highlights */
+.preview-context-heading {
+  border-bottom: 1px solid var(--md-border);
+  padding-bottom: 4px;
+}
 
-    .mask-fade-bottom {
-        mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
-        -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
-    }
+.preview-context-heading :where(h1, h2, h3, h4, h5, h6) {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.12rem !important;
+  color: var(--md-primary) !important;
+  opacity: 0.6 !important;
+  margin: 0 !important;
+}
+
+.highlight-target {
+  transition: all 0.4s var(--ease-spring);
+  animation: highlight-pulse 2s var(--ease-spring) infinite alternate;
+}
+
+@keyframes highlight-pulse {
+  from {
+    background-color: var(--md-bg-soft);
+    box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--md-primary), transparent 40%);
+  }
+  to {
+    background-color: color-mix(in srgb, var(--md-primary), transparent 93%);
+    box-shadow: inset 5px 0 0 0 var(--md-primary);
+  }
+}
+
+/* Target block highlight (minimalist to match site behavior) */
+.wiki-block-highlight {
+  background: transparent;
+  position: relative;
+}
+
+/* Constrain headings in preview context to prevent giant text overlap */
+.preview-section-context :where(h1, h2, h3, h4, h5, h6),
+.wiki-link-preview-content :where(h1, h2, h3, h4, h5, h6) {
+  font-size: 1.1rem !important;
+  font-weight: 800 !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+  color: var(--md-foreground) !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.3 !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Small, subtle sticky context header */
+.preview-context-heading :where(h1, h2, h3, h4, h5, h6) {
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.15rem !important;
+  color: var(--md-primary) !important;
+  opacity: 0.4 !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+.preview-section-context :where(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0 !important;
+}
+
+.preview-section-context :where(p) {
+  margin-bottom: 1rem !important;
+  line-height: 1.7 !important;
+  font-size: 0.95rem !important;
+}
+
+@scope (.markdown-body) {
+  /* Style for the block anchor indicator in content (the ^block-id badge) */
+  .block-ref-anchor {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.75rem;
+    font-size: 10px;
+    font-family: var(--font-mono, monospace);
+    font-weight: 800;
+    color: var(--md-primary);
+    opacity: 0.4;
+    transition: all 0.3s var(--ease-spring);
+    user-select: none;
+    padding: 1px 6px;
+    background: color-mix(in srgb, var(--md-primary), transparent 94%);
+    border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%);
+    border-radius: 4px;
+    vertical-align: 0.15em;
+    text-transform: none;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .block-ref-anchor:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--md-primary), transparent 88%);
+    color: var(--md-primary);
+    border-color: var(--md-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--md-primary), transparent 80%);
+  }
+
+  /* Show the block ID using the generated span's ID attribute */
+  .block-ref-anchor::before {
+    content: "#" attr(id);
+    letter-spacing: -0.01em;
+  }
+
+  /* Style for Wiki Links that target a specific block */
+  .wiki-link[data-fragment^="^"] {
+    background: color-mix(in srgb, var(--md-primary), transparent 94%);
+    padding: 0 4px;
+    border-radius: 4px;
+    border-bottom: 1.5px dashed color-mix(in srgb, var(--md-primary), transparent 50%);
+    transition: all 0.2s var(--ease-spring);
+    text-underline-offset: 4px;
+  }
+
+  .wiki-link[data-fragment^="^"]:hover {
+    background: color-mix(in srgb, var(--md-primary), transparent 88%);
+    border-bottom-color: var(--md-primary);
+    border-bottom-style: solid;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--md-primary), transparent 90%);
+    transform: translateY(-0.5px);
+  }
 }

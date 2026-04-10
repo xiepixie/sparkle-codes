@@ -6,6 +6,7 @@
 @import "../../../packages/markdown-parser/src/markdown.css";
 
 @source "../../../packages/ui/components";
+@source "../../../packages/markdown-parser/src";
 
 @variant dark (&:where(.dark, .dark *));
 
@@ -72,12 +73,67 @@
     /* Fix KaTeX font-display to prevent layout shifts and invisible text */
     @font-face {
         font-family: 'KaTeX_Main';
-        src: local('KaTeX_Main'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Main-Regular.woff2') format('woff2');
-        font-display: swap;
+        src: local('KaTeX_Main-Regular'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Main-Regular.woff2') format('woff2');
+        font-weight: normal; font-style: normal; font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Main';
+        src: local('KaTeX_Main-Bold'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Main-Bold.woff2') format('woff2');
+        font-weight: bold; font-style: normal; font-display: swap;
     }
     @font-face {
         font-family: 'KaTeX_Math';
-        src: local('KaTeX_Math'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Math-Italic.woff2') format('woff2');
+        src: local('KaTeX_Math-Italic'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Math-Italic.woff2') format('woff2');
+        font-weight: normal; font-style: italic; font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Size1';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Size1-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Size2';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Size2-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Size3';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Size3-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Size4';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Size4-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_AMS';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_AMS-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Caligraphic';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Caligraphic-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Fraktur';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Fraktur-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_SansSerif';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_SansSerif-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Script';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Script-Regular.woff2') format('woff2');
+        font-display: swap;
+    }
+    @font-face {
+        font-family: 'KaTeX_Typewriter';
+        src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Typewriter-Regular.woff2') format('woff2');
         font-display: swap;
     }
 }
@@ -94,12 +150,7 @@
 
 	/* --- Shared Premium Entities handled in @repo/ui --- */
 
-    .wiki-link {
-        background: color-mix(in srgb, var(--primary), transparent 96%);
-        padding: 0px 4px;
-        border-radius: 4px;
-        font-family: inherit;
-    }
+
 
     .jump-highlight {
         animation: jump-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
@@ -113,10 +164,20 @@
     }
 
     /* --- Theme Transition Nova (Starry Night Design) --- */
+    ::view-transition-group(root) {
+        animation-duration: 0s; /* Fix: Disable default browser group interpolation to prevent jumps */
+    }
+
     ::view-transition-old(root),
     ::view-transition-new(root) {
         animation: none;
         mix-blend-mode: normal;
+        display: block;
+        height: 100vh !important;
+        width: 100vw !important;
+        position: fixed !important;
+        inset: 0 !important;
+        object-fit: cover !important;
     }
 
     ::view-transition-old(root) {
@@ -124,6 +185,13 @@
     }
     ::view-transition-new(root) {
         z-index: 2; /* Needs to be above old to cover it up */
+    }
+
+    /* Prevent scroll anchoring and smooth-scrolling jumps during theme transitions */
+    .theme-transitioning,
+    .theme-transitioning * {
+        overflow-anchor: none !important;
+        scroll-behavior: auto !important;
     }
 
     .theme-toggle-nova {
@@ -156,22 +224,23 @@
     }
 
     /* Enhanced Search Highlights - Minimalist integrated style */
-    mark:not(.search-hit) {
-        border-radius: 0.35rem;
-        padding: 0.04rem 0.25rem;
-    }
+
 
     .search-hit {
-        color: var(--primary);
+        color: color-mix(in oklab, var(--primary) 82%, var(--aurora));
         font-weight: 800; /* Extra bold for visibility without background */
         background: transparent !important;
         padding: 0 !important;
         border-radius: 0 !important;
+        text-decoration: underline;
+        text-decoration-color: color-mix(in oklab, var(--starlight) 45%, transparent);
+        text-decoration-thickness: 0.12em;
+        text-underline-offset: 0.14em;
     }
 
     .dark .search-hit {
-        color: var(--primary);
-        filter: brightness(1.2);
+        color: color-mix(in oklab, var(--aurora) 55%, var(--primary));
+        filter: brightness(1.08);
     }
 
     .jump-highlight {
@@ -216,162 +285,23 @@
     .search-inline-accent {
         border-radius: 0.35rem;
         padding: 0.04rem 0.25rem;
-        background: color-mix(in srgb, var(--primary), transparent 85%);
-        color: color-mix(in srgb, var(--primary), var(--foreground) 70%);
-        font-weight: 500;
+        background: color-mix(in oklab, var(--primary) 14%, var(--starlight) 6%, transparent);
+        color: color-mix(in oklab, var(--primary) 76%, var(--foreground));
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 16%, transparent);
+        font-weight: 600;
     }
 
     .dark .search-inline-accent {
-        background: color-mix(in srgb, var(--primary), transparent 75%);
-        color: color-mix(in srgb, white, var(--primary) 20%);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary), transparent 70%);
+        background: color-mix(in oklab, var(--primary) 22%, var(--aurora) 8%, transparent);
+        color: color-mix(in oklab, white 78%, var(--aurora) 10%);
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 24%, transparent);
     }
 
     .search-katex :where(.katex) {
         font-size: 1em;
     }
 
-    /* --- Wiki Link Preview Styles --- */
-    .preview-context-heading {
-        border-bottom: 1px solid color-mix(in srgb, var(--primary), transparent 92%);
-        padding-bottom: 4px;
-    }
-    
-    .preview-context-heading :where(h1, h2, h3, h4, h5, h6) {
-        font-size: 11px !important;
-        font-weight: 800 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.12rem !important;
-        color: var(--primary) !important;
-        opacity: 0.6 !important;
-        margin: 0 !important;
-    }
 
-    .highlight-target {
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        animation: highlight-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
-    }
-
-    @keyframes highlight-pulse {
-        from { 
-            background-color: color-mix(in srgb, var(--primary), transparent 97%);
-            box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--primary), transparent 40%);
-        }
-        to { 
-            background-color: color-mix(in srgb, var(--primary), transparent 93%);
-            box-shadow: inset 5px 0 0 0 var(--primary);
-        }
-    }
-
-    /* Reference indicator for blocks in preview */
-    .wiki-block-highlight {
-        border-left: 2px solid var(--primary);
-        background: color-mix(in srgb, var(--primary), transparent 96%);
-        border-radius: 0 4px 4px 0;
-        position: relative;
-    }
-
-    .dark .wiki-block-highlight {
-        background: color-mix(in srgb, var(--primary), transparent 92%);
-    }
-
-    /* Hide redundant inline anchors in all preview contexts */
-    .preview-context-heading .block-anchor,
-    .wiki-block-highlight .block-anchor {
-        display: none !important;
-    }
-
-    .preview-section-context :where(h1, h2, h3),
-    .preview-context-heading :where(h1, h2, h3) {
-        font-size: 1.5rem !important; /* Matches text-2xl */
-        font-weight: 900 !important;
-        margin-top: 0.25rem !important;
-        margin-bottom: 0.25rem !important;
-        color: var(--foreground) !important;
-        letter-spacing: -0.025em !important;
-        line-height: 1.2 !important;
-    }
-
-    .preview-section-context :where(h4, h5, h6),
-    .preview-context-heading :where(h4, h5, h6) {
-        font-size: 1.125rem !important;
-        font-weight: 800 !important;
-        margin-top: 0.25rem !important;
-        margin-bottom: 0.25rem !important;
-        color: var(--foreground) !important;
-        letter-spacing: -0.01em !important;
-        line-height: 1.3 !important;
-    }
-
-    .preview-section-context :where(h1, h2, h3, h4, h5, h6):first-child {
-        margin-top: 0 !important;
-    }
-
-    .dark :where(.preview-section-context, .preview-context-heading) :where(h1, h2, h3, h4, h5, h6) {
-        color: var(--foreground) !important;
-    }
-
-    .preview-section-context :where(p) {
-        margin-bottom: 1rem !important;
-        line-height: 1.7 !important;
-        font-size: 0.95rem !important;
-    }
-
-    /* Style for the block anchor indicator in content */
-    .block-anchor {
-        display: inline-flex;
-        align-items: center;
-        margin-left: 0.5rem;
-        font-size: 0.65rem;
-        font-family: var(--font-mono);
-        font-weight: 700;
-        color: var(--primary);
-        opacity: 0.8 !important; /* Always visible */
-        vertical-align: baseline;
-        user-select: none;
-        padding: 1px 6px;
-        background: color-mix(in srgb, var(--primary), transparent 94%);
-        border: 1px solid color-mix(in srgb, var(--primary), transparent 85%);
-        border-radius: 4px;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        text-transform: none;
-        cursor: default;
-    }
-
-    .block-anchor:hover {
-        opacity: 1 !important;
-        background: color-mix(in srgb, var(--primary), transparent 85%);
-        box-shadow: 0 0 12px color-mix(in srgb, var(--primary), transparent 70%);
-        transform: translateY(-1px);
-    }
-
-    .block-anchor::before {
-        content: attr(id);
-    }
-
-    /* Style for Wiki Links that target a specific block */
-    .wiki-link[data-fragment^="^"] {
-        background: color-mix(in srgb, var(--primary), transparent 94%);
-        padding: 0 4px;
-        border-radius: 4px;
-        border-bottom: 1.5px dashed color-mix(in srgb, var(--primary), transparent 50%);
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        text-underline-offset: 4px;
-    }
-
-    .wiki-link[data-fragment^="^"]:hover {
-        background: color-mix(in srgb, var(--primary), transparent 88%);
-        border-bottom-color: var(--primary);
-        border-bottom-style: solid;
-        box-shadow: 0 4px 12px color-mix(in srgb, var(--primary), transparent 90%);
-        transform: translateY(-0.5px);
-    }
-
-    .dark .block-anchor {
-        opacity: 0.6 !important;
-        background: color-mix(in srgb, var(--primary), transparent 80%);
-        border-color: color-mix(in srgb, var(--primary), transparent 60%);
-    }
 }
 /* --- Global Markdown Token Mapping --- */
 @layer base {
@@ -385,167 +315,101 @@
 }
 
 @layer components {
-    /* --- Obsidian Task Markers --- */
-    .obsidian-task {
-        list-style: none !important;
-        position: relative;
-        padding-left: 2.2rem !important;
-        margin-bottom: 0.5rem !important;
-        transition: transform 0.2s ease;
-    }
 
-    .obsidian-task:hover {
-        transform: translateX(2px);
-    }
 
-    .obsidian-task::before {
-        content: attr(data-task);
-        position: absolute;
-        left: 0;
-        top: 0.15rem;
-        width: 1.5rem;
-        height: 1.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 6px;
-        font-family: var(--font-mono);
-        font-size: 0.75rem;
-        font-weight: 900;
-        background: color-mix(in srgb, var(--primary), transparent 90%);
-        border: 1px solid color-mix(in srgb, var(--primary), transparent 70%);
-        color: var(--primary);
-        box-shadow: 0 2px 8px color-mix(in srgb, var(--primary), transparent 95%);
-        transition: all 0.2s ease;
-        line-height: 1;
-        z-index: 10;
-    }
-
-    .obsidian-task:hover::before {
-        background: color-mix(in srgb, var(--primary), transparent 80%);
-        border-color: var(--primary);
-        box-shadow: 0 4px 12px color-mix(in srgb, var(--primary), transparent 85%);
-        transform: scale(1.05);
-    }
-
-    /* Task State Variants */
-    .task-completed::before { content: "✓"; background: rgba(34, 197, 94, 0.1) !important; border-color: rgba(34, 197, 94, 0.3) !important; color: #22c55e !important; }
-    .task-in-progress::before { content: ">" !important; color: #f59e0b !important; background: rgba(245, 158, 11, 0.1) !important; border-color: rgba(245, 158, 11, 0.3) !important; }
-    .task-important::before { content: "!" !important; color: #ef4444 !important; background: rgba(239, 68, 68, 0.1) !important; border-color: rgba(239, 68, 68, 0.3) !important; font-weight: 950 !important; }
-    .task-cancelled::before { content: "−" !important; color: #94a3b8 !important; background: rgba(148, 163, 184, 0.1) !important; border-color: rgba(148, 163, 184, 0.3) !important; text-decoration: line-through; opacity: 0.7; }
-    .task-question::before { content: "?" !important; color: #8b5cf6 !important; background: rgba(139, 92, 246, 0.1) !important; border-color: rgba(139, 92, 246, 0.3) !important; }
-
-    .dark .obsidian-task::before {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.6);
-        box-shadow: none;
-    }
-
-    .dark .task-completed::before { color: #4ade80 !important; background: rgba(74, 222, 128, 0.15) !important; border-color: rgba(74, 222, 128, 0.3) !important; }
-    .dark .task-in-progress::before { color: #fbbf24 !important; background: rgba(251, 191, 36, 0.15) !important; border-color: rgba(251, 191, 36, 0.3) !important; }
-    .dark .task-important::before { color: #f87171 !important; background: rgba(248, 113, 113, 0.15) !important; border-color: rgba(248, 113, 113, 0.3) !important; }
-    .dark .task-question::before { color: #a78bfa !important; background: rgba(167, 139, 250, 0.15) !important; border-color: rgba(167, 139, 250, 0.3) !important; }
-
-    /* Code Block Enhancements */
+    /* Code Block Enhancements - Handled in code-fence.css */
     .mockup-code::before {
         display: none !important; /* Remove DaisyUI defaults */
-    }
-    
-    .mockup-code {
-        border-radius: 12px !important; /* radius-xl equivalent */
-        margin-top: 0 !important;
-        background: color-mix(in srgb, var(--background), transparent 60%) !important;
-        backdrop-filter: blur(12px) !important;
-        border: 1px solid color-mix(in srgb, var(--primary), transparent 90%) !important;
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-    }
-
-    .dark .mockup-code {
-        background: rgba(15, 15, 20, 0.4) !important;
-        border: 1px solid rgba(255, 255, 255, 0.03) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-    }
-
-    .mockup-code pre {
-        padding-right: 1.5rem !important;
-        transition: background 0.2s ease;
-        line-height: 1.6;
-    }
-
-    .mockup-code pre:hover {
-        background: rgba(255, 255, 255, 0.03);
-    }
-
-    .mockup-code pre::before {
-        content: attr(data-prefix);
-        width: 2.5rem !important;
-        opacity: 0.2 !important;
-        text-align: right;
-        margin-right: 1.25rem !important;
-        font-weight: 500;
-        font-family: inherit;
     }
 
     /* --- Mermaid Diagram Styles --- */
     .mermaid-render-container {
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 1rem;
+        background:
+            radial-gradient(circle at top, color-mix(in oklab, var(--aurora) 7%, transparent), transparent 55%),
+            color-mix(in oklab, var(--background) 88%, var(--primary) 3%);
+        border: 1px solid color-mix(in oklab, var(--primary) 12%, var(--aurora) 6%, transparent);
+        box-shadow: 0 18px 38px -30px color-mix(in oklab, var(--primary) 22%, transparent);
+        /* Why: Diagrams are rendered client-side. Reserving space prevents CLS. */
+        content-visibility: auto;
+        contain-intrinsic-size: auto 200px;
+        min-height: 100px;
     }
 
     .mermaid-mobile-preview,
     .mermaid-mobile-preview .mermaid-render-container {
-        min-width: max-content;
-    }
-    
-    .mermaid-render-container svg {
-        background: transparent !important;
-        height: auto !important;
-        max-width: 100% !important;
-        font-family: inherit;
-    }
-
-    /* Light mode specific enhancements for border definition */
-    :root:not(.dark) .mermaid-render-container svg .node rect,
-    :root:not(.dark) .mermaid-render-container svg .node circle,
-    :root:not(.dark) .mermaid-render-container svg .node polygon,
-    :root:not(.dark) .mermaid-render-container svg .node path,
-    :root:not(.dark) .mermaid-render-container svg .cluster rect {
-        stroke-width: 1.5px !important;
-    }
-
-    /* Target Mermaid labels and containers */
-    .mermaid-render-container .label {
-        font-family: inherit !important;
+        display: flex;
+        justify-content: center;
+        background: transparent;
+        margin: 2rem 0;
+        padding: 1rem;
+        border-radius: 12px;
     }
 
     /* Fixed Clipping: Force visibility and add horizontal breathing room */
     .mermaid-render-container svg .label foreignObject {
         overflow: visible !important;
     }
-    
     .mermaid-render-container svg .label foreignObject > div {
         padding: 4px 12px !important;
         overflow: visible !important;
-        white-space: nowrap !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        height: 100% !important;
     }
 
-    /* Fixed Contrast: High-contrast text strategy for mixed backgrounds (White/Dark) */
-    .dark .mermaid-render-container .label div,
-    .dark .mermaid-render-container .label text,
-    .dark .mermaid-render-container .edgeLabel div,
-    .dark .mermaid-render-container .edgeLabel text {
-        color: #ffffff !important;
-        fill: #ffffff !important;
-        /* Subtle "Halo" effect makes white text readable even on white nodes/blocks */
-        text-shadow: 
-            0 1px 2px rgba(0,0,0,0.8),
-            0 0 1px rgba(0,0,0,0.5) !important;
-        font-weight: 500;
+    /* Node Interactivity & Style */
+    .mermaid-render-container svg .node rect,
+    .mermaid-render-container svg .node circle,
+    .mermaid-render-container svg .node polygon,
+    .mermaid-render-container svg .node path {
+        transition: all 0.2s ease !important;
+        stroke-width: 1.5px !important;
+    }
+
+    /* Dark mode node opacity refinement */
+    .dark .mermaid-render-container svg .node rect,
+    .dark .mermaid-render-container svg .node polygon,
+    .dark .mermaid-render-container svg .node path {
+        fill-opacity: 0.1 !important;
+        stroke-opacity: 0.8 !important;
+    }
+
+    .mermaid-render-container svg .node:hover rect,
+    .mermaid-render-container svg .node:hover circle,
+    .mermaid-render-container svg .node:hover polygon,
+    .mermaid-render-container svg .node:hover path {
+        stroke-width: 2.5px !important;
+        stroke-opacity: 1 !important;
+        fill-opacity: 0.15 !important;
+    }
+
+    /* Better Label Contrast */
+    .mermaid-render-container .label {
+        font-family: var(--font-sans, system-ui) !important;
+        line-height: 1.4 !important;
+        font-weight: 500 !important;
+    }
+
+    /* Dark Mode Visibility Correction */
+    .dark .mermaid-render-container svg .label,
+    .dark .mermaid-render-container svg .cluster-label,
+    .dark .mermaid-render-container svg .edgeLabel,
+    .dark .mermaid-render-container svg .messageText {
+        color: #f1f5f9 !important; /* Premium off-white */
+        fill: #f1f5f9 !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.6) !important;
+    }
+
+    .dark .mermaid-render-container svg .edgePath path {
+        stroke: var(--md-border-strong) !important;
+        stroke-opacity: 0.7 !important;
+    }
+
+    .dark .mermaid-render-container svg .edgeLabel {
+        background-color: var(--md-code-bg) !important;
+        border-radius: 4px;
+        padding: 2px 4px;
     }
 
     /* Ensure node backgrounds have a minimum depth in dark mode if not explicitly colored */
@@ -580,8 +444,6 @@
 /* Math Interaction */
 .math-block, .math-inline, .math-display {
     cursor: pointer;
-    user-select: none;
-    -webkit-user-select: none;
     transition: opacity 0.2s ease;
 }
 

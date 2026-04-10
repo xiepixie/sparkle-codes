@@ -1,1857 +1,1198 @@
+"use client";
+
 import { generateContentHash } from "@repo/utils";
-import DOMPurify from "dompurify";
-import katex from "katex";
 import "katex/dist/katex.min.css";
-import morphdom from "morphdom";
 import React, {
 	useCallback,
 	useEffect,
 	useLayoutEffect,
+	useMemo,
 	useRef,
-	useState,
 } from "react";
+import { toast } from "sonner";
 import "./markdown.css";
 
-// ✅ P0 FIX: Removed WASM dependencies. Now supports pre-rendered HTML from the database.
+// --- CONSTANTS & HELPERS ---
+//
+// 职责边界：
+// - 本组件不重新解析 Markdown，只消费服务端已经产出的稳定 HTML 协议。
+// - 本组件只负责“渐进 hydration”：数学公式、Mermaid、图片工具栏、复制按钮、callout 图标等。
+// - 路由跳转与业务态交互由 apps/web 的包装层负责，避免 parser package 直接依赖应用路由。
 
+const hasWindow = typeof window !== "undefined";
+const ric =
+	hasWindow && "requestIdleCallback" in window
+		? (cb: any, opts?: any) => (window as any).requestIdleCallback(cb, opts)
+		: (cb: any, opts?: any) =>
+				globalThis.setTimeout(() => {
+					cb({ didTimeout: true, timeRemaining: () => 0 });
+				}, opts?.timeout ?? 1);
 
+const MATH_SELECTOR =
+	"[data-tex].math-inline, [data-tex].math-block, .sentinel-math";
 
+let katexModulePromise: Promise<any> | null = null;
+let mermaidModulePromise: Promise<any> | null = null;
+let domPurifyModulePromise: Promise<any> | null = null;
+let morphdomModulePromise: Promise<any> | null = null;
 
-// ✅ P0-1: SSR-safe requestIdleCallback polyfill
-const hasWindow = typeof window !== 'undefined';
+async function getKatex() {
+	if (!katexModulePromise) {
+		katexModulePromise = import("katex").then((mod) => mod.default ?? mod);
+	}
+	return katexModulePromise;
+}
 
-type IdleDeadline = { didTimeout: boolean; timeRemaining: () => number };
-type IdleCallback = (deadline: IdleDeadline) => void;
-type IdleOptions = { timeout?: number };
+async function getMermaid() {
+	if (!mermaidModulePromise) {
+		mermaidModulePromise = import("mermaid").then((mod) => mod.default ?? mod);
+	}
+	return mermaidModulePromise;
+}
 
-const ric: (cb: IdleCallback, opts?: IdleOptions) => number =
-    hasWindow && 'requestIdleCallback' in window
-        ? (cb, opts) => (window as any).requestIdleCallback(cb, opts)
-        : (cb, opts) => globalThis.setTimeout(() => { cb({ didTimeout: true, timeRemaining: () => 0 }); }, opts?.timeout ?? 1) as unknown as number;
+async function getDOMPurify() {
+	if (!domPurifyModulePromise) {
+		domPurifyModulePromise = import("dompurify").then(
+			(mod) => mod.default ?? mod,
+		);
+	}
+	return domPurifyModulePromise;
+}
 
-const cic: (id: number) => void =
-    hasWindow && 'cancelIdleCallback' in window
-        ? (id) => (window as any).cancelIdleCallback(id)
-        : (id) => globalThis.clearTimeout(id);
+async function getMorphdom() {
+	if (!morphdomModulePromise) {
+		morphdomModulePromise = import("morphdom").then(
+			(mod) => mod.default ?? mod,
+		);
+	}
+	return morphdomModulePromise;
+}
 
-// LRU Cache helper
+function escapeHtml(text: string): string {
+	return text
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}
+
 class LRUCache<K, V> {
-    private cache = new Map<K, V>();
-    private maxSize: number;
-    constructor(maxSize: number) { this.maxSize = maxSize; }
-    get(key: K): V | undefined {
-        const value = this.cache.get(key);
-        if (value !== undefined) {
-            this.cache.delete(key);
-            this.cache.set(key, value);
-        }
-        return value;
-    }
-    set(key: K, value: V): void {
-        if (this.cache.has(key)) {
-            this.cache.delete(key);
-        } else if (this.cache.size >= this.maxSize) {
-            const firstKey = this.cache.keys().next().value;
-            if (firstKey !== undefined) {
-                this.cache.delete(firstKey);
-            }
-        }
-        this.cache.set(key, value);
-    }
+	private cache = new Map<K, V>();
+	private maxSize: number;
+	constructor(maxSize: number) {
+		this.maxSize = maxSize;
+	}
+	get(key: K): V | undefined {
+		const value = this.cache.get(key);
+		if (value !== undefined) {
+			this.cache.delete(key);
+			this.cache.set(key, value);
+		}
+		return value;
+	}
+	set(key: K, value: V): void {
+		if (this.cache.has(key)) {
+			this.cache.delete(key);
+		} else if (this.cache.size >= this.maxSize) {
+			const firstKey = this.cache.keys().next().value;
+			if (firstKey !== undefined) {
+				this.cache.delete(firstKey);
+			}
+		}
+		this.cache.set(key, value);
+	}
 }
 
-// ✅ P0-2: Store code in memory Map instead of DOM attributes (performance + security)
-const codeStore = new LRUCache<string, string>(500);
-
-// ✅ P0-3: Escape for HTML attributes (includes quotes)
-function escapeHtml(str: string): string {
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-export interface PreviewState {
-    target: string;
-    page: string;
-    fragment: string;
-    x: number;
-    y: number;
-    content: string | null;
-    visible: boolean;
-}
-
-export interface ParsedResult {
-    processedHtml: string;
-    hash: string;
-}
-
-export interface MarkdownRendererProps {
-    /** Pre-rendered HTML from the database (Primary) */
-    html?: string;
-    /** Raw markdown content (Fallback) */
-    content?: string;
-    className?: string;
-    density?: 'comfortable' | 'compact';
-    onWikiLinkClick?: (target: string) => void;
-    /** Resolve asset filename to a URL for images ![[image.jpg]] */
-    resolveAsset?: (filename: string) => string | Promise<string>;
-    /** Resolve note name to its parsed HTML content ![[Note#Section]] */
-    resolveNote?: (noteName: string) => string | Promise<string>;
-    /** Whether to show the "TEX" badge on math elements. Defaults to true. */
-    showTexBadge?: boolean;
-    /** Optional translation function. Defaults to identity. */
-    t?: (key: string, options?: { defaultValue?: string; [key: string]: unknown }) => string;
-}
-
-// LRU cache for LaTeX HTML
 const texHtmlCache = new LRUCache<string, string>(2000);
 
-// ✅ P1: Global Pre-rendering Hub (Singleton) - OPTIMIZED
-// This ensures that switching between components or questions doesn't reset the rendering state
+function copyToClipboard(text: string): Promise<boolean> {
+	if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+		return Promise.resolve(false);
+	}
+	return navigator.clipboard
+		.writeText(text)
+		.then(() => true)
+		.catch(() => false);
+}
+
+// --- MATH HYDRATION ---
+
 class MathRenderHub {
-    private observer: IntersectionObserver;
-    private queue: Set<HTMLElement> = new Set();
-    private isSweepRunning = false;
-    private sweepHandle: number | null = null;
-    private refCount = 0;
+	private observer: IntersectionObserver;
+	private queue: Set<HTMLElement> = new Set();
+	private isSweepRunning = false;
 
-    constructor() {
-        if (typeof window === 'undefined') {
-            this.observer = {} as any;
-            return;
-        }
+	constructor() {
+		if (typeof window === "undefined") {
+			this.observer = {} as any;
+			return;
+		}
 
-        this.observer = new IntersectionObserver(
-            (entries) => {
-                const toRender: HTMLElement[] = [];
-                for (const entry of entries) {
-                    if (entry.isIntersecting) {
-                        const el = entry.target as HTMLElement;
-                        this.observer.unobserve(el);
-                        // If not yet rendered, add to immediate batch
-                        if (!el.dataset.renderedKey) {
-                            toRender.push(el);
-                        }
-                    }
-                }
-                if (toRender.length > 0) {
-                    this.renderBatch(toRender);
-                }
-            },
-            {
-                root: null,
-                rootMargin: "1200px", // More aggressive pre-loading for global hub
-                threshold: 0.01,
-            },
-        );
-    }
+		this.observer = new IntersectionObserver(
+			(entries) => {
+				const toRender: HTMLElement[] = [];
+				for (const entry of entries) {
+					if (entry.isIntersecting) {
+						const el = entry.target as HTMLElement;
+						this.observer.unobserve(el);
+						if (el.dataset.renderedKey) {
+							// For SSR-enhanced math, we still need to dry-hydrate attributes
+							hydrateMathAttributes(el);
+						} else {
+							toRender.push(el);
+						}
+					}
+				}
+				if (toRender.length > 0) {
+					this.renderBatch(toRender);
+				}
+			},
+			{ root: null, rootMargin: "1200px", threshold: 0.01 },
+		);
+	}
 
-    // ✅ P0 优化：评估元素复杂度（用于优先级排序）
-    private estimateComplexity(el: HTMLElement): number {
-        const tex = el.dataset.tex || el.textContent || '';
-        let score = tex.length;
-        // 环境块更复杂
-        if (tex.includes('\\begin{')) {
-            score += 50;
-        }
-        // 分数、矩阵更复杂
-        if (tex.includes('\\frac') || tex.includes('\\matrix')) {
-            score += 30;
-        }
-        // 积分、求和更复杂
-        if (tex.includes('\\int') || tex.includes('\\sum')) {
-            score += 20;
-        }
-        return score;
-    }
+	private renderBatch(items: HTMLElement[]) {
+		const sorted = items.filter((el) => document.contains(el));
+		for (const el of sorted) {
+			if (!el.dataset.renderedKey) {
+				renderMathElement(el);
+			} else {
+				hydrateMathAttributes(el);
+			}
+			this.queue.delete(el);
+		}
+	}
 
+	public register(el: HTMLElement) {
+		if (el.dataset.renderedKey) {
+			return;
+		}
+		this.observer.observe(el);
+		this.queue.add(el);
+		this.startIdleSweep();
+	}
 
-    private renderBatch(items: HTMLElement[]) {
-        // ✅ FIX: Removed layout-forcing getViewportDistance call. 
-        // Intersecting elements are already visible/near-visible.
-        const sorted = items.filter(el => document.contains(el));
+	public unregister(el: HTMLElement) {
+		this.observer.unobserve(el);
+		this.queue.delete(el);
+	}
 
-        for (const el of sorted) {
-            if (!el.dataset.renderedKey) {
-                renderMathElement(el);
-            }
-            this.queue.delete(el);
-        }
-    }
+	private startIdleSweep() {
+		if (this.isSweepRunning || this.queue.size === 0) {
+			return;
+		}
+		this.isSweepRunning = true;
+		ric((deadline: any) => this.sweep(deadline), { timeout: 2000 });
+	}
 
-    public register(el: HTMLElement) {
-        if (el.dataset.renderedKey) {
-            return;
-        }
-        this.observer.observe(el);
-        this.queue.add(el);
-        this.refCount++;
-        this.startIdleSweep();
-    }
+	private sweep(deadline: any) {
+		const items = Array.from(this.queue);
+		if (items.length === 0) {
+			this.isSweepRunning = false;
+			return;
+		}
 
-    public unregister(el: HTMLElement) {
-        this.observer.unobserve(el);
-        const wasInQueue = this.queue.delete(el);
-        if (wasInQueue) {
-            this.refCount--;
-        }
-    }
+		let i = 0;
+		while (
+			i < items.length &&
+			(deadline.timeRemaining() > 1 || deadline.didTimeout)
+		) {
+			const el = items[i];
+			if (document.contains(el) && !el.dataset.renderedKey) {
+				renderMathElement(el);
+			}
+			this.queue.delete(el);
+			i++;
+		}
 
-    private startIdleSweep() {
-        if (this.isSweepRunning || this.queue.size === 0) {
-            return;
-        }
-        this.isSweepRunning = true;
-        this.sweepHandle = ric((deadline) => this.sweep(deadline), { timeout: 2000 });
-    }
+		if (this.queue.size > 0) {
+			ric((d: any) => this.sweep(d), { timeout: 2000 });
+		} else {
+			this.isSweepRunning = false;
+		}
+	}
 
-    private sweep(deadline: IdleDeadline) {
-        // ✅ P0 优化：动态批处理大小，根据剩余时间调整
-        const items = Array.from(this.queue);
-        if (items.length === 0) {
-            this.isSweepRunning = false;
-            return;
-        }
-
-        // ✅ Optimized: Complexity-only sorting (text-based, NO reflow)
-        const scored = items
-            .filter((el): el is HTMLElement => document.contains(el) && !el.dataset.renderedKey)
-            .map(el => ({
-                el,
-                priority: this.estimateComplexity(el)
-            }))
-            .sort((a, b) => a.priority - b.priority);
-
-        let processed = 0;
-        const minBatchSize = 2;
-        const maxBatchSize = 8;
-
-        while (processed < scored.length && (deadline.timeRemaining() > 1 || deadline.didTimeout)) {
-            const { el } = scored[processed];
-            if (el && !el.dataset.renderedKey) {
-                renderMathElement(el);
-            }
-            this.queue.delete(el);
-            processed++;
-
-            // 动态调整：如果时间充裕，继续处理更多
-            if (processed >= maxBatchSize) {
-                break;
-            }
-            if (processed >= minBatchSize && deadline.timeRemaining() < 5) {
-                break;
-            }
-        }
-
-        this.isSweepRunning = false;
-        if (this.queue.size > 0) {
-            this.startIdleSweep();
-        }
-    }
-
-    public cleanUp() {
-        // No-op for global hub to avoid disabling processing for other instances.
-        // The hub manages its own idle sweep lifecycle based on queue size.
-    }
+	public cleanUp() {
+		this.isSweepRunning = false;
+		this.queue.clear();
+		if (typeof this.observer.disconnect === "function") {
+			this.observer.disconnect();
+		}
+	}
 }
 
-const mathHub = new MathRenderHub();
+function buildMathRenderedContent(
+	renderedHtml: string,
+	cleanTex: string,
+	isBlock: boolean,
+): DocumentFragment {
+	const fragment = document.createDocumentFragment();
 
-// ✅ P0 CONTRACT: Support both markdown-rs output and sentinel-lab format
-// markdown-rs: <code class="language-math">...</code>
-// sentinel-lab: <div class="sentinel-math">...</div>
-// legacy:      <span class="math-inline" data-tex="...">...</span>
-const MATH_SELECTOR = '.sparkle-math, code.language-math, .math-inline, .math-block, code.math-display, span.math-inline, .sentinel-math, div.sentinel-math';
+	const contentWrapper = document.createElement(isBlock ? "div" : "span");
+	contentWrapper.className = "katex-render-content";
+	contentWrapper.innerHTML = renderedHtml;
+	fragment.appendChild(contentWrapper);
 
-function notify(messageOrKey: string, level: 'success' | 'error' = 'success', i18nParams?: Record<string, unknown>) {
-    window.dispatchEvent(new CustomEvent('app-notify', {
-        detail: {
-            message: messageOrKey, // Fallback for legacy consumers
-            i18nKey: messageOrKey, // App.tsx will try to translate this
-            i18nParams,
-            level
-        }
-    }));
+	if (!isBlock) {
+		const inlineSource = document.createElement("span");
+		inlineSource.className = "latex-source-inline";
+		inlineSource.textContent = cleanTex;
+		fragment.appendChild(inlineSource);
+		return fragment;
+	}
+
+	const sourceContainer = document.createElement("div");
+	sourceContainer.className = "latex-source";
+
+	const header = document.createElement("div");
+	header.className = "code-fence-header";
+
+	const headerLeft = document.createElement("div");
+	headerLeft.className = "code-header-left";
+	const headerLabel = document.createElement("span");
+	headerLabel.className = "code-lang-text";
+	headerLabel.textContent = "LaTeX";
+	headerLeft.appendChild(headerLabel);
+
+	const headerRight = document.createElement("div");
+	headerRight.className = "code-header-right";
+
+	const copyBtn = document.createElement("button");
+	copyBtn.type = "button";
+	copyBtn.className = "code-copy-btn-math";
+	copyBtn.title = "Copy LaTeX";
+	copyBtn.textContent = "COPY";
+
+	const closeBtn = document.createElement("button");
+	closeBtn.type = "button";
+	closeBtn.className = "code-close-btn";
+	closeBtn.title = "Close Source";
+	closeBtn.textContent = "CLOSE";
+
+	headerRight.appendChild(copyBtn);
+	headerRight.appendChild(closeBtn);
+	header.appendChild(headerLeft);
+	header.appendChild(headerRight);
+
+	const sourceCodeWrapper = document.createElement("div");
+	sourceCodeWrapper.className = "mockup-code";
+	const pre = document.createElement("pre");
+	const code = document.createElement("code");
+	code.textContent = cleanTex;
+	pre.appendChild(code);
+	sourceCodeWrapper.appendChild(pre);
+
+	sourceContainer.appendChild(header);
+	sourceContainer.appendChild(sourceCodeWrapper);
+	fragment.appendChild(sourceContainer);
+
+	return fragment;
 }
 
-/**
- * P0安全修复：Clipboard复制降级策略
- * 支持HTTPS、非HTTPS、旧浏览器等各种环境
- */
-async function copyToClipboard(text: string): Promise<boolean> {
-    // Feature detection
-    if (!navigator.clipboard?.writeText) {
-        // 降级方案：使用传统的textarea + execCommand
-        try {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.left = '-9999px';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            textarea.setSelectionRange(0, text.length);
-            const success = document.execCommand('copy');
-            document.body.removeChild(textarea);
-            return success;
-        } catch {
-            return false;
-        }
-    }
+function hydrateMathAttributes(el: HTMLElement) {
+	const isBlock =
+		el.classList.contains("math-block") ||
+		el.classList.contains("math-display") ||
+		el.tagName === "DIV";
 
-    // 现代Clipboard API
-    try {
-        await navigator.clipboard.writeText(text);
-        return true;
-    } catch (error) {
-        // 可能是权限问题或浏览器拒绝
-        console.warn('Clipboard write failed:', error);
-        // 再尝试降级方案
-        try {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.left = '-9999px';
-            document.body.appendChild(textarea);
-            textarea.select();
-            const success = document.execCommand('copy');
-            document.body.removeChild(textarea);
-            return success;
-        } catch {
-            return false;
-        }
-    }
+	el.setAttribute("tabindex", "0");
+	el.setAttribute("role", "button");
+	el.setAttribute(
+		"aria-expanded",
+		el.classList.contains("source-mode") ? "true" : "false",
+	);
+	el.setAttribute(
+		"aria-label",
+		isBlock
+			? "Toggle LaTeX source for block formula"
+			: "Toggle LaTeX source for inline formula",
+	);
+	el.setAttribute(
+		"title",
+		isBlock
+			? "Double-click or press Enter to show LaTeX source"
+			: "Double-click or press Enter to show inline LaTeX source",
+	);
 }
 
-/**
- * P0 Security: Filter dangerous LaTeX commands before rendering
- */
-/**
- * P0 Security: Filter dangerous LaTeX commands before rendering
- */
+function toggleMathSource(el: HTMLElement) {
+	if (!el.dataset.tex) {
+		return;
+	}
+	el.classList.toggle("source-mode");
+	el.setAttribute(
+		"aria-expanded",
+		el.classList.contains("source-mode") ? "true" : "false",
+	);
+}
+
+async function renderMathElement(el: HTMLElement) {
+	const tex = el.dataset.tex || el.textContent || "";
+	if (!tex || el.dataset.renderingMath === "true") {
+		return;
+	}
+
+	// Clean leading/trailing $$ or $ and handle display mode detection
+	const isBlock =
+		el.classList.contains("math-block") ||
+		el.classList.contains("math-display") ||
+		el.tagName === "DIV" ||
+		tex.trim().startsWith("$$");
+
+	// Why: content arrives from database HTML attributes where entity decoding already happened.
+	// We normalize once here so cache keys, copied LaTeX, and source-mode text all stay in sync.
+	const cleanTex = tex.replace(/^(\$\$|\$)|(\$\$|\$)$/g, "").trim();
+
+	el.dataset.tex = cleanTex;
+	el.setAttribute("tabindex", "0");
+	el.setAttribute("role", "button");
+	el.setAttribute(
+		"aria-expanded",
+		el.classList.contains("source-mode") ? "true" : "false",
+	);
+	el.setAttribute(
+		"aria-label",
+		isBlock
+			? "Toggle LaTeX source for block formula"
+			: "Toggle LaTeX source for inline formula",
+	);
+	el.setAttribute(
+		"title",
+		isBlock
+			? "Double-click or press Enter to show LaTeX source"
+			: "Double-click or press Enter to show inline LaTeX source",
+	);
+
+	const cacheKey = `${isBlock ? "B" : "I"}:${cleanTex}`;
+	const cached = texHtmlCache.get(cacheKey);
+
+	if (cached) {
+		el.replaceChildren(buildMathRenderedContent(cached, cleanTex, isBlock));
+		el.dataset.renderedKey = generateContentHash(cleanTex);
+		el.classList.add("is-rendered");
+		return;
+	}
+
+	try {
+		el.dataset.renderingMath = "true";
+		const katex = await getKatex();
+		const html = katex.renderToString(cleanTex, {
+			displayMode: isBlock,
+			throwOnError: false,
+			trust: false,
+			strict: false,
+		});
+
+		texHtmlCache.set(cacheKey, html);
+		el.replaceChildren(buildMathRenderedContent(html, cleanTex, isBlock));
+		el.dataset.renderedKey = generateContentHash(cleanTex);
+		el.classList.add("is-rendered");
+	} catch (err) {
+		console.error("KaTeX error:", err);
+	} finally {
+		delete el.dataset.renderingMath;
+	}
+}
+
+// --- INTERACTIVE HYDRATORS ---
+
+async function hydrateMermaid(el: HTMLElement, isDark: boolean, force = false) {
+	if (!el || (!force && el.dataset.renderedTheme === String(isDark))) {
+		return;
+	}
+
+	try {
+		const themeVariables = isDark
+			? {
+					darkMode: true,
+					background: "transparent",
+					mainBkg: "transparent",
+					primaryColor: "#818cf8",
+					primaryTextColor: "#f8fafc",
+					textColor: "#f8fafc",
+					nodeBkg: "#0a0a1a",
+					nodeTextColor: "#f1f5f9",
+					nodeBorder: "#4f46e5",
+					clusterBkg: "rgba(30, 27, 75, 0.4)",
+					clusterBorder: "#818cf8",
+					clusterTextColor: "#cbd5e1",
+					lineColor: "#6366f1",
+					edgeLabelBackground: "#0a0a1a",
+					tertiaryColor: "#1e1b4b",
+					secondaryColor: "#312e81",
+				}
+			: {
+					darkMode: false,
+					background: "transparent",
+					mainBkg: "transparent",
+					primaryColor: "#513bb2",
+					primaryTextColor: "#0f172a",
+					textColor: "#0f172a",
+					nodeBkg: "#ffffff",
+					nodeTextColor: "#0f172a",
+					nodeBorder: "#513bb2",
+					clusterBkg: "rgba(81, 59, 178, 0.05)",
+					clusterBorder: "#513bb2",
+					clusterTextColor: "#513bb2",
+					lineColor: "#513bb2",
+					edgeLabelBackground: "#ffffff",
+					tertiaryColor: "#f1f5f9",
+					secondaryColor: "#e2e8f0",
+				};
+
+		const mermaid = await getMermaid();
+		mermaid.initialize({
+			startOnLoad: false,
+			theme: "base",
+			themeVariables,
+			// Why: these diagrams are rendered from persisted markdown content.
+			// Keeping Mermaid in strict mode protects the client boundary even if upstream sanitization regresses.
+			securityLevel: "strict",
+			fontFamily: "Inter, var(--font-pingfang-sc), sans-serif",
+		});
+
+		const content = el.dataset.mermaidContent || el.textContent || "";
+		if (!content) {
+			return;
+		}
+
+		const renderToken = `${generateContentHash(content)}:${isDark ? "dark" : "light"}`;
+		el.dataset.mermaidRenderToken = renderToken;
+
+		const uniqueId = `mermaid-${generateContentHash(content)}-${Math.random().toString(36).slice(2, 5)}`;
+		const { svg } = await mermaid.render(uniqueId, content);
+		if (!el.isConnected || el.dataset.mermaidRenderToken !== renderToken) {
+			return;
+		}
+
+		const DOMPurify = await getDOMPurify();
+		const sanitizedSvg = DOMPurify.sanitize(svg, {
+			ADD_TAGS: ["foreignObject"],
+			USE_PROFILES: { svg: true, svgFilters: true, html: true },
+		});
+
+		let container = el.nextElementSibling;
+		if (
+			!container ||
+			!container.classList.contains("mermaid-render-container")
+		) {
+			container = document.createElement("div");
+			container.className =
+				"mermaid-render-container my-10 flex justify-center overflow-x-auto transition-all group/mermaid";
+			el.parentNode?.insertBefore(container, el.nextSibling);
+		}
+		const svgTemplate = document.createElement("template");
+		svgTemplate.innerHTML = sanitizedSvg;
+		container.replaceChildren(svgTemplate.content.cloneNode(true));
+		el.style.display = "none";
+		el.dataset.renderedTheme = String(isDark);
+		el.dataset.mermaidContent = content;
+	} catch (err) {
+		console.error("Mermaid error:", err);
+	}
+}
+
+function hydrateCalloutIcons(el: HTMLElement) {
+	// Base Lucide-inspired SVG components for reuse and consistency
+	const SVG = {
+		INFO: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+		CHECK:
+			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+		CHECK_CIRCLE:
+			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+		ALERT:
+			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+		X_CIRCLE:
+			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
+		HELP: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
+		BUG: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/><path d="m10 4 1 2"/><path d="m14 4-1 2"/></svg>',
+		PENCIL:
+			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>',
+		SPARKLE:
+			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
+		LIST: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+		QUOTE:
+			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1 0 2.5 0 6-2 7Zm14 0c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1 0 2.5 0 6-2 7Z"/></svg>',
+		ZAP: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-2 10h10L11 22l2-10H3Z"/></svg>',
+		CLIPBOARD_LIST:
+			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>',
+	};
+
+	// Reduced redundancy by mapping types into functional groups
+	const calloutIcons: Record<string, string> = {
+		note: SVG.PENCIL,
+		todo: SVG.CHECK_CIRCLE,
+		info: SVG.INFO,
+		abstract: SVG.CLIPBOARD_LIST,
+		summary: SVG.CLIPBOARD_LIST,
+		tldr: SVG.CLIPBOARD_LIST,
+		tip: SVG.SPARKLE,
+		hint: SVG.SPARKLE,
+		important: SVG.SPARKLE,
+		success: SVG.CHECK,
+		done: SVG.CHECK,
+		check: SVG.CHECK,
+		question: SVG.HELP,
+		help: SVG.HELP,
+		faq: SVG.HELP,
+		warning: SVG.ALERT,
+		attention: SVG.ALERT,
+		caution: SVG.ALERT,
+		failure: SVG.X_CIRCLE,
+		fail: SVG.X_CIRCLE,
+		missing: SVG.X_CIRCLE,
+		danger: SVG.ZAP,
+		error: SVG.ZAP,
+		bug: SVG.BUG,
+		example: SVG.LIST,
+		quote: SVG.QUOTE,
+		cite: SVG.QUOTE,
+	};
+
+	const type = el.dataset.calloutType?.toLowerCase() || "note";
+	const customIcon = el.dataset.calloutIcon?.toLowerCase();
+
+	if (el.dataset.iconHydrated === (customIcon || type)) {
+		return;
+	}
+
+	const iconEl = el.querySelector(
+		".md-callout__icon, .md-callout-icon, .callout-icon",
+	);
+	if (iconEl) {
+		// Priority: User custom icon > Type-based icon > Note fallback
+		iconEl.innerHTML =
+			calloutIcons[customIcon || ""] || calloutIcons[type] || calloutIcons.note;
+	}
+	el.dataset.iconHydrated = customIcon || type;
+}
+
+function hydrateImageEmbed(el: HTMLElement) {
+	const src = el.dataset.src || el.dataset.target;
+	if (!src) {
+		return;
+	}
+
+	// Why: if the server already emitted the full image shell, the client should only
+	// attach behaviors. Rebuilding that subtree would risk losing SSR-first layout stability.
+	const alreadyRendered =
+		el.dataset.rendered === src && el.querySelector("img");
+
+	const r2PublicUrl =
+		process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://cdn.sparkle.codes";
+	const label = el.dataset.alt || "";
+	const encodedSrc = encodeURIComponent(src).replace(/%2F/g, "/");
+	const primaryUrl = src.startsWith("http")
+		? src
+		: `${r2PublicUrl.replace(/\/$/, "")}/${encodedSrc}`;
+	const localUrl = `/obsidian-assets/${encodedSrc}`;
+
+	if (alreadyRendered) {
+		if (el.dataset.imageHydrated === src) {
+			return;
+		}
+
+		// Just attach missing logic to existing elements
+		const img = el.querySelector("img");
+		if (img) {
+			img.addEventListener("error", () => {
+				if (img.src !== `${window.location.origin}${localUrl}`) {
+					img.src = localUrl;
+				} else {
+					img.style.display = "none";
+					const errorDiv = el.querySelector(".wiki-image-error") as HTMLElement;
+					if (errorDiv) {
+						errorDiv.style.display = "block";
+					}
+				}
+			});
+		}
+
+		// Add missing buttons if they weren't in the pre-render
+		const toolbar = el.querySelector(".img-toolbar");
+		if (toolbar && !toolbar.querySelector(".download-img-btn")) {
+			const downloadBtn = document.createElement("button");
+			downloadBtn.className =
+				"img-action-btn download-img-btn flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all pointer-events-auto border-none";
+			downloadBtn.dataset.url = primaryUrl;
+			downloadBtn.dataset.filename = src;
+			downloadBtn.title = "Download";
+			downloadBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`;
+			toolbar.appendChild(downloadBtn);
+		}
+		el.dataset.imageHydrated = src;
+		return;
+	}
+
+	// Fallback for non-pre-rendered content (though blog.ts should catch most)
+	let widthStyle = "max-width: 100%;";
+	let displayAlt = label;
+	if (label && /^\d+(x\d+)?$/.test(label)) {
+		const [w] = label.split("x");
+		widthStyle = `width: ${w}px; max-width: 100%;`;
+		displayAlt = "";
+	}
+
+	el.innerHTML = "";
+	const wrapper = document.createElement("div");
+	wrapper.className =
+		"wiki-image-wrapper group relative my-10 flex flex-col items-center";
+
+	const resizerContainer = document.createElement("div");
+	resizerContainer.className =
+		"relative transition-all duration-700 group-hover:scale-[1.01] z-0";
+	resizerContainer.style.cssText = widthStyle;
+
+	const img = document.createElement("img");
+	img.src = primaryUrl;
+	img.alt = displayAlt || src;
+	img.className =
+		"block w-full h-auto rounded-xl shadow-ambient group-hover:shadow-[0_24px_70px_rgba(0,0,0,0.4)] transition-all duration-700 relative z-0";
+	img.loading = "lazy";
+	img.decoding = "async";
+
+	const errorDiv = document.createElement("div");
+	errorDiv.className =
+		"wiki-image-error p-4 rounded-xl bg-red-500/5 border border-red-500/10 text-red-500/60 text-[10px] text-center font-black uppercase tracking-widest my-4";
+	errorDiv.style.display = "none";
+	errorDiv.innerText = `⚠️ Image Sync Failed: ${src}`;
+
+	img.addEventListener("error", () => {
+		if (img.src !== `${window.location.origin}${localUrl}`) {
+			img.src = localUrl;
+		} else {
+			img.style.display = "none";
+			errorDiv.style.display = "block";
+		}
+	});
+
+	const toolbar = document.createElement("div");
+	toolbar.className =
+		"img-toolbar absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-30 sm:top-4 sm:right-4 pointer-events-none";
+
+	const copyBtn = document.createElement("button");
+	copyBtn.className =
+		"img-action-btn copy-img-btn flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all pointer-events-auto border-none";
+	copyBtn.dataset.url = primaryUrl;
+	copyBtn.title = "Copy Link";
+	copyBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+
+	const downloadBtn = document.createElement("button");
+	downloadBtn.className =
+		"img-action-btn download-img-btn flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all pointer-events-auto border-none";
+	downloadBtn.dataset.url = primaryUrl;
+	downloadBtn.dataset.filename = src;
+	downloadBtn.title = "Download";
+	downloadBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`;
+
+	toolbar.appendChild(copyBtn);
+	toolbar.appendChild(downloadBtn);
+
+	resizerContainer.appendChild(img);
+	resizerContainer.appendChild(errorDiv);
+	resizerContainer.appendChild(toolbar);
+	wrapper.appendChild(resizerContainer);
+
+	if (displayAlt) {
+		const capContainer = document.createElement("div");
+		capContainer.className = "mt-5 text-center";
+		const caption = document.createElement("span");
+		caption.className =
+			"px-4 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-[9px] text-primary/60 font-black tracking-[0.3em] uppercase";
+		caption.textContent = displayAlt;
+		capContainer.appendChild(caption);
+		wrapper.appendChild(capContainer);
+	}
+
+	el.appendChild(wrapper);
+	el.dataset.rendered = src;
+	el.dataset.imageHydrated = src;
+}
+
+function hydrateCodeBlocks(el: HTMLElement) {
+	if (el.dataset.codeHydrated) {
+		return;
+	}
+	const header = el.querySelector(".code-fence-header");
+	if (header && !header.querySelector(".code-copy-btn")) {
+		const copyBtn = document.createElement("button");
+		copyBtn.className =
+			"code-copy-btn group/copy-btn flex items-center justify-center p-1.5 rounded-md hover:bg-primary/10 transition-all";
+		copyBtn.title = "Copy Code";
+		copyBtn.innerHTML = `
+            <svg class="w-3.5 h-3.5 text-muted-foreground group-hover/copy-btn:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path d="M8 4v12a2 2 0 002 2h8a2 2 0 002-2V7.242a2 2 0 00-.586-1.414l-3.242-3.242A2 2 0 0013.758 2H10a2 2 0 00-2 2z" />
+                <path d="M16 18v2a2 2 0 01-2 2H6a2 2 0 01-2-2V9a2 2 0 012-2h2" />
+            </svg>
+        `;
+		const rightGroup = header.querySelector(".code-header-right");
+		if (rightGroup) {
+			rightGroup.insertBefore(copyBtn, rightGroup.firstChild);
+		} else {
+			header.appendChild(copyBtn);
+		}
+	}
+	el.dataset.codeHydrated = "true";
+}
+
+// --- COMPONENT PROPS ---
+
+export interface MarkdownRendererProps {
+	html?: string;
+	content?: string;
+	className?: string;
+	// Reserved for app-layer wrappers that want to keep a stable renderer API.
+	// The parser package itself does not make routing decisions from this value.
+	currentSlug?: string;
+	onWikiLinkClick?: (target: string, href?: string) => void;
+	onNodeAdded?: (el: HTMLElement) => void;
+	resolvedTheme?: string;
+}
+
+// --- MAIN RENDERER ---
+
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
+	({
+		html: initialHtml,
+		content,
+		className = "",
+		currentSlug: _currentSlug,
+		onWikiLinkClick,
+		onNodeAdded,
+		resolvedTheme,
+	}) => {
+		const containerRef = useRef<HTMLDivElement>(null);
+		const mathHubRef = useRef<MathRenderHub | null>(null);
+		const isFirstMount = useRef(true);
+		const isDark = resolvedTheme === "dark";
+		const lastHtmlRef = useRef<string>(initialHtml || "");
+
+		const stableHtml = useMemo(() => {
+			if (initialHtml) {
+				return initialHtml;
+			}
+			if (content) {
+				return `<p>${escapeHtml(content)}</p>`;
+			}
+			return "";
+		}, [initialHtml, content]);
+
+		if (!mathHubRef.current && typeof window !== "undefined") {
+			mathHubRef.current = new MathRenderHub();
+		}
+
+		useEffect(() => {
+			return () => {
+				mathHubRef.current?.cleanUp();
+				mathHubRef.current = null;
+			};
+		}, []);
+
+		// 2. DOM Patching & Hydration
+		// Why: We use useEffect instead of useLayoutEffect to avoid blocking the initial
+		// paint with heavy DOM reconciliation. By using dangerouslySetInnerHTML for SSR
+		// and morphdom for hydration, we get fast initial content with efficient updates.
+		useEffect(() => {
+			const mathHub = mathHubRef.current;
+			const container = containerRef.current;
+			if (!container || !stableHtml || !mathHub) {
+				return;
+			}
+			let cancelled = false;
+
+			const hydrateEnhancements = (root: HTMLElement) => {
+				// Priority 1: Math (Visual integrity)
+				root.querySelectorAll(MATH_SELECTOR).forEach((el) => {
+					mathHub.register(el as HTMLElement);
+				});
+				if (root.matches(MATH_SELECTOR)) {
+					mathHub.register(root);
+				}
+
+				// Priority 2: Interaction (Can be deferred to idle)
+				ric(
+					() => {
+						// Hydrate Code Blocks
+						root.querySelectorAll(".code-fence-container").forEach((el) => {
+							hydrateCodeBlocks(el as HTMLElement);
+						});
+						if (root.matches(".code-fence-container")) {
+							hydrateCodeBlocks(root);
+						}
+
+						// Hydrate Mermaid
+						root
+							.querySelectorAll(
+								".language-mermaid, div.mermaid, [data-lang='mermaid']",
+							)
+							.forEach((el) => {
+								hydrateMermaid(el as HTMLElement, isDark);
+							});
+						if (
+							root.matches(
+								".language-mermaid, div.mermaid, [data-lang='mermaid']",
+							)
+						) {
+							hydrateMermaid(root, isDark);
+						}
+
+						// Hydrate Callouts
+						root.querySelectorAll(".md-callout, .callout").forEach((el) => {
+							hydrateCalloutIcons(el as HTMLElement);
+						});
+						if (root.matches(".md-callout, .callout")) {
+							hydrateCalloutIcons(root);
+						}
+
+						// Hydrate Images
+						root
+							.querySelectorAll(".wiki-embed[data-embed-kind='image']")
+							.forEach((el) => {
+								hydrateImageEmbed(el as HTMLElement);
+							});
+						if (root.matches(".wiki-embed[data-embed-kind='image']")) {
+							hydrateImageEmbed(root);
+						}
+					},
+					{ timeout: 2000 },
+				);
+			};
+
+			// If it's the first mount and we have valid initial HTML, we can skip the heavy
+			// morphdom pass and just perform interactive hydration.
+			// This dramatically reduces styles recalculation on first load.
+			if (isFirstMount.current) {
+				isFirstMount.current = false;
+				lastHtmlRef.current = stableHtml;
+				hydrateEnhancements(container);
+				return;
+			}
+
+			// Fast path: if HTML hasn't changed, only re-sweep hydration
+			if (lastHtmlRef.current === stableHtml) {
+				hydrateEnhancements(container);
+				return;
+			}
+
+			lastHtmlRef.current = stableHtml;
+			void (async () => {
+				const [DOMPurify, morphdom] = await Promise.all([
+					getDOMPurify(),
+					getMorphdom(),
+				]);
+				if (cancelled) {
+					return;
+				}
+
+				// Why: most blog navigations render stable SSR HTML on first paint.
+				// Deferring sanitize + morphdom until the content truly changes keeps
+				// the initial client work small without weakening later update safety.
+				const fragment = DOMPurify.sanitize(stableHtml, {
+					RETURN_DOM_FRAGMENT: true,
+					ADD_ATTR: [
+						"id",
+						"style",
+						"data-src",
+						"data-alt",
+						"data-embed-kind",
+						"data-tex",
+						"data-target",
+						"data-page",
+						"data-fragment",
+						"data-callout-type",
+						"data-callout-icon",
+						"data-callout-fold",
+						"data-language",
+						"data-lang",
+						"data-code",
+						"data-task",
+						"data-block-ref",
+					],
+					ADD_TAGS: ["svg", "path"],
+					USE_PROFILES: { html: true, mathMl: true, svg: true },
+				}) as unknown as DocumentFragment;
+
+				const tempDiv = document.createElement("div");
+				tempDiv.appendChild(fragment);
+
+				morphdom(container, tempDiv, {
+					childrenOnly: true,
+					onBeforeElUpdated: (from: Node, to: Node) => {
+						if (
+							!(from instanceof HTMLElement) ||
+							!(to instanceof HTMLElement)
+						) {
+							return true;
+						}
+						// Source Mode state preservation
+						if (from.dataset.tex && from.dataset.tex === to.dataset.tex) {
+							if (from.classList.contains("source-mode")) {
+								to.classList.add("source-mode");
+								to.setAttribute("aria-expanded", "true");
+							}
+							if (from.dataset.renderedKey) {
+								to.innerHTML = from.innerHTML;
+								to.dataset.renderedKey = from.dataset.renderedKey;
+							}
+							return false;
+						}
+						// Callout Fold state preservation
+						if (
+							from.matches(".md-callout, .callout") &&
+							from.getAttribute("data-callout-type") ===
+								to.getAttribute("data-callout-type") &&
+							from.hasAttribute("data-callout-fold")
+						) {
+							const liveFoldState = from.getAttribute("data-callout-fold");
+							if (liveFoldState) {
+								to.setAttribute("data-callout-fold", liveFoldState);
+							}
+						}
+						return true;
+					},
+					onNodeAdded: (n: Node) => {
+						if (n instanceof HTMLElement) {
+							hydrateEnhancements(n);
+							if (onNodeAdded) {
+								onNodeAdded(n);
+							}
+						}
+						return n;
+					},
+				});
+
+				if (!cancelled) {
+					hydrateEnhancements(container);
+				}
+			})();
+
+			return () => {
+				cancelled = true;
+			};
+		}, [stableHtml, onNodeAdded]);
+
+		// 3. Theme-Specific Updates (Optimization for JANK)
+		// Why: content re-morphing on theme change is expensive and triggers forced reflows.
+		// Decoupling theme updates from the main reconciliation loop keeps the switch responsive.
+		useEffect(() => {
+			const container = containerRef.current;
+			if (!container || isFirstMount.current) {
+				return;
+			}
+
+			ric(() => {
+				// Specifically update Mermaid diagrams which are theme-dependent
+				container
+					.querySelectorAll(
+						".language-mermaid, div.mermaid, [data-lang='mermaid']",
+					)
+					.forEach((el) => {
+						hydrateMermaid(el as HTMLElement, isDark);
+					});
+			});
+		}, [isDark]);
+
+		// 3. Event Handling (Delegation)
+		const handleClick = useCallback(
+			(e: React.MouseEvent) => {
+				const target = e.target as HTMLElement;
+
+				// WikiLinks
+				const wikiLink = target.closest(".wiki-link, .internal-link");
+				if (wikiLink instanceof HTMLAnchorElement) {
+					const linkTarget =
+						wikiLink.dataset.target || wikiLink.getAttribute("href");
+					const href = wikiLink.getAttribute("href");
+					if (linkTarget && onWikiLinkClick) {
+						e.preventDefault();
+						onWikiLinkClick(linkTarget, href || undefined);
+						return;
+					}
+				}
+
+				// Callout Folds
+				const calloutHeader = target.closest(
+					".md-callout__header, .md-callout-header, .callout-title",
+				);
+				if (calloutHeader) {
+					const callout = calloutHeader.closest(
+						".md-callout, .callout",
+					) as HTMLElement;
+					if (callout?.hasAttribute("data-callout-fold")) {
+						const current = callout.getAttribute("data-callout-fold");
+						callout.setAttribute(
+							"data-callout-fold",
+							current === "+" ? "-" : "+",
+						);
+					}
+				}
+
+				// Math Options & Inline Math Copy
+				const mathCopyElement = target.closest(
+					".math-copy-option, .code-copy-btn-math, .inline-copy-btn, .code-copy-btn[data-is-math]",
+				);
+				if (mathCopyElement) {
+					const mathEl = mathCopyElement.closest("[data-tex]") as HTMLElement;
+					const tex = mathEl?.dataset.tex;
+					
+					if (tex) {
+						let finalTex = tex;
+						let label = "LaTeX";
+						const wrapType = mathCopyElement.getAttribute("data-wrap");
+						
+						if (wrapType === "$$") { finalTex = `$$\n${tex}\n$$`; label = "$$"; }
+						else if (wrapType === "\\[") { finalTex = `\\[\n${tex}\n\\]`; label = "\\["; }
+						else if (wrapType === "$") { finalTex = `$${tex}$`; label = "inline $"; }
+						
+						copyToClipboard(finalTex).then(() => {
+							toast.success(`Copied as ${label}`);
+							
+							// Handle visual feedback
+							const container = mathCopyElement.closest(".code-fence-container, .group\\/code");
+							if (container) {
+								container.classList.add("is-copied");
+								setTimeout(() => container.classList.remove("is-copied"), 2000);
+							}
+						});
+					}
+					return;
+				}
+
+				// Standard Code Copy
+				const codeCopyBtn = target.closest(".code-copy-btn");
+				if (codeCopyBtn) {
+					const container = codeCopyBtn.closest(".code-fence-container");
+					if (container) {
+						// Shiki line-by-line mode might have multiple <pre> elements
+						const preElements = container.querySelectorAll(".mockup-code pre");
+						let text = "";
+						if (preElements.length > 0) {
+							text = Array.from(preElements)
+								.map((pre) => pre.textContent || "")
+								.join("\n");
+						} else {
+							// Fallback to searching any pre/code in container
+							const codeEl =
+								container.querySelector("pre code") ||
+								container.querySelector("pre");
+							text = codeEl?.textContent || "";
+						}
+
+						if (text) {
+							copyToClipboard(text).then(() => {
+								toast.success("Code copied");
+								container.classList.add("is-copied");
+								setTimeout(() => container.classList.remove("is-copied"), 2000);
+							});
+						}
+					}
+					return;
+				}
+
+				// Close Source Mode
+				const closeBtn = target.closest(".code-close-btn");
+				if (closeBtn) {
+					const mathEl = closeBtn.closest(".source-mode") as HTMLElement;
+					if (mathEl) {
+						mathEl.classList.remove("source-mode");
+					}
+					return;
+				}
+
+				// Image Toolbar Actions
+				const imgActionBtn = target.closest(".img-action-btn") as HTMLElement;
+				if (imgActionBtn) {
+					e.stopPropagation();
+					e.preventDefault();
+					const url = imgActionBtn.dataset.url;
+					const filename = imgActionBtn.dataset.filename;
+
+					if (imgActionBtn.classList.contains("copy-img-btn") && url) {
+						copyToClipboard(url).then(() => toast.success("Image URL copied"));
+					} else if (
+						imgActionBtn.classList.contains("download-img-btn") &&
+						url
+					) {
+						const a = document.createElement("a");
+						a.href = url;
+						a.download = filename || "downloaded-image.png";
+						a.target = "_blank";
+						document.body.appendChild(a);
+						a.click();
+						document.body.removeChild(a);
+					}
+					return;
+				}
+			},
+			[onWikiLinkClick],
+		);
+
+		return (
+			<article
+				ref={containerRef}
+				className={`markdown-body space-y-6 ${className}`}
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is produced by the trusted server pipeline, and client-side updates are sanitized before morphdom applies them.
+				dangerouslySetInnerHTML={{ __html: stableHtml }}
+				onClick={handleClick}
+				onKeyDown={(e) => {
+					const target = e.target as HTMLElement;
+					const mathEl = target.closest("[data-tex]") as HTMLElement | null;
+					if (mathEl && (e.key === "Enter" || e.key === " ")) {
+						e.preventDefault();
+						toggleMathSource(mathEl);
+					}
+				}}
+				aria-label="Markdown Content"
+				onDoubleClick={(e) => {
+					const target = e.target as HTMLElement;
+					const mathEl = target.closest("[data-tex]") as HTMLElement | null;
+					if (mathEl) {
+						const tex = mathEl.dataset.tex;
+						const isBlock = mathEl.classList.contains("math-block") || mathEl.tagName === "DIV";
+						
+						if (!isBlock && tex) {
+							// Inline Math: Quick copy with $ wrapping AND Toggle Source
+							const finalTex = `$${tex}$`;
+							copyToClipboard(finalTex).then(() => {
+								toast.success("Copied as $ ... $");
+							});
+							toggleMathSource(mathEl);
+						} else {
+							// Block Math: Toggle source view for interaction
+							toggleMathSource(mathEl);
+						}
+					}
+				}}
+			/>
+		);
+	},
+);
+
+// Standalone component for small snippets
+export const LatexRenderer: React.FC<{
+	tex: string;
+	block?: boolean;
+	className?: string;
+}> = ({ tex, block = false, className = "" }) => {
+	const elRef = useRef<HTMLSpanElement>(null);
+	useLayoutEffect(() => {
+		if (elRef.current) {
+			renderMathElement(elRef.current);
+		}
+	}, [tex]);
+
+	return (
+		<span
+			ref={elRef}
+			className={`math-render ${block ? "math-block" : "math-inline"} ${className}`}
+			data-tex={tex}
+		>
+			{tex}
+		</span>
+	);
+};
+
 export function sanitizeLatex(tex: string): string {
-    // KaTeX v0.16.21+ patched \htmlData vulnerability
-    // As additional defense-in-depth, reject inputs containing known dangerous commands
-    const dangerousCommands = [
-        '\\htmlData',
-        '\\HTML',
-        '\\htmlClass',
-        '\\htmlId',
-        '\\htmlStyle'
-    ];
-
-    let clean = tex.trim();
-
-    // ✅ P0 FIX: Strip Obsidian-style blockquote prefixes if they leaked into the math content
-    // This happens when math is inside a blockquote and the parser doesn't perfectly isolate it.
-    clean = clean.split('\n').map(line => line.replace(/^\s*>\s*/, '')).join('\n').trim();
-
-    // ✅ P0 FIX: Robustly strip delimiters if they were captured
-    // Handle both single and double delimiters, and recursive wrapping (e.g., $$ $$)
-    while ((clean.startsWith('$$') && clean.endsWith('$$')) || (clean.startsWith('$') && clean.endsWith('$'))) {
-        if (clean.startsWith('$$') && clean.endsWith('$$') && clean.length >= 4) {
-            clean = clean.substring(2, clean.length - 2).trim();
-        } else if (clean.startsWith('$') && clean.endsWith('$') && clean.length >= 2) {
-            clean = clean.substring(1, clean.length - 1).trim();
-        } else {
-            break;
-        }
-    }
-
-    // Safety: prevent nested delimiters that KaTeX can't handle inside a rendered block
-    for (const cmd of dangerousCommands) {
-        const regex = new RegExp(`${cmd.replace(/\\/g, '\\\\')}(?![a-zA-Z])`, 'g');
-        if (regex.test(clean)) {
-            console.warn(`[Security] Blocked potentially dangerous LaTeX command: ${cmd}`);
-            clean = clean.replace(regex, `\\text{[BLOCKED: ${cmd}]} `);
-        }
-    }
-    return clean;
-}
-
-/**
- * ✅ P0 CONTRACT FIX: Support markdown-rs actual output format
- * 
- * markdown-rs outputs math as:
- * - Inline: <code class="language-math math-inline">a_n</code>
- * - Block:  <code class="language-math math-display">...</code>
- * 
- * TeX source is in textContent, NOT data-tex (unlike our old format)
- * Display mode: check for 'math-display' OR 'math-block' class
- */
-function renderMathElement(el: HTMLElement): void {
-    const rawTex = el.dataset.tex ?? el.textContent ?? '';
-    const trimmedRaw = rawTex.trim();
-
-    // ✅ P0: Smart display mode detection
-    // 1. Check classes (set by parser)
-    // 2. Check for $$ delimiters (raw capture)
-    // 3. Check for specific block environments that SHOULD be blocks
-    const hasDisplayDelimiters = trimmedRaw.startsWith('$$') && trimmedRaw.endsWith('$$');
-    const hasBlockEnv = /\\begin\{(?:aligned|align|gather|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases|equation|split)\}/.test(trimmedRaw);
-
-    const displayMode = el.classList.contains('math-display') ||
-        el.classList.contains('math-block') ||
-        hasDisplayDelimiters ||
-        hasBlockEnv;
-
-    const tex = sanitizeLatex(rawTex);
-
-    // ✅ Store cleaned tex back immediately to normalize all interaction sources
-    el.dataset.tex = tex;
-
-    // ✅ Normalize classes for consistent CSS targeting
-    el.classList.add('not-prose');
-
-    // ✅ FIX: If we're already showing source, don't try to render as KaTeX
-    if (el.classList.contains('show-source')) {
-        return;
-    }
-
-    if (displayMode) {
-        el.classList.add('math-block');
-        el.classList.remove('math-inline');
-    } else {
-        el.classList.add('math-inline');
-        el.classList.remove('math-block');
-    }
-
-    const cacheKey = (displayMode ? 'D|' : 'I|') + tex;
-    el.classList.remove('show-source');
-
-    // Safety check: if no tex content, don't try to render
-    if (!tex.trim()) {
-        return;
-    }
-
-    if (el.dataset.renderedKey === cacheKey) {
-        return;
-    }
-
-    const perfId = `katex-${cacheKey.slice(0, 12).replace(/[^a-zA-Z0-9]/g, '')}`;
-    performance.mark(`${perfId}-start`);
-
-    try {
-        let html = texHtmlCache.get(cacheKey);
-        if (!html) {
-            // 🚨 P0 安全：KaTeX渲染不可信LaTeX源的安全配置
-            // KaTeX v0.16.27 (≥ 0.16.21 required per advisory)
-            html = katex.renderToString(tex, {
-                displayMode,
-                throwOnError: false,
-                output: 'html',
-                // 安全选项：禁用信任模式和危险功能
-                trust: false,  // 禁止 \href、\url、\includegraphics 等
-                // ✅ 修复：允许 Unicode (如中文分号) 在数学模式中出现，避免用户误输入导致报错
-                strict: (errorCode: string) =>
-                    errorCode === 'unicodeTextInMathMode' ? 'ignore' : 'warn',
-                // 明确禁用 \htmlData 等危险命令（KaTeX 0.16.21+修复）
-                macros: {},  // 不允许自定义宏
-            });
-            texHtmlCache.set(cacheKey, html);
-            performance.mark(`${perfId}-rendered`);
-        } else {
-            performance.mark(`${perfId}-cache-hit`);
-        }
-        el.innerHTML = html;
-        el.dataset.renderedKey = cacheKey;
-        el.classList.add('is-rendered');
-        el.classList.remove('math-error');
-        if (el.querySelector('.katex-error')) {
-            el.classList.add('math-error');
-        }
-
-        performance.mark(`${perfId}-end`);
-        performance.measure("katex-render", `${perfId}-start`, `${perfId}-end`);
-    } catch {
-        el.textContent = tex;
-        el.classList.add('math-error');
-        el.dataset.renderedKey = cacheKey;
-    }
-
-    // ✅ Store tex in data-tex for popover/interaction (normalize format)
-    if (!el.dataset.tex) {
-        el.dataset.tex = tex;
-    }
-}
-
-/**
- * ✅ P0 FIX: Smart LaTeX syntax highlighting with proper tokenization
- *
- * Problems solved:
- * 1. Double escaping: escapeHtml first, then regex matching broke entities
- * 2. Selection issues: Tokenizer approach preserves selection flow
- * 3. HTML entity handling: Decode first if input already has entities
- */
-const LATEX_GREEK = new Set(['\\alpha', '\\beta', '\\gamma', '\\delta', '\\epsilon', '\\zeta', '\\eta', '\\theta', '\\iota', '\\kappa', '\\lambda', '\\mu', '\\nu', '\\xi', '\\pi', '\\rho', '\\sigma', '\\tau', '\\upsilon', '\\phi', '\\chi', '\\psi', '\\omega', '\\Gamma', '\\Delta', '\\Theta', '\\Lambda', '\\Xi', '\\Pi', '\\Sigma', '\\Upsilon', '\\Phi', '\\Psi', '\\Omega', '\\varepsilon', '\\varphi', '\\varpi', '\\varrho', '\\varsigma', '\\vartheta']);
-const LATEX_FUNCTIONS = new Set(['\\sin', '\\cos', '\\tan', '\\log', '\\ln', '\\exp', '\\lim', '\\max', '\\min', '\\sup', '\\inf', '\\det', '\\deg', '\\dim', '\\ker', '\\arg', '\\arccos', '\\arcsin', '\\arctan', '\\sinh', '\\cosh', '\\tanh', '\\cot', '\\sec', '\\csc', '\\arcsinh', '\\arccosh', '\\arctanh']);
-const LATEX_SYMBOLS = new Set(['\\sum', '\\int', '\\prod', '\\partial', '\\nabla', '\\infty', '\\forall', '\\exists', '\\in', '\\notin', '\\subset', '\\supset', '\\cup', '\\cap', '\\to', '\\rightarrow', '\\Rightarrow', '\\gets', '\\leftarrow', '\\Leftarrow', '\\leftrightarrow', '\\Leftrightarrow', '\\approx', '\\neq', '\\le', '\\ge', '\\times', '\\cdot', '\\pm', '\\mp', '\\hbar', '\\imath', '\\jmath', '\\ell', '\\wp', '\\Re', '\\Im', '\\aleph', '\\beth', '\\daleth', '\\gimel', '\\complement', '\\ell', '\\eth', '\\hbar', '\\hslash', '\\mho', '\\partial', '\\sqsubset', '\\sqsupset', '\\vartriangle', '\\triangledown', '\\triangleleft', '\\triangleright', '\\Box', '\\Diamond', '\\flat', '\\natural', '\\sharp', '\\clubsuit', '\\diamondsuit', '\\heartsuit', '\\spadesuit', '\\surd', '\\top', '\\bottom', '\\neg', '\\lnot', '\\land', '\\lor', '\\ni', '\\owns', '\\propto', '\\sim', '\\perp', '\\cdot', '\\circ', '\\ast', '\\times', '\\div', '\\pm', '\\mp', '\\oplus', '\\ominus', '\\otimes', '\\oslash', '\\odot', '\\wedge', '\\vee', '\\cap', '\\cup', '\\sqcap', '\\sqcup', '\\uplus', '\\amalg', '\\setminus', '\\bullet', '\\star', '\\dagger', '\\ddagger', '\\wr']);
-
-function highlightLatex(tex: string): string {
-    // Step 1: Decode HTML entities and normalize
-    let source = tex
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'");
-
-    // Step 2: Tokenize - extract syntax elements into placeholders
-    const tokens: Array<{ placeholder: string; html: string }> = [];
-    let tokenId = 0;
-
-    const createToken = (match: string, className: string): string => {
-        const placeholder = `\x00T${tokenId++}\x00`;
-        tokens.push({ placeholder, html: `<span class="${className}">${escapeHtml(match)}</span>` });
-        return placeholder;
-    };
-
-    // Order matters: most specific patterns first
-    // 1. Line breaks
-    source = source.replace(/\\\\/g, m => createToken(m, 'tex-newline'));
-
-    // 2. Control Sequences (Commands) - handle greek letters, functions, and symbols specifically
-    source = source.replace(/\\[a-zA-Z]+/g, m => {
-        if (LATEX_GREEK.has(m)) {
-            return createToken(m, 'tex-greek');
-        }
-        if (LATEX_FUNCTIONS.has(m)) {
-            return createToken(m, 'tex-function');
-        }
-        if (LATEX_SYMBOLS.has(m)) {
-            return createToken(m, 'tex-symbol');
-        }
-        if (m === '\\begin' || m === '\\end') {
-            return createToken(m, 'tex-env-cmd');
-        }
-        return createToken(m, 'tex-command');
-    });
-
-    // 3. Environment Arguments: {matrix}, {aligned} etc.
-    // Try to match arguments of \begin or \end specifically for better coloring
-    source = source.replace(/(\{)([a-zA-Z*]+)(\})/g, (_match, p1, p2, p3) => {
-        return createToken(p1, 'tex-brace') + createToken(p2, 'tex-env-name') + createToken(p3, 'tex-brace');
-    });
-
-    // 4. Special escaped chars like \{ \} \$ \& \%
-    source = source.replace(/\\[{}$#%&_^~]/g, m => createToken(m, 'tex-escape'));
-
-    // 5. Brackets & Parentheses
-    source = source.replace(/[{}[\]()]/g, m => createToken(m, 'tex-brace'));
-
-    // 6. Operators, Equal signs & Aligners
-    source = source.replace(/[&_^=+\-*/<>]|\\pm|\\mp|\\to|\\approx/g, m => createToken(m, 'tex-operator'));
-
-    // Step 3: Escape remaining plain text
-    source = escapeHtml(source);
-
-    // Step 4: Replace placeholders with highlighted HTML
-    for (const { placeholder, html } of tokens) {
-        source = source.replace(placeholder, html);
-    }
-
-    return source;
-}
-
-/**
- * ✅ P1 ENHANCED: Smart LaTeX source beautification
- *
- * Features:
- * 1. Decode HTML entities (from dataset.tex)
- * 2. Smart line breaking at \\ (LaTeX newlines) for single-line formulas
- * 3. Auto-indentation for \begin{...} / \end{...} environments
- * 4. Comprehensive environment support (aligned, cases, matrix, etc.)
- * 5. Preserve original formatting if already multi-line
- */
-function formatLatexSource(tex: string): string[] {
-    // Step 1: Decode HTML entities and normalize
-    let source = tex
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/\r\n/g, '\n')
-        .replace(/\r/g, '\n');
-
-    // Step 2: Smart Prettifying
-    // 1. Break before/after environments
-    source = source.replace(/(\\begin\{[^}]+\})/g, '\n$1\n');
-    source = source.replace(/(\\end\{[^}]+\})/g, '\n$1\n');
-
-    // 2. Break after LaTeX line breaks \\
-    source = source.replace(/\\\\/g, '\\\\\n');
-
-    // 3. Normalize alignment operators (&) - No longer split here to keep matrix rows together
-    source = source.replace(/\s*&\s*/g, ' & ');
-
-    // 4. Force breaks for very long formulas that have no structure
-    if (!source.includes('\n') && source.length > 50) {
-        let depth = 0;
-        let result = '';
-        for (let i = 0; i < source.length; i++) {
-            const char = source[i];
-            if (char === '{') {
-                depth++;
-            } else if (char === '}') {
-                depth--;
-            }
-
-            // Break at principal operators (=, \to) at top level
-            if (depth === 0 && i > 25) {
-                if (char === '=' && source[i - 1] !== '\\' && source[i - 1] !== '<' && source[i - 1] !== '>') {
-                    result += '\n  = ';
-                    continue;
-                }
-            }
-            result += char;
-        }
-        source = result;
-    }
-
-    let rawLines = source.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-    // Step 3: Auto-indent based on \begin{} and \end{} nesting
-    const nestingEnvs = new Set([
-        'aligned', 'align', 'align*', 'alignat', 'alignat*', 'flalign', 'flalign*',
-        'eqnarray', 'eqnarray*', 'cases', 'dcases', 'rcases', 'dcases*', 'rcases*',
-        'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'smallmatrix',
-        'array', 'tabular', 'tabular*', 'equation', 'equation*', 'gather', 'gather*',
-        'multline', 'multline*', 'split', 'subequations', 'empheq',
-    ]);
-
-    const result: string[] = [];
-    let depth = 0;
-    const INDENT = '  ';
-
-    for (const line of rawLines) {
-        // Decrease indent BEFORE the line if it starts with \end
-        const endMatch = line.match(/^\\end\{([\w\*]+)\}/);
-        if (endMatch && nestingEnvs.has(endMatch[1])) {
-            depth = Math.max(0, depth - 1);
-        }
-
-        // Add indented line
-        result.push(INDENT.repeat(depth) + line);
-
-        // Increase indent AFTER the line if it starts with \begin
-        const beginMatch = line.match(/^\\begin\{([\w\*]+)\}/);
-        if (beginMatch && nestingEnvs.has(beginMatch[1])) {
-            if (!line.includes('\\end{' + beginMatch[1] + '}')) {
-                depth++;
-            }
-        }
-    }
-
-    return result.length > 0 ? result : [''];
-}
-
-function toggleMathSource(el: HTMLElement, t: (key: string, options?: any) => string = (k, o) => o?.defaultValue || k): void {
-    const tex = el.dataset.tex || '';
-    const isShowingSource = el.classList.contains('show-source');
-
-    // Formulas with \begin{...} environments, multiple \\, or very long text should use block display
-    const hasBlockContent = /\\begin\{/.test(tex) || (tex.match(/\\\\/g) || []).length >= 2 || tex.length > 80;
-    const isBlock = el.classList.contains('math-block') || el.classList.contains('math-display') || hasBlockContent;
-
-    // Reset formula counter if needed to avoid "0" numbering issue
-    if (isBlock && !document.body.style.counterReset.includes('math-eq-counter')) {
-        document.body.style.counterReset = (document.body.style.counterReset || '') + ' math-eq-counter';
-    }
-
-    if (isShowingSource) {
-        // Restore to rendered formula
-        delete el.dataset.renderedKey;
-        el.classList.remove('show-source');
-        renderMathElement(el);
-    } else {
-        // Toggle to source view with premium container style
-        el.classList.add('show-source');
-        el.classList.remove('is-rendered');
-
-        // ✅ FIX: Use smart formatting for multi-line display
-        const formattedLines = formatLatexSource(tex);
-        const blockId = `math-src-${generateContentHash(tex)}`;
-
-        // ✅ UNIFIED: Wrap in .code-fence-container to reuse all code block styling
-        const content = isBlock
-            ? `<div class="code-fence-container latex-source" data-lang="latex" data-key="${blockId}">
-                <div class="code-fence-header group/latex-hdr" data-key="${blockId}-h">
-                    <div class="code-header-left">
-                        <div class="code-dots">
-                            <div class="code-dot code-dot-red"></div>
-                            <div class="code-dot code-dot-amber"></div>
-                            <div class="code-dot code-dot-green"></div>
-                        </div>
-                    </div>
-                    <div class="code-header-right flex items-center gap-4">
-                        <span class="code-lang-text">LaTeX</span>
-                        <div class="flex items-center gap-1 opacity-0 group-hover/latex-hdr:opacity-100 transition-all duration-300">
-                           <button type="button" class="code-copy-btn-math ml-2 flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-primary uppercase active:scale-95" aria-label="${t('markdown.action.copy_latex', { defaultValue: '复制 LaTeX' })}"><span>COPY</span></button>
-                           <button type="button" class="code-close-btn flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-white/50 hover:text-white uppercase active:scale-95" aria-label="${t('markdown.action.back_to_render', { defaultValue: '返回渲染' })}"><span>BACK</span></button>
-                        </div>
-                    </div>
-                </div>
-                <div class="code-fence mockup-code" data-key="${blockId}-c">${formattedLines.map((line, i) => {
-                const lineId = `${blockId}-L${i + 1}`;
-                return `<pre id="${lineId}" data-key="${lineId}" tabindex="-1" data-prefix="${i + 1}" data-line="${i + 1}"><code>${highlightLatex(line)}</code></pre>`;
-            }).join('')}</div>
-                <div class="latex-ref-panel hidden">
-                    <div class="ref-panel-header">
-                        <span class="ref-panel-title">${t('markdown.panel.latex_ref', { defaultValue: 'LaTeX 参考' })}</span>
-                        <button type="button" class="ref-panel-close">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
-                    </div>
-                    <div class="ref-panel-content"></div>
-                </div>
-            </div>`
-            : `<code class="math-source-content">${highlightLatex(tex)}<button type="button" class="inline-copy-btn ml-2 opacity-30 hover:opacity-100 transition-opacity" title="${t('markdown.action.copy', { defaultValue: '复制' })}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></button></code>`;
-
-        el.innerHTML = content;
-
-        // ✅ AUTO-COPY on initial toggle to source view
-        copyToClipboard(tex).then(success => {
-            if (success) notify(t('markdown.notifications.latex_copied', { defaultValue: '公式源码已复制' }), 'success');
-        });
-
-        const codeArea = el.querySelector('.code-fence.mockup-code') as HTMLElement;
-        if (codeArea) {
-            setupCodeBlockScrollDetection(codeArea);
-        }
-    }
-}
-
-function getLatexDescription(cmd: string): string {
-    const DESCRIPTIONS: Record<string, string> = {
-        '\\alpha': 'Alpha (希腊字母)',
-        '\\beta': 'Beta (希腊字母)',
-        '\\gamma': 'Gamma (希腊字母)',
-        '\\delta': 'Delta (希腊字母)',
-        '\\theta': 'Theta (希腊字母)',
-        '\\lambda': 'Lambda (希腊字母)',
-        '\\pi': 'Pi (圆周率)',
-        '\\sigma': 'Sigma (标准差/求和)',
-        '\\omega': 'Omega (频率)',
-        '\\sum': '累加求和',
-        '\\int': '积分符号',
-        '\\prod': '累乘符号',
-        '\\partial': '偏导数符号',
-        '\\nabla': '梯度算子',
-        '\\infty': '无穷大',
-        '\\frac': '分式',
-        '\\dfrac': '显示模式分式',
-        '\\sqrt': '根号',
-        '\\hbar': '约化普朗克常数',
-        '\\hat': '向量/算符帽子',
-        '\\bar': '平均值符号',
-        '\\vec': '向量符号',
-        '\\begin': '环境开始',
-        '\\end': '环境结束',
-        '\\matrix': '基础矩阵',
-        '\\pmatrix': '圆括号矩阵',
-        '\\bmatrix': '方括号矩阵',
-    };
-    return DESCRIPTIONS[cmd] || '';
-}
-
-/**
- * ✅ P0: Extract a specific section from HTML based on header hierarchy
- * Matches Obsidian/Wiki transclusion logic: captures from header until next header of same or higher level.
- */
-function extractSection(html: string, fragmentPath: string): string {
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-
-    const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
-    const fragments = fragmentPath.split('#').map(norm);
-
-    let startNode: Element | null = null;
-    let currentLevel = 0;
-
-    // 1. Precise Recursive Scope Slicing
-    for (const f of fragments) {
-        let candidates: Element[] = [];
-
-        if (!startNode) {
-            // Initial search: anywhere in the document
-            candidates = Array.from(temp.querySelectorAll('h1, h2, h3, h4, h5, h6'));
-        } else {
-            // Sub-search: only search within the scope of startNode
-            // Captured headers must be sub-headings (level > currentLevel)
-            // and appear before any heading of level <= currentLevel
-            let curr = startNode.nextElementSibling;
-            while (curr) {
-                if (/^H[1-6]$/.test(curr.tagName)) {
-                    const level = Number.parseInt(curr.tagName[1], 10);
-                    if (level <= currentLevel) {
-                        break; // Exit scope
-                    }
-                    candidates.push(curr);
-                }
-                curr = curr.nextElementSibling;
-            }
-        }
-
-        const found = candidates.find(h => norm(h.textContent || '') === f);
-        if (!found) {
-            return ""; // Link broke or heading renamed
-        }
-
-        startNode = found;
-        currentLevel = Number.parseInt(found.tagName[1]);
-    }
-
-    if (!startNode) {
-        return '';
-    }
-
-    // 2. Section Slicing: Capture content including the start node
-    const fragment_nodes: Node[] = [startNode.cloneNode(true)];
-    let cur = startNode.nextSibling;
-    while (cur) {
-        if (cur.nodeType === 1) { // Element
-            const el = cur as HTMLElement;
-            if (/^H[1-6]$/.test(el.tagName)) {
-                if (Number.parseInt(el.tagName[1]) <= currentLevel) {
-                break;
-            }
-            }
-        }
-        fragment_nodes.push(cur.cloneNode(true));
-        cur = cur.nextSibling;
-    }
-
-    const wrap = document.createElement('div');
-    wrap.className = 'wiki-embed-section-content';
-    fragment_nodes.forEach((node: Node) => {
-        wrap.appendChild(node);
-    });
-    return wrap.innerHTML;
-}
-
-// Global resolve cache to prevent redundant fetches within the same render cycle
-const noteContentCache = new Map<string, string | Promise<string>>();
-
-// toggleCodeSource - reserved for future code block source toggle feature
-// function toggleCodeSource(el: HTMLElement): void { ... }
-
-// escapeHtml is defined at module scope above (P0-3 fix)
-
-/**
- * 基础语法高亮 - 使用正则表达式为常见语言添加颜色
- * 支持: Python, JavaScript, TypeScript, Java, C/C++, Rust, Go等
- */
-const highlightCache = new Map<string, RegExp>();
-
-function highlightCode(code: string, language: string): string {
-    const lang = language.toLowerCase();
-    let highlighted = escapeHtml(code);
-    const patterns: Array<{ regex: RegExp; className: string }> = [];
-    // 1. Compile or get cached patterns
-    const getRegex = (key: string, source: string, flags = "g") => {
-        const cacheKey = `${lang}|${key}`;
-        const cached = highlightCache.get(cacheKey);
-        if (cached) {
-            return cached;
-        }
-        const regex = new RegExp(source, flags);
-        highlightCache.set(cacheKey, regex);
-        return regex;
-    };
-
-    if (["python", "ruby", "bash", "shell"].includes(lang)) {
-        patterns.push({ regex: getRegex("comment", /(#.*$)/.source, "gm"), className: "token comment" });
-    } else if (["javascript", "typescript", "java", "c", "cpp", "rust", "go", "csharp"].includes(lang)) {
-        patterns.push({ regex: getRegex("comment-sl", /(\/\/.*$)/.source, "gm"), className: "token comment" });
-        patterns.push({ regex: getRegex("comment-ml", /(\/\*[\s\S]*?\*\/)/.source, "g"), className: "token comment" });
-    }
-    patterns.push({ regex: getRegex('string', /(&quot;[^&quot;]*&quot;|'[^']*'|&#39;[^#]*&#39;)/.source, 'g'), className: 'token string' });
-    patterns.push({ regex: getRegex('number', /\b(\d+\.?\d*)\b/.source, 'g'), className: 'token number' });
-
-    const keywords: Record<string, string[]> = {
-        python: ['def', 'class', 'import', 'from', 'as', 'if', 'elif', 'else', 'for', 'while', 'in', 'return', 'yield', 'lambda', 'with', 'try', 'except', 'finally', 'raise', 'True', 'False', 'None', 'and', 'or', 'not', 'is', 'async', 'await'],
-        javascript: ['function', 'const', 'let', 'var', 'if', 'else', 'for', 'while', 'return', 'class', 'extends', 'import', 'export', 'from', 'as', 'default', 'async', 'await', 'new', 'this', 'super', 'static', 'try', 'catch', 'finally', 'throw', 'typeof', 'instanceof'],
-        typescript: ['function', 'const', 'let', 'var', 'if', 'else', 'for', 'while', 'return', 'class', 'extends', 'import', 'export', 'from', 'as', 'default', 'async', 'await', 'new', 'this', 'super', 'static', 'try', 'catch', 'finally', 'throw', 'typeof', 'instanceof', 'interface', 'type', 'enum', 'public', 'private', 'protected', 'readonly'],
-        rust: ['fn', 'let', 'mut', 'const', 'static', 'if', 'else', 'match', 'for', 'while', 'loop', 'return', 'struct', 'enum', 'impl', 'trait', 'pub', 'use', 'mod', 'crate', 'self', 'super', 'async', 'await', 'where'],
-    };
-
-    const langKeywords = keywords[lang] || keywords.javascript;
-    patterns.push({ regex: getRegex('keyword', `\\b(${langKeywords.join('|')})\\b`, 'g'), className: 'token keyword' });
-    patterns.push({ regex: getRegex('function', /\b(\w+)(?=\()/.source, 'g'), className: 'token function' });
-
-    // 2. Optimized Tokenization Flow
-    const parts: Array<{ text: string; isToken: boolean }> = [{ text: highlighted, isToken: false }];
-    for (const { regex, className } of patterns) {
-        const newParts: Array<{ text: string; isToken: boolean }> = [];
-        for (const part of parts) {
-            if (part.isToken) {
-                newParts.push(part);
-                continue;
-            }
-            let lastIdx = 0;
-            let m: RegExpExecArray | null;
-            regex.lastIndex = 0;
-            m = regex.exec(part.text);
-            while (m !== null) {
-                if (m.index > lastIdx) {
-                    newParts.push({
-                        text: part.text.substring(lastIdx, m.index),
-                        isToken: false,
-                    });
-                }
-                newParts.push({ text: `<span class="${className}">${m[0]}</span>`, isToken: true });
-                lastIdx = m.index + m[0].length;
-                m = regex.exec(part.text);
-            }
-            if (lastIdx < part.text.length) {
-                newParts.push({
-                    text: part.text.substring(lastIdx),
-                    isToken: false,
-                });
-            }
-        }
-        parts.length = 0; parts.push(...newParts);
-    }
-    return parts.map(p => p.text).join('');
-}
-
-/**
- * ✅ 代码块滚动状态检测
- * 当代码块滚动到底部时添加 .scrolled-bottom 类，隐藏渐变遮罩
- */
-const scrollListenerMap = new WeakMap<HTMLElement, () => void>();
-
-function setupCodeBlockScrollDetection(el: HTMLElement): void {
-    // 避免重复添加监听器
-    if (scrollListenerMap.has(el)) {
-        return;
-    }
-
-    const checkScrollPosition = () => {
-        const isScrolledToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
-        const isScrollable = el.scrollHeight > el.clientHeight + 10;
-
-        if (isScrollable && isScrolledToBottom) {
-            el.classList.add('scrolled-bottom');
-        } else {
-            el.classList.remove('scrolled-bottom');
-        }
-    };
-
-    // 初始检查
-    checkScrollPosition();
-
-    // 添加滚动监听
-    el.addEventListener('scroll', checkScrollPosition, { passive: true });
-    scrollListenerMap.set(el, checkScrollPosition);
-}
-
-
-
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({
-    html: initialHtml,
-    content,
-    className = '',
-    density = 'comfortable',
-    onWikiLinkClick,
-    resolveAsset,
-    resolveNote,
-    showTexBadge = true,
-    t = (k: string, o?: { defaultValue?: string; [key: string]: any }) => o?.defaultValue || k
-}: MarkdownRendererProps) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    // lastHashRef and idleHandleRef were indeed unused and removed
-    const error: string | null = null; // Defined as constant since setError was unused
-
-    // ✅ P1-2: Refs for interaction management
-    const longPressTimerRef = useRef<number | null>(null);
-    const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
-    const lastActiveLineRef = useRef<HTMLElement | null>(null);
-    const lastSelectedLineRef = useRef<HTMLElement | null>(null);
-    const embedQueueRef = useRef<Set<HTMLElement>>(new Set());
-    const embedObserverRef = useRef<IntersectionObserver | null>(null);
-    const previewTimerRef = useRef<number | null>(null);
-    const [preview, setPreview] = useState<PreviewState | null>(null);
-    const [parsedResult, setParsedResult] = useState<ParsedResult | null>(null);
-
-
-    // ✅ P0 FIX: Removed WASM init loop
-
-
-    const handleMouseEnter = useCallback((e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-        const wikiLink = target.closest('.wiki-link');
-
-        if (wikiLink instanceof HTMLElement) {
-            const { target: linkTarget, page, fragment } = wikiLink.dataset;
-            if (!linkTarget || !page) {
-                return;
-            }
-
-            // Clear any pending dismissal
-            if (previewTimerRef.current) {
-                window.clearTimeout(previewTimerRef.current);
-                previewTimerRef.current = null;
-            }
-
-            // Simple debounce for showing (150ms)
-            previewTimerRef.current = window.setTimeout(async () => {
-                const rect = wikiLink.getBoundingClientRect();
-
-                // ✅ UX: Viewport-aware positioning
-                const menuWidth = 320;
-                let x = rect.left + window.scrollX;
-                // If it overflows right side of window
-                if (x + menuWidth > window.innerWidth + window.scrollX - 20) {
-                    x = window.innerWidth + window.scrollX - menuWidth - 20;
-                }
-
-                // Set initial loading state
-                setPreview({
-                    target: linkTarget,
-                    page,
-                    fragment: fragment || '',
-                    x: Math.max(10, x),
-                    y: rect.bottom + window.scrollY + 8,
-                    content: null,
-                    visible: true
-                });
-
-                // Fetch content
-                if (resolveNote) {
-                    try {
-                        let html = noteContentCache.get(page);
-                        if (html instanceof Promise) {
-                            html = await html;
-                        }
-                        if (!html) {
-                            const p = resolveNote(page);
-                            noteContentCache.set(page, p);
-                            html = await p;
-                            noteContentCache.set(page, html);
-                        }
-
-                        if (fragment) {
-                            html = extractSection(html, fragment);
-                        }
-
-                        setPreview((prev: PreviewState | null) => prev?.page === page ? { ...prev, content: html || 'No content found' } : prev);
-                    } catch (err) {
-                        setPreview((prev: PreviewState | null) => prev?.page === page ? { ...prev, content: 'Failed to load preview' } : prev);
-                    }
-                }
-            }, 150);
-        }
-    }, [resolveNote]);
-
-    const handleMouseLeave = useCallback(() => {
-        if (previewTimerRef.current) {
-            window.clearTimeout(previewTimerRef.current);
-            previewTimerRef.current = null;
-        }
-
-        // Delay dismissal slightly to allow moving mouse TO the preview (optional, but smoother)
-        previewTimerRef.current = window.setTimeout(() => {
-            setPreview(null);
-        }, 100);
-    }, []);
-
-    const handleClick = useCallback((e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-
-        // 0. Handle wiki links [[...]]
-        const wikiLink = target.closest('.wiki-link');
-        if (wikiLink instanceof HTMLAnchorElement) {
-            e.preventDefault();
-            const linkTarget = wikiLink.dataset.target;
-            if (linkTarget && onWikiLinkClick) {
-                onWikiLinkClick(linkTarget);
-            }
-            return;
-        }
-
-        // 1. Handle anchor links (both the hover icon and generic internal links)
-        const anchor = target.closest('a');
-        if (anchor && anchor instanceof HTMLAnchorElement) {
-            const href = anchor.getAttribute('href');
-            if (href?.startsWith('#') && href.length > 1) {
-                e.preventDefault();
-                const id = decodeURIComponent(href.slice(1));
-
-                // Prioritize local lookup in case of multiple renderers
-                const targetElement = containerRef.current?.querySelector(`[id="${CSS.escape(id)}"]`) || document.getElementById(id);
-
-                if (targetElement) {
-                    // Find the closest scrollable parent (handles nested scroll containers like in test pages)
-                    const getScrollParent = (element: HTMLElement): HTMLElement | null => {
-                        let parent: HTMLElement | null = element.parentElement;
-                        while (parent) {
-                            const style = window.getComputedStyle(parent);
-                            const overflowY = style.overflowY;
-                            if ((overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight) {
-                                return parent;
-                            }
-                            parent = parent.parentElement;
-                        }
-                        return null;
-                    };
-
-                    const scrollContainer = getScrollParent(targetElement as HTMLElement);
-
-                    if (scrollContainer) {
-                        // Calculate position relative to the scrollable container
-                        const containerRect = scrollContainer.getBoundingClientRect();
-                        const targetRect = targetElement.getBoundingClientRect();
-                        const scrollOffset = targetRect.top - containerRect.top + scrollContainer.scrollTop - 80; // 80px header offset
-
-                        scrollContainer.scrollTo({
-                            top: Math.max(0, scrollOffset),
-                            behavior: 'smooth'
-                        });
-                    } else {
-                        // Fallback to standard scrollIntoView for window-level scrolling
-                        targetElement.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start'
-                        });
-                    }
-
-                    // Update URL hash (address bar) without causing a page jump
-                    window.history.pushState(null, '', '#' + id);
-
-                    // UX: Auto-copy is disabled by default to avoid annoyance, 
-                    // users can right-click the link if they want the URL.
-                } else {
-                    // Fallback: update URL anyway
-                    window.history.replaceState(null, '', '#' + id);
-                }
-                return;
-            }
-        }
-
-        // 2. Handle code and math copy buttons
-        const copyBtn = target.closest('.code-copy-btn');
-        if (copyBtn) {
-            const container = copyBtn.closest('.code-fence-container') as HTMLElement;
-            const mathParent = copyBtn.closest(MATH_SELECTOR) as HTMLElement;
-
-            // Priority: If it's math source view
-            if (mathParent && mathParent.dataset.tex) {
-                copyToClipboard(mathParent.dataset.tex).then(success => {
-                    if (success) {
-                        notify(t('markdown.notifications.latex_copied', { defaultValue: '公式源码已复制' }), 'success');
-                        container?.classList.add('is-copied');
-                        setTimeout(() => container?.classList.remove('is-copied'), 600);
-                    }
-                });
-                return;
-            }
-
-            // Normal code block copy
-            const selectedLines = container?.querySelectorAll('pre.is-selected, pre[aria-selected="true"]');
-            if (selectedLines && selectedLines.length > 0) {
-                const lines = Array.from(selectedLines).map(el => el.querySelector('code')?.textContent || '');
-                copyToClipboard(lines.join('\n')).then(ok => {
-                    notify(ok ? 'markdown:markdown.notifications.code_lines_copied' : 'markdown:markdown.notifications.copy_failed', ok ? 'success' : 'error', ok ? { count: lines.length } : undefined);
-                    if (ok) {
-                        container.classList.add('is-copied');
-                        selectedLines.forEach((line: Element) => {
-                            line.classList.add('is-copied');
-                        });
-                        setTimeout(() => {
-                            container.classList.remove('is-copied');
-                            selectedLines.forEach((line: Element) => {
-                            line.classList.remove('is-copied');
-                        });
-                        }, 400);
-                    }
-                });
-            } else {
-                const codeKey = container.dataset.codeKey;
-                const fullCode = codeKey ? codeStore.get(codeKey) || '' : '';
-                if (fullCode) {
-                    copyToClipboard(fullCode).then(success => {
-                        notify(success ? 'markdown:markdown.notifications.code_copied' : 'markdown:markdown.notifications.copy_failed', success ? 'success' : 'error');
-                        if (success) {
-                            container.classList.add('is-copied');
-                            const codeElements = container.querySelectorAll('.mockup-code pre');
-                            codeElements.forEach((line: Element) => {
-                                line.classList.add('is-copied');
-                            });
-                            setTimeout(() => {
-                                container.classList.remove('is-copied');
-                                codeElements.forEach((line: Element) => {
-                                    line.classList.remove('is-copied');
-                                });
-                            }, 400);
-                        }
-                    });
-                }
-            }
-            return;
-        }
-
-        // 2.1 Handle math source view interaction (back, ref, etc)
-        const closeBtn = target.closest('.code-close-btn');
-        if (closeBtn) {
-            const mathEl = closeBtn.closest(MATH_SELECTOR) as HTMLElement;
-            if (mathEl) {
-                toggleMathSource(mathEl);
-            }
-            return;
-        }
-
-        // 3. Handle IDE Line Interaction (Active / Selection / Range)
-        const codeLine = target.closest('.mockup-code pre');
-        if (codeLine instanceof HTMLElement) {
-            // ✅ P0 FIX: Prevent event bubbling/standard behaviors to stabilize interaction
-            // This prevents "clicking line index" from potentially triggering accidental re-renders or losing focus
-            e.preventDefault();
-            e.stopPropagation();
-
-            const container = codeLine.closest('.code-fence-container') as HTMLElement;
-            if (!container) {
-                return; // Defensive check
-            }
-
-            const style = getComputedStyle(container);
-            const gutterRem = Number.parseFloat(style.getPropertyValue('--code-gutter')) || 3.5;
-            const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-            const gutterPx = gutterRem * rootFontSize;
-
-            const rect = codeLine.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const isGutterClick = clickX < gutterPx;
-
-            // Handle focus and activity
-            if (lastActiveLineRef.current && lastActiveLineRef.current !== codeLine) {
-                lastActiveLineRef.current.classList.remove('is-active');
-            }
-            codeLine.classList.add('is-active');
-            lastActiveLineRef.current = codeLine;
-            codeLine.focus();
-
-            // ✅ IDE State 1: Range Selection (Shift + Click)
-            if (e.shiftKey && lastSelectedLineRef.current) {
-                const allLines = Array.from(container.querySelectorAll('.mockup-code pre')) as HTMLElement[];
-                const startIdx = allLines.indexOf(lastSelectedLineRef.current);
-                const endIdx = allLines.indexOf(codeLine);
-
-                if (startIdx !== -1 && endIdx !== -1) {
-                    const [low, high] = [Math.min(startIdx, endIdx), Math.max(startIdx, endIdx)];
-                    allLines.forEach((line, idx) => {
-                        if (idx >= low && idx <= high) {
-                            line.classList.add('is-selected');
-                            line.setAttribute('aria-selected', 'true');
-                        }
-                    });
-                }
-                const count = container.querySelectorAll('pre.is-selected').length;
-                const copySpan = container.querySelector('.code-copy-btn span');
-                if (copySpan) copySpan.textContent = t('markdown.action.copy_lines', { defaultValue: `复制 ${count} 行`, count });
-                return;
-            }
-
-            // ✅ IDE State 3: Toggle Selection (Gutter Click)
-            if (isGutterClick) {
-                const isSelected = codeLine.classList.toggle('is-selected');
-                codeLine.setAttribute('aria-selected', isSelected ? 'true' : 'false');
-                lastSelectedLineRef.current = codeLine;
-
-                const count = container.querySelectorAll('pre.is-selected').length;
-                const copySpan = container.querySelector('.code-copy-btn span');
-                if (copySpan) copySpan.textContent = count > 0 ? t('markdown.action.copy_lines', { defaultValue: `复制 ${count} 行`, count }) : t('markdown.action.copy', { defaultValue: '复制' });
-                return;
-            }
-
-            // ✅ IDE State 4: Normal active line highlight
-            if (!e.ctrlKey && !e.metaKey) {
-                container.querySelectorAll('pre.is-selected').forEach(el => {
-                    el.classList.remove('is-selected');
-                    el.removeAttribute('aria-selected');
-                });
-                const copySpan = container.querySelector('.code-copy-btn span');
-                if (copySpan) copySpan.textContent = t('markdown.action.copy', { defaultValue: '复制' });
-            }
-            lastSelectedLineRef.current = codeLine;
-        }
-    }, [t]);
-
-    const handleMouseOut = useCallback((e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-        const mathEl = target.closest(MATH_SELECTOR);
-
-        if (mathEl instanceof HTMLElement && mathEl.classList.contains('show-source')) {
-            const related = e.relatedTarget as Node | null;
-            // Only toggle back if we truly left the math element (not moving between its children)
-            if (!related || !mathEl.contains(related)) {
-                // Return to rendered view
-                toggleMathSource(mathEl, t);
-            }
-        }
-    }, [t]);
-
-    const handleContextMenu = useCallback((_e: React.MouseEvent) => {
-        // ✅ UX: Disable custom context menu for formula to keep interaction simple and less discoverable/annoying.
-        // We rely on double-click instead.
-    }, []);
-
-    const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-
-        const mathEl = target.closest(MATH_SELECTOR);
-        if (mathEl instanceof HTMLElement && mathEl.dataset.tex) {
-            toggleMathSource(mathEl, t);
-            return;
-        }
-    }, [t]);
-
-
-    // ✅ P1-4: Split parsing (useEffect) from DOM patching (useLayoutEffect)
-
-    useEffect(() => {
-        // Option 1: We already have pre-rendered HTML from the DB (The SSOT path)
-        if (initialHtml) {
-            setParsedResult({ 
-                processedHtml: initialHtml, 
-                hash: generateContentHash(initialHtml) 
-            });
-            return;
-        }
-
-        // Option 2: Fallback to content parsing (Note: Requires a parser)
-        // If we want zero-WASM, we should ideally NOT parse here or use a lighter JS parser
-        if (!content) {
-            return;
-        }
-
-        // For now, if we have content but no HTML, we show a warning or fallback
-        // Given the goal of removing WASM, we should expect HTML to be the main path.
-        setParsedResult({
-            processedHtml: `<div class="p-4 border border-dashed border-base-content/20 rounded-xl text-center text-sm text-base-content/50">
-                ${t('markdown.error.no_rendered_html', { defaultValue: 'Waiting for database synchronization...' })}
-            </div>`,
-            hash: 'pending'
-        });
-    }, [initialHtml, content]);
-
-    useLayoutEffect(() => {
-        if (!parsedResult || !containerRef.current) {
-            return;
-        }
-
-        const perfId = `dom-${parsedResult.hash.slice(0, 8)}`;
-        performance.mark(`${perfId}-morph-start`);
-
-        // 🚨 P0-4: Direct fragment injection to reduce parse cycles
-        // Security: Filter style attribute to allow only safe CSS properties
-        const ALLOWED_STYLE_PROXIES = new Set(['text-align', 'color', 'background-color', 'font-weight', 'font-style', 'text-decoration', 'padding-left', 'margin-left']);
-
-        DOMPurify.addHook('afterSanitizeAttributes', (node: Element) => {
-            if ('getAttribute' in node) {
-                const style = node.getAttribute('style');
-                if (style) {
-                    const parts = style.split(';').map((s: string) => s.trim()).filter(Boolean);
-                    const filtered = parts.filter((part: string) => {
-                        const prop = part.split(':')[0].toLowerCase().trim();
-                        // Protect against url() or other advanced CSS vectors
-                        return ALLOWED_STYLE_PROXIES.has(prop) && !part.includes('url(');
-                    });
-                    if (filtered.length > 0) {
-                        node.setAttribute('style', filtered.join('; '));
-                    } else {
-                        node.removeAttribute('style');
-                    }
-                }
-            }
-        });
-
-        const fragment = DOMPurify.sanitize(parsedResult.processedHtml, {
-            RETURN_DOM_FRAGMENT: true,
-            // ✅ Restore ID for deep linking and style for KaTeX/Layout
-            // Note: 'style' is still allowed in ADD_ATTR, but our hook will sanitize its content.
-            ADD_ATTR: ['id', 'style', 'data-tex', 'data-target', 'data-page', 'data-fragment', 'data-embed', 'data-type', 'data-alias', 'data-key', 'data-lang', 'data-code', 'data-code-key', 'data-prefix', 'data-line', 'aria-selected', 'aria-hidden', 'tabindex'],
-            ADD_TAGS: ['svg', 'path'],
-            USE_PROFILES: { html: true, mathMl: true, svg: true },
-        }) as unknown as DocumentFragment;
-
-        // ✅ P1-3: Table Wrapper Injection for Overflow & Layout Spacing
-        // industry-standard wrapping for responsive tables
-        fragment.querySelectorAll("table").forEach((table: Element) => {
-            if (table.parentElement?.classList.contains("md-table-wrap")) {
-                return;
-            }
-            const wrap = document.createElement("div");
-            wrap.className = "md-table-wrap";
-            table.replaceWith(wrap);
-            wrap.appendChild(table);
-        });
-
-        // Clean up hook to avoid affecting other sanitize calls if any
-        DOMPurify.removeHook('afterSanitizeAttributes');
-
-        // ✅ Robustness: Wrapper div for morphdom compatibility with fragments
-        const tempDiv = document.createElement('div');
-        tempDiv.appendChild(fragment);
-
-        const mathQueue = new Set<HTMLElement>();
-        morphdom(containerRef.current, tempDiv, {
-            childrenOnly: true,
-            // ✅ P0-3: Safe nodeType check before accessing dataset
-            getNodeKey: (node: Node) => {
-                if (!node || node.nodeType !== 1) {
-                    return null;
-                }
-                const el = node as HTMLElement;
-                return el.dataset.key || el.id || null;
-            },
-            onBeforeElUpdated: (from: Node, to: Node) => {
-                if (!(from instanceof HTMLElement) || !(to instanceof HTMLElement)) {
-                    return true;
-                }
-                const fk = from.dataset.key;
-                const tk = to.dataset.key;
-                // ✅ P0-4: Preserve interactive state on keyed nodes (IDE experience)
-                // Support math state persistence even for unkeyed elements (data-tex based)
-                const isMath = from.dataset.tex !== undefined;
-                if ((fk && fk === tk) || (isMath && from.dataset.tex === to.dataset.tex)) {
-                    ['is-selected', 'is-active', 'is-copied', 'show-source'].forEach((cls: string) => {
-                        if (from.classList.contains(cls)) {
-                            to.classList.add(cls);
-                        }
-                    });
-                    if (from.getAttribute('aria-selected') === 'true') {
-                        to.setAttribute('aria-selected', 'true');
-                    }
-                    // ✅ P1-2: Fast path - skip update if content hash matches
-                    // OR if it's already rendered math and the source hasn't changed
-                    if (from.dataset.tex === to.dataset.tex && from.dataset.code === to.dataset.code) {
-                        // If it was already rendered, preserve the rendered HTML in the 'to' element
-                        // This prevents morphdom from clearing the rendered math and showing raw TeX for a split second
-                        if (from.dataset.renderedKey || from.classList.contains('show-source')) {
-                            to.innerHTML = from.innerHTML;
-                            if (from.dataset.renderedKey) to.dataset.renderedKey = from.dataset.renderedKey;
-                        }
-                        return false;
-                    }
-                }
-                return true; // Let morphdom handle the actual diff
-            },
-            onNodeAdded: (n: Node) => {
-                if (n instanceof HTMLElement) {
-                    if (
-                        n.classList.contains("math-inline") ||
-                        n.classList.contains("math-block") ||
-                        n.classList.contains("sentinel-math")
-                    ) {
-                        mathQueue.add(n);
-                    }
-                    n.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => {
-                        mathQueue.add(el as HTMLElement);
-                    });
-
-                    // ✅ WikiEmbed Lazy Loading & Rendering
-                    if (n.classList.contains('wiki-embed') && !n.dataset.rendered) {
-                        embedQueueRef.current.add(n);
-                    }
-                    for (const el of n.querySelectorAll(".wiki-embed:not([data-rendered])")) {
-                        embedQueueRef.current.add(el as HTMLElement);
-                    }
-
-                    // ✅ 代码块滚动状态检测：添加滚动监听器
-                    if (n.classList.contains("code-fence") && n.classList.contains("mockup-code")) {
-                        setupCodeBlockScrollDetection(n);
-                    }
-                    for (const el of n.querySelectorAll(".code-fence.mockup-code")) {
-                        setupCodeBlockScrollDetection(el as HTMLElement);
-                    }
-                }
-                return n;
-            },
-            onElUpdated: (el: Node) => {
-                if (
-                    el instanceof HTMLElement &&
-                    (el.classList.contains("math-inline") ||
-                        el.classList.contains("math-block") ||
-                        el.classList.contains("sentinel-math")) &&
-                    !el.dataset.renderedKey
-                ) {
-                    mathQueue.add(el);
-                }
-            },
-            onNodeDiscarded: (n: Node) => {
-                if (n instanceof HTMLElement) {
-                    if (n.classList.contains('math-inline') || n.classList.contains('math-block') || n.classList.contains('sentinel-math')) {
-                        mathHub.unregister(n);
-                    }
-                    n.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => {
-                        mathHub.unregister(el as HTMLElement);
-                    });
-                }
-            }
-        });
-        containerRef.current.querySelectorAll(`${MATH_SELECTOR}:not([data-rendered-key])`).forEach((el: Element) => {
-            mathQueue.add(el as HTMLElement);
-        });
-
-        // ✅ P1-4: Accessibility fixes must ALWAYS run, not be skipped by early return
-        if (containerRef.current) {
-            const container = containerRef.current;
-            
-            // 🚨 P1-Global: Clean up any leaked blockquote prefixes ("> ") in math data-tex
-            // We do this globally first to catch all instances
-            container.querySelectorAll(MATH_SELECTOR).forEach((el: Element) => {
-                const mathEl = el as HTMLElement;
-                if (mathEl.dataset.tex) {
-                    // Use multiline flag 'm' to catch prefixes on every line, 
-                    // and handle various escape formats from different parsers
-                    mathEl.dataset.tex = mathEl.dataset.tex
-                        .replace(/^(?:\s*&gt;|\s*>|\s*&amp;gt;)\s?/gm, '')
-                        .trim();
-                }
-            });
-
-            // 🚨 P2: Obsidian-style callouts are now handled by the Rust parser at the Pass 2.7 stage.
-            // This prevents hydration errors and ensures SSR/CSR semantic parity.
-            // 🚨 P3: Accessibility & Tab Index for Math
-            for (const el of container.querySelectorAll(MATH_SELECTOR)) {
-                const mathEl = el as HTMLElement;
-                const isBlock = mathEl.classList.contains('math-block') || mathEl.classList.contains('math-display');
-                
-                if (!mathEl.hasAttribute('tabindex')) {
-                    mathEl.setAttribute('tabindex', isBlock ? '0' : '-1');
-                }
-                if (!mathEl.hasAttribute('role')) {
-                    mathEl.setAttribute('role', isBlock ? 'button' : 'presentation');
-                }
-                if (!mathEl.hasAttribute('aria-label')) {
-                    const label = t('markdown.aria.math_label', {
-                        defaultValue: `数学${isBlock ? '公式块' : '公式'}，双击${isBlock ? '或按回车' : ''}查看源码`,
-                        type: isBlock ? t('markdown.aria.type_block', { defaultValue: '公式块' }) : t('markdown.aria.type_inline', { defaultValue: '公式' }),
-                        action: isBlock ? t('markdown.aria.action_block', { defaultValue: '或按回车' }) : t('markdown.aria.action_inline', { defaultValue: '' })
-                    });
-                    mathEl.setAttribute('aria-label', label);
-                }
-            }
-        }
-
-        if (mathQueue.size > 0) {
-            for (const el of mathQueue) {
-                mathHub.register(el);
-            }
-            performance.mark(`${perfId}-math-queued`);
-        }
-
-        // ✅ P0: WikiEmbed Task Scheduling
-        if (embedQueueRef.current.size > 0) {
-            for (const el of embedQueueRef.current) {
-                embedObserverRef.current?.observe(el);
-            }
-            embedQueueRef.current.clear();
-        }
-
-        performance.mark(`${perfId}-morph-end`);
-        performance.measure("markdown-dom-update", `${perfId}-morph-start`, `${perfId}-morph-end`);
-
-        return () => {
-            // Components don't disconnect the hub, just unobserve items they added if they are vanishing
-            // (But unobserve is handled by IntersectionObserver automatically if items are removed from DOM)
-            // We just ensure sweep handle is managed
-            mathHub.cleanUp();
-        };
-    }, [parsedResult]);
-
-    // ✅ P1-2: Touch interaction support for mobile devices
-    const handleTouchStart = useCallback((e: React.TouchEvent) => {
-        const target = e.target as HTMLElement;
-        const mathEl = target.closest(MATH_SELECTOR);
-
-        if (mathEl instanceof HTMLElement && mathEl.dataset.tex) {
-            const touch = e.touches[0];
-            touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
-
-            // Start long-press timer (350ms is standard for mobile long-press)
-            longPressTimerRef.current = window.setTimeout(() => {
-                // Verify touch hasn't moved significantly (drag vs press)
-                toggleMathSource(mathEl, t);
-                // Haptic feedback if available
-                if ('vibrate' in navigator) {
-                    navigator.vibrate(10);
-                }
-            }, 350);
-        }
-    }, []);
-
-    const handleTouchMove = useCallback((e: React.TouchEvent) => {
-        // Cancel long-press if user is scrolling/dragging
-        if (longPressTimerRef.current && touchStartPosRef.current) {
-            const touch = e.touches[0];
-            const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
-            const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
-
-            // 10px threshold for movement
-            if (deltaX > 10 || deltaY > 10) {
-                window.clearTimeout(longPressTimerRef.current);
-                longPressTimerRef.current = null;
-            }
-        }
-    }, []);
-
-    const handleTouchEnd = useCallback(() => {
-        // Clear long-press timer if touch ends before trigger
-        if (longPressTimerRef.current) {
-            window.clearTimeout(longPressTimerRef.current);
-            longPressTimerRef.current = null;
-        }
-        touchStartPosRef.current = null;
-    }, []);
-
-    // ✅ P0: WikiEmbed Observer Lifecycle
-    useEffect(() => {
-        embedObserverRef.current = new IntersectionObserver((entries) => {
-            entries.forEach((entry: IntersectionObserverEntry) => {
-                if (entry.isIntersecting) {
-                    const el = entry.target as HTMLElement;
-                    embedObserverRef.current?.unobserve(el);
-                    // Trigger actual embed rendering
-                    renderWikiEmbed(el);
-                }
-            });
-        }, { rootMargin: '400px' });
-
-        return () => {
-            embedObserverRef.current?.disconnect();
-        };
-    }, []);
-
-    // Cleanup touch timers on unmount
-    useEffect(() => {
-        return () => {
-            if (longPressTimerRef.current) {
-                window.clearTimeout(longPressTimerRef.current);
-            }
-        };
-    }, []);
-
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        // ✅ P0修复：支持Enter和Space键（ARIA button pattern）
-        if (e.key === 'Enter' || e.key === ' ') {
-            const target = e.target as HTMLElement;
-            const mathEl = target.closest(MATH_SELECTOR);
-            if (mathEl instanceof HTMLElement && mathEl.dataset.tex) {
-                e.preventDefault();  // 防止Space滚动页面
-                toggleMathSource(mathEl, t);
-            }
-        }
-    }, []);
-
-    // ✅ P0: Implementation of WikiEmbed rendering
-    async function renderWikiEmbed(el: HTMLElement) {
-        const { type, target, page, fragment, alias } = el.dataset;
-        if (!page) {
-            return;
-        }
-
-        el.classList.add('is-loading');
-
-        try {
-            if (type === 'image') {
-                if (!resolveAsset) throw new Error('Asset resolver not provided');
-                const src = await resolveAsset(page);
-                el.innerHTML = '';
-                const img = document.createElement('img');
-                img.src = src;
-                const displayLabel = alias || page;
-                img.alt = displayLabel;
-                img.loading = 'lazy';
-                el.appendChild(img);
-
-                if (displayLabel) {
-                    const cap = document.createElement('div');
-                    cap.className = 'wiki-embed-caption';
-                    cap.textContent = displayLabel;
-                    el.appendChild(cap);
-                }
-            } else {
-                // Note / Transclusion
-                if (!resolveNote) throw new Error('Note resolver not provided');
-
-                // Check cache first
-                let noteHtml = noteContentCache.get(page);
-                if (noteHtml instanceof Promise) {
-                    noteHtml = await noteHtml;
-                }
-                if (!noteHtml) {
-                    const promise = resolveNote(page);
-                    noteContentCache.set(page, promise);
-                    noteHtml = await promise;
-                    noteContentCache.set(page, noteHtml);
-                }
-
-                if (fragment) {
-                    noteHtml = extractSection(noteHtml, fragment);
-                    if (!noteHtml) {
-                        throw new Error(`Section not found: ${fragment}`);
-                    }
-                }
-
-                // Inject content with a stylized header link
-                const headerHtml = `
-                    <div class="wiki-embed-header">
-                        <span class="wiki-embed-breadcrumb">${page}${fragment ? ' > ' + fragment.replace(/#/g, ' > ') : ''}</span>
-                        <a href="${page}${fragment ? '#' + fragment : ''}" class="wiki-link wiki-embed-link-icon" data-target="${page}${fragment ? '#' + fragment : ''}" title="打开原始笔记">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x11="10" y1="14" x2="21" y2="3"></line></svg>
-                        </a>
-                    </div>
-                `;
-
-                el.innerHTML = headerHtml + `<div class="wiki-embed-content">${noteHtml}</div>`;
-
-                // Recursive Enhancement: Process math, code etc inside embedded content
-                for (const m of el.querySelectorAll(MATH_SELECTOR)) {
-                    mathHub.register(m as HTMLElement);
-                }
-                for (const c of el.querySelectorAll(".code-fence.mockup-code")) {
-                    setupCodeBlockScrollDetection(c as HTMLElement);
-                }
-                // Handle nested embeds
-                for (const e of el.querySelectorAll(".wiki-embed:not([data-rendered])")) {
-                    renderWikiEmbed(e as HTMLElement);
-                }
-            }
-
-            el.dataset.rendered = '1';
-        } catch (err) {
-            console.warn('[WikiEmbed] Render failed:', err);
-            el.innerHTML = `
-                <div class="wiki-embed-error">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                    <span>${err instanceof Error ? err.message : 'Embed failed'}</span>
-                </div>
-            `;
-        } finally {
-            el.classList.remove('is-loading');
-        }
-    }
-
-    if (error) {
-        return <article className="alert alert-error m-4 rounded-xl shadow-lg border-none">{error}</article>;
-    }
-
-
-    // Support both legacy prose-none and new data-density attribute
-    const isProseNone = className.includes('prose-none');
-    const baseClasses = isProseNone
-        ? "markdown-body starry-night-theme max-w-none prose-none"
-        : "markdown-body starry-night-theme prose prose-sm max-w-none prose-p:text-inherit prose-p:leading-relaxed prose-p:mb-4 prose-strong:text-inherit prose-strong:font-black prose-pre:bg-transparent prose-pre:p-0";
-
-    return (
-        <>
-            <article
-                ref={containerRef}
-                className={`${baseClasses} ${className}`}
-                data-density={density === "compact" ? "compact" : undefined}
-                data-hide-tex-badge={showTexBadge ? undefined : ""}
-                onClick={handleClick}
-                onContextMenu={handleContextMenu}
-                onDoubleClick={handleDoubleClick}
-                onKeyDown={handleKeyDown}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onMouseOver={handleMouseEnter}
-                onFocus={() => { /* no-op */ }} 
-            />
-
-            {/* ✅ WikiLink Preview Popover */}
-            {preview?.visible && (
-                <div
-                    className="wiki-link-preview sea glass-panel shadow-premium-lg"
-                    style={{
-                        position: 'absolute',
-                        left: preview.x,
-                        top: preview.y,
-                        width: '320px',
-                        maxHeight: '240px',
-                        overflow: 'hidden',
-                        zIndex: 1000,
-                        padding: '1rem',
-                        pointerEvents: 'none', // Allow clicking "through" if needed, or 'auto' to interact
-                        borderRadius: '16px',
-                        fontSize: '0.85rem',
-                        lineHeight: '1.5',
-                        animation: 'preview-fade-in 0.2s ease-out'
-                    }}
-                >
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2 border-bottom border-base-content/10 pb-2 mb-2">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" role="img" aria-label="Note Preview Icon">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                            <span className="font-bold truncate text-primary">{preview.page}{preview.fragment ? ` #${preview.fragment}` : ''}</span>
-                        </div>
-                        {preview.content === null ? (
-                            <div className="flex items-center justify-center p-4">
-                                <span className="loading loading-spinner loading-xs text-primary/50" />
-                            </div>
-                        ) : (
-                            <div
-                                className="prose prose-xs text-base-content/80 line-clamp-6 mask-fade-bottom"
-                                // biome-ignore lint: sanitized
-                                dangerouslySetInnerHTML={{ __html: preview.content }}
-                            />
-                        )}
-                    </div>
-                </div>
-            )}
-        </>
-    );
-});
-
-export const LatexRenderer = MarkdownRenderer;
-export default MarkdownRenderer;
-
-// 🚀 Prefetch utilities are exported inline at their function definitions above
-
-/**
- * 📊 PERFORMANCE MONITOR: Get rendering performance metrics
- * Call this from DevTools console: window.__getMarkdownPerf?.()
- *
- * Returns aggregated timing data for:
- * - WASM initialization
- * - Markdown parsing
- * - DOM updates (morphdom)
- * - KaTeX rendering
- */
-export function getPerformanceMetrics(): {
-    wasm: null;
-    parse: PerformanceEntryList;
-    dom: PerformanceEntryList;
-    katex: PerformanceEntryList;
-    prefetch: null;
-    summary: { avg: number; max: number; count: number } | null;
-} {
-    const parse = performance.getEntriesByType('measure').filter(e => e.name === 'markdown-parse-total');
-    const dom = performance.getEntriesByType('measure').filter(e => e.name === 'markdown-dom-update');
-    const katex = performance.getEntriesByType('measure').filter(e => e.name === 'katex-render');
-
-    // Calculate summary
-    const allTimes = [...parse, ...dom].map(e => e.duration);
-    const summary = allTimes.length > 0 ? {
-        avg: allTimes.reduce((a, b) => a + b, 0) / allTimes.length,
-        max: Math.max(...allTimes),
-        count: allTimes.length
-    } : null;
-
-    return { wasm: null, parse, dom, katex, prefetch: null, summary };
-}
-
-// Expose to window for DevTools access
-if (typeof window !== 'undefined') {
-    (window as any).__getMarkdownPerf = getPerformanceMetrics;
+	return tex.replace(/\\htmlData|\\url|\\href/g, "");
 }

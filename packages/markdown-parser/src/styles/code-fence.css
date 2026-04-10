@@ -1,366 +1,394 @@
-/* IDE-Grade Code Block Rendering - @layer components */
-@layer components {
-    /* --- Code Fence Wrapper --- */
-    .code-fence-container {
-        position: relative;
-        background: color-mix(in srgb, var(--background), transparent 20%);
-        border: 1px solid color-mix(in srgb, var(--md-border), transparent 40%);
-        border-radius: var(--radius-lg, 8px); /* Adhere to AGENTS.md rule */
-        margin: 2.5rem 0;
-        overflow: hidden;
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        /* Neutral light-mode elevation */
-        box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05),
-                    0 0 0 1px rgba(0, 0, 0, 0.02);
+@scope (.markdown-body) {
+  /* --- Code Fence Wrapper --- */
+  .code-fence-container {
+    position: relative;
+    background: color-mix(in srgb, var(--md-card), black 3%);
+    border: 1px solid var(--md-border);
+    border-radius: var(--radius-xl, 12px);
+    margin: 2.5rem 0;
+    overflow: hidden;
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.02),
+      0 4px 20px rgba(0, 0, 0, 0.08);
+    /* Performance: Code blocks are often DOM-heavy. Contain layout to avoid expensive re-paints. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 240px;
+  }
+
+  .code-fence-container:hover {
+    border-color: color-mix(in srgb, var(--md-primary), transparent 75%);
+    box-shadow:
+      0 12px 40px -10px rgba(0, 0, 0, 0.15),
+      0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 95%);
+  }
+
+  /* Nested Protection */
+  :where(blockquote, .md-callout, .callout, ul, ol, li) .code-fence-container {
+    margin: 1rem 0;
+  }
+
+  /* Custom thin scrollbar */
+  .code-fence.mockup-code::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .code-fence.mockup-code::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 10px;
+  }
+
+  .code-fence-container:hover .code-fence.mockup-code::-webkit-scrollbar-thumb {
+    background: var(--md-border-strong);
+  }
+
+  /* Sticky Header */
+  .code-fence-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--md-code-header-bg);
+    border-bottom: 1px solid var(--md-border);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--md-muted);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    user-select: none;
+  }
+
+  /* Mac-style window dots */
+  .code-dots {
+    display: flex;
+    gap: 8px;
+    opacity: 1;
+    transition: transform 0.3s var(--ease-spring);
+  }
+
+  .code-fence-container:hover .code-dots {
+    transform: scale(1.05);
+  }
+
+  .code-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+  .dark .code-dot {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+
+  .code-dot-red {
+    background: #ff5f56;
+  }
+  .code-dot-amber {
+    background: #ffbd2e;
+  }
+  .code-dot-green {
+    background: #27c93f;
+  }
+
+  .code-header-left,
+  .code-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Language text, moved to the right */
+  .code-lang-text {
+    font-family: var(--font-mono, monospace);
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--md-muted);
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  /* Standardized Header Action Buttons (Redesign) */
+  .code-action-btn,
+  .code-copy-btn,
+  .code-close-btn,
+  .format-toggle-btn {
+    cursor: pointer;
+    opacity: 0; /* Hidden by default for a clean 'Industrial' aesthetic */
+    transition: all 0.25s var(--ease-spring);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--md-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 6px;
+    position: relative;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    user-select: none;
+    pointer-events: auto;
+    white-space: nowrap;
+  }
+
+  .code-fence-container:hover :where(.code-action-btn, .code-copy-btn, .code-close-btn, .format-toggle-btn) {
+    opacity: 0.7;
+  }
+
+  .code-action-btn:hover,
+  .code-copy-btn:hover,
+  .code-close-btn:hover,
+  .format-toggle-btn:hover {
+    opacity: 1 !important;
+    background: var(--md-bg-soft);
+    color: var(--md-primary);
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--md-primary), transparent 85%);
+    box-shadow: 
+      0 8px 16px -8px color-mix(in srgb, var(--md-primary), transparent 60%),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .code-action-btn:active,
+  .code-copy-btn:active,
+  .code-close-btn:active,
+  .format-toggle-btn:active {
+    transform: scale(0.96);
+    background: color-mix(in srgb, var(--md-primary), transparent 92%);
+  }
+
+  /* Success Feedback for Copying */
+  .is-copied :where(.code-action-btn, .code-copy-btn) {
+    color: var(--md-success) !important;
+    opacity: 1 !important;
+    background: color-mix(in srgb, var(--md-success), transparent 90%) !important;
+    border-color: color-mix(in srgb, var(--md-success), transparent 80%) !important;
+  }
+
+  /* Specific handling for icon-only variants (usually standard copy button) */
+  .code-copy-btn:not(:has(span)),
+  .code-action-btn:has(svg:only-child):not(:has(span)) {
+    width: 32px;
+    padding: 0;
+  }
+
+  /* Specific animations for icon-only variant */
+  .is-copied .code-copy-btn svg {
+    transform: scale(1.1);
+  }
+
+  .is-copied .code-copy-btn::after {
+    content: "COPIED";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--md-success);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 8px;
+    font-weight: 800;
+    pointer-events: none;
+    animation: copy-success-fade 1.5s ease forwards;
+    white-space: nowrap;
+    z-index: 10;
+  }
+
+  @keyframes copy-success-fade {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, 5px);
     }
-
-    @media (hover: none) and (pointer: coarse) {
-        .code-fence-container {
-            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-            touch-action: pan-x;
-        }
-
-        .code-fence-container:active {
-            transform: scale(0.995);
-            border-color: color-mix(in srgb, var(--md-border), transparent 20%);
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-border), transparent 80%),
-                        0 10px 24px -16px rgba(0, 0, 0, 0.1);
-        }
+    15% {
+      opacity: 1;
+      transform: translate(-50%, 0);
     }
-
-    /* AGENTS.md rule: Dark theme for optimal readability + inset shadows */
-    .dark .code-fence-container {
-        background: rgba(12, 12, 17, 0.6); /* Very dark, slate-blue tinted */
-        border: 1px solid rgba(255, 255, 255, 0.08); /* 1px border */
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), /* Inset shadow for depth */
-                    0 10px 40px -10px rgba(0, 0, 0, 0.5);
+    85% {
+      opacity: 1;
+      transform: translate(-50%, 0);
     }
-
-    .code-fence-container:hover {
-        border-color: color-mix(in srgb, var(--md-primary), transparent 70%);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 90%),
-                    0 10px 30px -10px rgba(0, 0, 0, 0.08);
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -5px);
     }
+  }
 
-    .dark .code-fence-container:hover {
-        border-color: color-mix(in srgb, var(--md-primary), transparent 40%);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 
-                    0 0 0 1px color-mix(in srgb, var(--md-primary), transparent 70%),
-                    0 15px 40px -10px color-mix(in srgb, var(--md-primary), transparent 85%);
+  .code-fence-container:hover .code-lang-text {
+    opacity: 1;
+    color: var(--md-foreground);
+  }
+
+  .code-filename {
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--md-muted);
+  }
+
+  /* --- Content Area (mockup-code) --- */
+  .code-fence.mockup-code {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    max-width: 100% !important;
+    background: var(--md-code-bg) !important;
+    padding: 1.5rem 0 !important; /* Scaled up padding */
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    position: relative;
+    display: block !important;
+    line-height: 1.8 !important; /* Further increased line-height */
+  }
+
+  /* Force Shiki's child to behave and causes scrolling */
+  .code-fence.mockup-code > code,
+  .code-fence.mockup-code > div {
+    min-width: 100% !important;
+    width: max-content !important;
+    display: block !important;
+  }
+
+  /* Code Typography & Lines */
+  .code-fence.mockup-code pre {
+    padding: 0 1.5rem 0 0rem;
+    margin: 0 !important; /* Critical: remove global pre margin from individual lines */
+    position: relative;
+    min-width: 100%;
+    width: 100%;
+    line-height: 1.8 !important;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.98rem !important;
+    color: var(--md-foreground);
+    display: flex !important;
+    align-items: flex-start;
+    white-space: pre !important;
+  }
+
+  /* LaTeX Auto-Indentation Support: Targets only the code content, leaving gutter fixed */
+  .code-fence.mockup-code .line-code {
+    display: inline-block;
+    padding-left: calc(var(--indent-level, 0) * 1.5rem);
+    transition: padding-left 0.2s ease;
+  }
+
+  .code-fence.mockup-code pre:hover {
+    background-color: var(--md-code-line-hover, rgba(128, 128, 128, 0.05));
+  }
+
+  .code-fence.mockup-code code {
+    display: block;
+    width: 100%;
+    white-space: pre !important;
+  }
+
+  /* Line Numbers (Gutter) - Sticky for premium feel */
+  .code-fence.mockup-code pre[data-prefix]::before {
+    content: attr(data-prefix);
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    width: 3.5rem;
+    min-width: 3.5rem;
+    text-align: right;
+    color: var(--md-secondary);
+    opacity: 0.55;
+    user-select: none;
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding-right: 1rem;
+    background: var(--md-code-bg);
+    border-right: 1px solid var(--md-code-gutter-border, rgba(128, 128, 128, 0.1));
+    transition:
+      opacity 0.2s,
+      color 0.2s,
+      border-color 0.2s;
+    margin-right: 1.25rem;
+  }
+
+  .code-fence.mockup-code pre:hover[data-prefix]::before {
+    opacity: 0.9;
+    color: var(--md-primary);
+    border-color: color-mix(in srgb, var(--md-primary), transparent 80%);
+  }
+
+  /* Copied Animation */
+  @keyframes code-copied-pulse {
+    0% {
+      transform: scale(1);
     }
-
-    /* Legacy overrides for older builds - keep briefly then move to @layer overrides */
-    .code-fence-container .mockup-code {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        margin: 0 !important;
-        backdrop-filter: none !important;
-        padding-top: 1rem;
-        padding-bottom: 1rem;
+    50% {
+      transform: scale(1.01);
+      border-color: var(--md-success);
     }
-
-    /* Custom thin scrollbar for code and math */
-    .code-fence.mockup-code::-webkit-scrollbar,
-    .math-block::-webkit-scrollbar {
-        height: 6px;
-        width: 6px;
+    100% {
+      transform: scale(1);
     }
+  }
 
-    .code-fence.mockup-code::-webkit-scrollbar-thumb,
-    .math-block::-webkit-scrollbar-thumb {
-        background: transparent;
-        border-radius: 10px;
-    }
+  .code-fence-container.is-copied {
+    animation: code-copied-pulse 0.5s var(--ease-spring);
+  }
 
-    .code-fence-container:hover .code-fence.mockup-code::-webkit-scrollbar-thumb,
-    .math-block:hover::-webkit-scrollbar-thumb {
-        background: color-mix(in srgb, var(--md-border), transparent 40%);
-    }
+  /* Syntax Highlighting Tokens */
+  .code-fence.mockup-code span,
+  .shiki-inline span,
+  .shiki-inline {
+    color: var(--shiki-light);
+    font-style: var(--shiki-light-font-style, normal);
+    font-weight: var(--shiki-light-font-weight, normal);
+    text-decoration: var(--shiki-light-text-decoration, none);
+    transition: color 0.4s ease;
+  }
 
-    /* Sticky Header */
+  /* Dark Mode Overrides */
+  :scope :where(.dark) .code-fence.mockup-code span,
+  :scope :where(.dark) .shiki-inline span,
+  :scope :where(.dark) .shiki-inline,
+  :where(.dark) :scope .code-fence.mockup-code span,
+  :where(.dark) :scope .shiki-inline span,
+  :where(.dark) :scope .shiki-inline {
+    color: var(--shiki-dark);
+    font-style: var(--shiki-dark-font-style, normal);
+    font-weight: var(--shiki-dark-font-weight, normal);
+    text-decoration: var(--shiki-dark-text-decoration, none);
+  }
+
+  @media (max-width: 768px) {
     .code-fence-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 16px;
-        background: color-mix(in srgb, var(--md-card-header), transparent 60%);
-        border-bottom: 1px solid color-mix(in srgb, var(--md-border), transparent 50%);
-        font-size: 0.75rem;
-        font-weight: 500;
-        color: var(--md-muted);
-        position: sticky;
-        top: 0;
-        z-index: 20;
-        user-select: none;
+      gap: 0.75rem;
+      padding: 0.75rem 0.9rem;
     }
-
-    @media (max-width: 768px) {
-        .code-fence-header {
-            gap: 0.75rem;
-            padding: 0.75rem 0.9rem;
-        }
-
-        .code-header-right {
-            gap: 0.5rem;
-            min-width: 0;
-        }
-
-        .code-lang-text {
-            font-size: 9px;
-            letter-spacing: 0.04em;
-        }
-
-        .code-fence.mockup-code {
-            max-height: min(70vh, 700px);
-        }
-
-        .code-fence.mockup-code pre {
-            padding: 0 1rem 0 3rem;
-            font-size: 0.8rem;
-            line-height: 1.65;
-        }
-
-        .code-fence.mockup-code pre[data-prefix]::before {
-            width: 2.2rem;
-            padding-right: 0.5rem;
-            font-size: 0.7rem;
-        }
-    }
-
-    .dark .code-fence-header {
-        background: rgba(20, 20, 26, 0.8);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    /* Mac-style window dots */
-    .code-dots {
-        display: flex;
-        gap: 8px;
-        opacity: 0.5;
-        transition: opacity 0.3s ease;
-    }
-
-    .code-fence-container:hover .code-dots {
-        opacity: 1;
-    }
-
-    .code-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
-    }
-    .dark .code-dot { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
-
-    .code-dot-red { background: #ff5f56; }
-    .code-dot-amber { background: #ffbd2e; }
-    .code-dot-green { background: #27c93f; }
-
-    .code-header-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
     .code-header-right {
-        display: flex;
-        align-items: center;
-        gap: 12px;
+      gap: 0.5rem;
+      min-width: 0;
     }
-
-    /* Language text, moved to the right */
     .code-lang-text {
-        font-family: var(--font-mono, 'JetBrains Mono', monospace);
-        font-weight: 700;
-        font-size: 10px;
-        letter-spacing: 0.05em;
-        color: var(--md-muted);
-        text-transform: uppercase;
-        opacity: 0.7;
+      font-size: 9px;
+      letter-spacing: 0.04em;
     }
-
-    .code-fence-container:hover .code-lang-text {
-        opacity: 1;
-        color: var(--md-foreground);
-    }
-
-    .code-filename {
-        font-family: var(--font-mono, 'JetBrains Mono', monospace);
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--md-muted);
-    }
-
-
     .code-fence.mockup-code {
-        overflow-x: auto;
-        overflow-y: auto;
-        max-height: min(85vh, 1000px);
-        scrollbar-gutter: stable;
-        padding: 1.25rem 0;
-        position: relative;
+      max-height: min(70vh, 700px);
     }
-
-    /* Code Typography & Lines */
     .code-fence.mockup-code pre {
-        padding: 0 1.5rem 0 3.5rem; /* Allow more space for the gutter */
-        position: relative;
-        margin: 0;
-        min-height: 1.5rem;
-        line-height: 1.7;
-        transition: background 0.15s ease;
-        cursor: text;
-        /* Optimized typography stack with ligatures enabled */
-        font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
-        font-variant-ligatures: contextual common-ligatures;
-        font-size: 0.85rem; 
-        color: var(--md-foreground);
+      padding: 0 1rem 0 3rem;
+      font-size: 0.8rem;
+      line-height: 1.45;
     }
-    
-    .dark .code-fence.mockup-code pre {
-        color: #e5e7eb; /* Soft white/gray for high contrast readability */
-    }
-
-    /* Row hover selection */
-    .code-fence.mockup-code pre:hover {
-        background: color-mix(in srgb, var(--md-foreground), transparent 97%);
-    }
-
-    .dark .code-fence.mockup-code pre:hover {
-        background: rgba(255, 255, 255, 0.04);
-    }
-
-    .code-fence.mockup-code pre.is-selected {
-        background: color-mix(in srgb, var(--primary), transparent 88%) !important;
-    }
-    .dark .code-fence.mockup-code pre.is-selected {
-        background: color-mix(in srgb, var(--primary), transparent 80%) !important;
-    }
-
-    /* Highlight accent bar */
-    .code-fence.mockup-code pre::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 3px;
-        background: var(--primary);
-        opacity: 0;
-        transition: opacity 0.2s ease;
-    }
-
-    .code-fence.mockup-code pre.is-selected::after {
-        opacity: 1;
-    }
-
-    /* Line Numbers (Gutter) */
     .code-fence.mockup-code pre[data-prefix]::before {
-        content: attr(data-prefix);
-        position: absolute;
-        left: 0;
-        width: 2.5rem; /* Fixed precise width for gutter alignment */
-        text-align: right;
-        color: var(--md-muted);
-        opacity: 0.4;
-        user-select: none;
-        font-size: 0.75rem;
-        font-weight: 500;
-        padding-right: 0.75rem;
-        border-right: 1px solid transparent; 
-        transition: opacity 0.2s, border-color 0.2s;
+      width: 2.2rem;
+      padding-right: 0.5rem;
+      font-size: 0.7rem;
     }
-
-    .code-fence.mockup-code pre:hover[data-prefix]::before {
-        opacity: 0.8;
-        border-right-color: color-mix(in srgb, var(--md-border), transparent 50%);
-    }
-
-    /* Copied Animation */
-    @keyframes code-copied-pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.01); border-color: #22c55e; }
-        100% { transform: scale(1); }
-    }
-
-    .code-fence-container.is-copied {
-        animation: code-copied-pulse 0.5s var(--ease-spring);
-    }
-
-    /* ==========================================
-       Premium Syntax Highlighting (Shiki Dual Themes)
-       ========================================== */
-    .code-fence.mockup-code span {
-        color: var(--shiki-light);
-        font-style: var(--shiki-light-font-style, normal);
-        font-weight: var(--shiki-light-font-weight, normal);
-        text-decoration: var(--shiki-light-text-decoration, none);
-        transition: color 0.4s ease;
-    }
-
-    .dark .code-fence.mockup-code span {
-        color: var(--shiki-dark);
-        font-style: var(--shiki-dark-font-style, normal);
-        font-weight: var(--shiki-dark-font-weight, normal);
-        text-decoration: var(--shiki-dark-text-decoration, none);
-    }
+  }
 }
 
-/* =========================================
-   Starry Overrides Layer (High Priority)
-   ========================================= */
-@layer overrides {
-    /* --- DaisyUI Mockup Overrides --- */
-    .code-fence-container .mockup-code {
-        background: transparent;
-        border: none;
-        box-shadow: none;
-        border-radius: 0;
-        margin: 0;
-        backdrop-filter: none;
-        min-width: 100%;
-        width: fit-content;
-    }
-
-    .dark .code-fence-container .mockup-code {
-        background: transparent;
-    }
-
-
-    /* --- Inline Math Source Style --- */
-    .math-inline.source-mode {
-        display: inline-flex;
-        align-items: center;
-        vertical-align: middle;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-        padding-inline: 0.25rem;
-        margin-inline: 0.125rem;
-        transition: all 0.3s ease;
-        cursor: pointer;
-    }
-
-    .math-inline.source-mode:hover {
-        background: rgba(255, 255, 255, 0.06);
-        border-color: var(--primary-glow);
-    }
-
-    .math-source-content {
-        font-family: var(--font-mono);
-        font-size: 0.85em;
-        line-height: 1.4;
-        color: var(--primary);
-    }
-
-    /* --- LaTeX Source Alignment Fix --- */
-    /* Remove redundant margin when nested in a math block to ensure vertical alignment parity */
-    .math-block .code-fence-container,
-    .math-display .code-fence-container {
-        margin: 0 !important;
-    }
-}

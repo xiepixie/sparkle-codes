@@ -25,7 +25,8 @@ import {
   CommandSurfaceFooter,
   CommandSurfaceHeader,
 } from "@/components/CommandSurface";
-import { readFilteredHistory, normalizeSlug, type ReadingHistoryEntry } from "@/lib/reading-history";
+import { readFilteredHistory, type ReadingHistoryEntry } from "@/lib/reading-history";
+import { normalizeSlug } from "@repo/utils";
 import {
   COMMAND_CENTER_EVENT,
   scrollToReadingSection,
@@ -153,12 +154,12 @@ export function CommandMenu() {
       return;
     }
 
-    const normalize = (url: string) => url.split("#")[0].split("?")[0].replace(/\/$/, "");
-    const current = normalize(pathname);
-    const target = normalize(pendingUrl);
+    const current = normalizeSlug(pathname);
+    const target = normalizeSlug(pendingUrl);
     
     // Arrival check: URL matches destination
-    const hasArrived = current === target || target.endsWith(current);
+    // Comparison is now robust against encoding and normalization differences
+    const hasArrived = current === target;
     
     // Snappy Cleanup: Close immediately if we arrived OR the transition finished
     if (hasArrived || (!isNavigating && pendingUrl)) {

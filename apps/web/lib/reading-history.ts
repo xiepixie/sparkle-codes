@@ -1,3 +1,5 @@
+import { normalizeSlug } from "@repo/utils";
+
 export interface ReadingHistoryEntry {
   slug: string;
   title: string;
@@ -7,47 +9,6 @@ export interface ReadingHistoryEntry {
 }
 
 export const READING_HISTORY_KEY = "sparkle_reading_history";
-
-/**
- * Canonical slug normalization — the SINGLE SOURCE OF TRUTH for all slug
- * comparison / dedup / storage in the reading-history subsystem.
- *
- * 保护约束：
- * - 去掉 URL 编码 (%E6%B5%8B → 测试)
- * - 去掉前导斜杠、路由前缀 (/blog/xxx → xxx)
- * - 去掉尾部斜杠、hash、query string
- * - 全部小写
- *
- * 改坏会怎样：历史记录里出现重复条目或当前文章出现在推荐列表中。
- */
-export function normalizeSlug(raw?: string): string {
-  if (!raw) {
-    return "";
-  }
-  let slug = raw;
-  try {
-    // 1. Handle URL decoding. We decode multiple times to handle double-encoded slugs 
-    // common in Obsidian-to-Next.js pipelines.
-    // Try double decoding first for robust handling of Chinese/special chars.
-    slug = decodeURIComponent(decodeURIComponent(slug));
-  } catch {
-    try {
-      slug = decodeURIComponent(slug);
-    } catch {
-      // malformed URI or raw bytes — just continue
-    }
-  }
-
-  return slug
-    .trim()
-    .normalize("NFC")               // Enforce NFC for Mac/Obsidian parity
-    .replace(/^\/+/, "")            // strip leading slashes
-    .replace(/^blog\//i, "")        // strip /blog prefix
-    .split("#")[0]                  // strip hash fragment
-    .split("?")[0]                  // strip query string
-    .replace(/\/+$/, "")            // strip trailing slashes
-    .toLowerCase();                 // canonical lowercase
-}
 
 function isReadingHistoryEntry(value: unknown): value is ReadingHistoryEntry {
   return Boolean(

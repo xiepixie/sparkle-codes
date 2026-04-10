@@ -1,177 +1,205 @@
-/* Notion-Style Callouts (Admonitions) - @layer components */
-@layer components {
-    blockquote.md-callout {
-        --callout-color: var(--md-callout-color, var(--md-primary, #6366f1));
-        margin: 2.5rem 0;
-        padding: 1.25rem 1.5rem;
-        border-radius: var(--radius-xl, 14px);
-        border: 1px solid var(--md-border);
-        border-left: 6px solid var(--callout-color);
-        background: color-mix(in srgb, var(--md-foreground), transparent 97%);
-        backdrop-filter: blur(8px);
-        position: relative;
-        font-style: normal;
-        opacity: 1;
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.1);
+@scope (.markdown-body) {
+  .md-callout,
+  .callout {
+    --callout-color: var(--md-note);
+    --callout-bg: color-mix(in srgb, var(--callout-color), var(--background, white) 92%);
+    margin: 2rem 0;
+    padding: 1.25rem 1.5rem;
+    border-radius: var(--radius-xl, 14px);
+    border: 1px solid color-mix(in srgb, var(--callout-color), transparent 85%);
+    border-left: 6px solid var(--callout-color);
+    background: var(--callout-bg);
+    backdrop-filter: blur(8px);
+    position: relative;
+    font-style: normal;
+    transition: all 0.3s var(--ease-spring);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    box-shadow: 0 4px 24px -1px color-mix(in srgb, var(--callout-color), transparent 95%);
+  }
+
+  :where(.md-callout, .callout):hover {
+    border-color: color-mix(in srgb, var(--callout-color), transparent 60%);
+  }
+
+  :where(.md-callout__header, .callout-title) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 800;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    user-select: none;
+    color: var(--callout-color);
+    margin-bottom: 0.25rem;
+  }
+
+  :where(.md-callout__icon, .callout-icon) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.95;
+  }
+
+  :where(.md-callout__icon, .callout-icon):empty::before {
+    content: "✦";
+    font-size: 1.1rem;
+  }
+
+  :where(.md-callout__title, .callout-title-inner) {
+    font-family: var(--font-mono, monospace);
+    filter: brightness(1.1);
+  }
+
+  /* Callout Types Semantic Mapping */
+  :where(.md-callout, .callout)[data-callout-type="note"] {
+    --callout-color: var(--md-note);
+  }
+  :where(.md-callout, .callout)[data-callout-type="todo"] {
+    --callout-color: var(--md-info);
+  }
+  :where(.md-callout, .callout)[data-callout-type="tip"],
+  :where(.md-callout, .callout)[data-callout-type="hint"] {
+    --callout-color: var(--md-success);
+  }
+  :where(.md-callout, .callout)[data-callout-type="warning"],
+  :where(.md-callout, .callout)[data-callout-type="caution"],
+  :where(.md-callout, .callout)[data-callout-type="attention"] {
+    --callout-color: var(--md-warning);
+  }
+  :where(.md-callout, .callout)[data-callout-type="danger"],
+  :where(.md-callout, .callout)[data-callout-type="error"],
+  :where(.md-callout, .callout)[data-callout-type="bug"] {
+    --callout-color: var(--md-danger);
+  }
+  :where(.md-callout, .callout)[data-callout-type="info"] {
+    --callout-color: var(--md-info);
+  }
+  :where(.md-callout, .callout)[data-callout-type="success"],
+  :where(.md-callout, .callout)[data-callout-type="check"],
+  :where(.md-callout, .callout)[data-callout-type="done"] {
+    --callout-color: var(--md-success);
+  }
+  :where(.md-callout, .callout)[data-callout-type="question"],
+  :where(.md-callout, .callout)[data-callout-type="help"],
+  :where(.md-callout, .callout)[data-callout-type="faq"] {
+    --callout-color: var(--md-question);
+  }
+  :where(.md-callout, .callout)[data-callout-type="failure"],
+  :where(.md-callout, .callout)[data-callout-type="fail"],
+  :where(.md-callout, .callout)[data-callout-type="missing"] {
+    --callout-color: var(--md-cancelled);
+  }
+  :where(.md-callout, .callout)[data-callout-type="abstract"],
+  :where(.md-callout, .callout)[data-callout-type="summary"],
+  :where(.md-callout, .callout)[data-callout-type="tldr"] {
+    --callout-color: var(--md-info);
+  }
+  :where(.md-callout, .callout)[data-callout-type="quote"],
+  :where(.md-callout, .callout)[data-callout-type="cite"] {
+    --callout-color: var(--md-muted);
+  }
+  :where(.md-callout, .callout)[data-callout-type="important"],
+  :where(.md-callout, .callout)[data-callout-type="example"] {
+    --callout-color: var(--md-primary);
+  }
+
+  .md-callout__content {
+    width: 100%;
+  }
+
+  /* Content styling inside callouts */
+  :where(.md-callout, .callout) .md-callout__content :where(p, ul, ol),
+  :where(.md-callout, .callout) :where(p, ul, ol) {
+    margin: 0.25rem 0 0 0;
+    font-size: 0.95rem;
+  }
+
+  :where(.md-callout, .callout) .md-callout__content :where(p):last-child,
+  :where(.md-callout, .callout) :where(p):last-child {
+    margin-bottom: 0;
+  }
+
+  /* Nested contextual protection and progressive depth */
+  :where(.md-callout, .callout) :where(.md-callout, .callout) {
+    margin: 1.25rem 0;
+    box-shadow: none;
+    background: color-mix(in srgb, var(--callout-color), transparent 96%);
+    border-left-width: 4px;
+    padding: 1rem 1.25rem;
+  }
+
+  /* Triple nesting contrast adjustment */
+  :where(.md-callout, .callout) :where(.md-callout, .callout) :where(.md-callout, .callout) {
+    background: color-mix(in srgb, var(--callout-color), transparent 98%);
+    border-left-width: 3px;
+    border-style: dashed;
+    font-size: 0.9em;
+  }
+
+  /* Support for formulas and code in titles */
+  .callout-title-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 768px) {
+    :where(.md-callout, .callout) {
+      margin: 1.5rem 0;
+      padding: 1.1rem;
+      border-radius: var(--radius-lg, 8px);
+      border-left-width: 4px;
     }
 
-    .dark blockquote.md-callout {
-        background: color-mix(in srgb, var(--callout-color), transparent 88%);
-        border-color: color-mix(in srgb, var(--callout-color), transparent 80%);
+    :where(.md-callout, .callout) :where(.md-callout, .callout) {
+      padding: 0.85rem;
+      margin: 0.75rem 0;
     }
+  }
 
-    blockquote.md-callout::before {
-        display: none !important;
-    }
+  /* Fold Interaction */
+  .md-callout[data-callout-fold] .md-callout__header {
+    cursor: pointer;
+  }
 
-    blockquote.md-callout .md-callout-header {
-        display: flex;
-        align-items: center;
-        gap: 0.65rem;
-        font-weight: 800;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        user-select: none;
-        margin-bottom: 0.1rem;
-    }
+  .md-callout[data-callout-fold="-"] .md-callout__content {
+    display: none;
+  }
 
-    blockquote.md-callout .md-callout-icon {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transform: translateY(-0.5px);
-        opacity: 0.95;
-        color: var(--callout-color);
-    }
+  .md-callout__fold-icon {
+    margin-left: auto;
+    width: 1.25rem;
+    height: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s var(--ease-spring);
+    opacity: 0.5;
+    color: inherit;
+  }
 
-    blockquote.md-callout .md-callout-title {
-        font-family: var(--font-mono, 'JetBrains Mono', monospace);
-        opacity: 0.9;
-    }
+  .md-callout[data-callout-fold="-"] .md-callout__fold-icon {
+    transform: rotate(-90deg);
+  }
 
-    /* Callout Types */
-    blockquote.md-callout[data-callout-type="tip"] {
-        --callout-color: var(--aurora, #22c55e);
-    }
-    blockquote.md-callout[data-callout-type="note"] {
-        --callout-color: var(--md-primary, #9b5de5);
-    }
-    blockquote.md-callout[data-callout-type="warning"] {
-        --callout-color: #f59e0b;
-    }
-    blockquote.md-callout[data-callout-type="caution"] {
-        --callout-color: #ef4444;
-    }
-    blockquote.md-callout[data-callout-type="important"] {
-        --callout-color: var(--starlight, #ec4899);
-    }
-    blockquote.md-callout[data-callout-type="example"] {
-        --callout-color: #a855f7;
-    }
-    blockquote.md-callout[data-callout-type="info"] {
-        --callout-color: #3b82f6;
-    }
-    blockquote.md-callout[data-callout-type="danger"],
-    blockquote.md-callout[data-callout-type="bug"] {
-        --callout-color: #ef4444;
-    }
-    blockquote.md-callout[data-callout-type="abstract"],
-    blockquote.md-callout[data-callout-type="summary"],
-    blockquote.md-callout[data-callout-type="tldr"] {
-        --callout-color: #06b6d4;
-    }
-    blockquote.md-callout[data-callout-type="question"],
-    blockquote.md-callout[data-callout-type="help"],
-    blockquote.md-callout[data-callout-type="faq"] {
-        --callout-color: #f97316;
-    }
-    blockquote.md-callout[data-callout-type="success"],
-    blockquote.md-callout[data-callout-type="check"],
-    blockquote.md-callout[data-callout-type="done"] {
-        --callout-color: #22c55e;
-    }
-    blockquote.md-callout[data-callout-type="failure"],
-    blockquote.md-callout[data-callout-type="fail"],
-    blockquote.md-callout[data-callout-type="missing"] {
-        --callout-color: #ef4444;
-    }
-    blockquote.md-callout[data-callout-type="quote"],
-    blockquote.md-callout[data-callout-type="cite"] {
-        --callout-color: #94a3b8;
-    }
+  .md-callout__fold-icon::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid currentColor;
+  }
 
-    blockquote.md-callout[data-callout-type] .md-callout-title {
-        color: var(--callout-color);
-        font-weight: 700;
-        font-size: 0.95rem;
-        letter-spacing: 0.02em;
-        filter: brightness(1.1);
-    }
+  .md-callout:hover .md-callout__fold-icon {
+    opacity: 1;
+  }
 
-    blockquote.md-callout:hover {
-        background: color-mix(in srgb, var(--callout-color), transparent 90%);
-        box-shadow: 0 12px 40px -12px color-mix(in srgb, var(--callout-color), transparent 60%);
-        transform: translateY(-2px);
-        border-color: color-mix(in srgb, var(--callout-color), transparent 50%);
-    }
-
-    blockquote.md-callout p {
-        margin: 0.5rem 0 0 0;
-        opacity: 0.95;
-        font-size: 1rem;
-        line-height: 1.6;
-        color: inherit;
-    }
-
-    blockquote.md-callout strong {
-        color: var(--callout-color);
-        filter: brightness(1.2);
-    }
-
-    /* Blockquote-specific resetting of global quote markers */
-    blockquote.md-callout::before {
-        content: none !important;
-    }
-
-    @media (max-width: 768px) {
-        blockquote.md-callout {
-            margin: 1.75rem 0;
-            padding: 1rem 1rem 1rem 1.1rem;
-            border-left-width: 4px;
-            border-radius: var(--radius-lg, 12px);
-        }
-
-        blockquote.md-callout .md-callout-header {
-            gap: 0.5rem;
-            font-size: 0.72rem;
-            letter-spacing: 0.06em;
-        }
-
-        blockquote.md-callout[data-callout-type] .md-callout-title {
-            font-size: 0.88rem;
-        }
-
-        blockquote.md-callout p {
-            font-size: 0.95rem;
-            line-height: 1.65;
-        }
-    }
-
-    @media (hover: none) and (pointer: coarse) {
-        blockquote.md-callout {
-            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
-        }
-
-        blockquote.md-callout:active {
-            transform: scale(0.996);
-            background: color-mix(in srgb, var(--callout-color), transparent 92%);
-            border-color: color-mix(in srgb, var(--callout-color), transparent 58%);
-            box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--callout-color), transparent 50%);
-        }
-    }
+  .dark :where(.md-callout, .callout) {
+    --callout-bg: color-mix(in srgb, var(--callout-color), var(--background, #111) 92%);
+  }
 }

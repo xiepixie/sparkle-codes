@@ -51,8 +51,11 @@ pub async fn resolve_targets_batch(
             let mut best_match: Option<(i32, ResolvedLink)> = None;
 
             for (id, slug, area, title, aliases) in &candidates {
+                let slug_lower = slug.to_lowercase();
+                let title_lower = title.to_lowercase();
+                
                 // Priority 1: Exact slug match
-                if norm == slug {
+                if norm == &slug_lower {
                     best_match = Some((1, ResolvedLink {
                         target_id: Some(id.clone()),
                         target_slug: Some(slug.clone()),
@@ -62,7 +65,7 @@ pub async fn resolve_targets_batch(
                 }
                 
                 // Priority 2: Title match
-                if fname == title {
+                if fname == &title_lower {
                     if best_match.as_ref().map_or(true, |(p, _)| *p > 2) {
                         best_match = Some((2, ResolvedLink {
                             target_id: Some(id.clone()),
@@ -73,7 +76,7 @@ pub async fn resolve_targets_batch(
                 }
                 
                 // Priority 3: Alias match
-                if aliases.iter().any(|a| a == fname) {
+                if aliases.iter().any(|a| a.to_lowercase() == *fname) {
                     if best_match.as_ref().map_or(true, |(p, _)| *p > 3) {
                         best_match = Some((3, ResolvedLink {
                             target_id: Some(id.clone()),

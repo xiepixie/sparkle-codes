@@ -76,7 +76,7 @@ function InternalProviders({ children }: { children: ReactNode }) {
     <>
       <ThemeCookieSync />
       <StarryBackground />
-      <StarCursor theme={resolvedTheme} pathname={pathname} />
+      <StarCursor pathname={pathname} />
       {children}
       <Toaster 
         theme={resolvedTheme === 'dark' ? 'dark' : 'light'}

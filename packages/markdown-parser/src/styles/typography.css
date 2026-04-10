@@ -1,214 +1,401 @@
-@layer typography {
-  @scope (.markdown-body) {
-    /* --- 1. Global Container & Typography Tokens --- */
-    :scope {
-      --md-leading: 1.85;
-      --md-leading-compact: 1.6;
-      --md-p-space: 1.75rem;
-      --md-max-width: 78ch;
+@scope (.markdown-body) {
+  /* --- 1. Global Container & Text Selection --- */
+  :scope {
+    color: var(--md-foreground);
+    font-size: 1rem;
+    line-height: var(--md-leading);
+    max-width: var(--md-max-width);
+    margin: 0 auto;
+    font-family: var(--font-sans, system-ui);
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    /* Why: Long articles with many nodes (math/code) cause heavy style recalc. 
+       content-visibility: auto defers this until the section is near-viewport. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 1000px;
+  }
 
-      font-size: 0.92rem;
-      line-height: var(--md-leading);
-      color: var(--md-foreground);
-      max-width: var(--md-max-width);
-      margin: 0 auto;
-      font-family: var(--font-sans, system-ui);
-      hyphens: auto;
-      text-rendering: optimizeLegibility;
-      -webkit-font-smoothing: antialiased;
-      counter-reset: theorem example proof math-eq-counter wiki-embed;
-      position: relative;
-    }
+  ::selection {
+    background: var(--md-selection-bg);
+    color: var(--md-foreground);
+  }
 
-    &[data-density="compact"] {
-      --md-leading: var(--md-leading-compact);
-      font-size: 0.98rem;
-    }
+  /* --- 2. Headings & Heading Anchors --- */
+  :where(h1, h2, h3, h4, h5, h6) {
+    color: var(--md-foreground);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 3.5rem 0 1.5rem;
+    line-height: 1.2;
+    position: relative;
+    scroll-margin-top: 100px;
+  }
 
-    &[data-density="compact"] :where(p, ul, ol, blockquote) {
-      margin-bottom: 1.5rem;
-    }
+  :where(h1) {
+    font-size: 2.5rem;
+    margin-top: 0;
+  }
+  :where(h2) {
+    font-size: 2rem;
+    border-bottom: 1px solid var(--md-border);
+    padding-bottom: 0.5rem;
+  }
+  :where(h3) {
+    font-size: 1.5rem;
+  }
+  :where(h4) {
+    font-size: 1.25rem;
+  }
+  :where(h5) {
+    font-size: 1.1rem;
+  }
+  :where(h6) {
+    font-size: 1rem;
+    color: var(--md-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
 
-    /* --- 2. Headings --- */
-    :where(h1, h2, h3, h4, h5, h6) {
-      color: var(--md-foreground);
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      margin: 5rem 0 2.25rem;
-      line-height: 1.15;
-      position: relative;
-      scroll-margin-top: 100px;
-    }
+  /* Heading Anchor Link */
+  :where(h1, h2, h3, h4, h5, h6) a.anchor {
+    position: absolute;
+    left: -1.2em;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    color: var(--md-primary);
+    transition: opacity 0.2s ease;
+    text-decoration: none;
+    padding-right: 0.5em;
+  }
 
-    :where(h1) {
-      font-size: 2.75rem;
-      margin-top: 0;
-    }
-    :where(h2) {
-      font-size: 2.15rem;
-      border-bottom: 1px solid var(--md-border);
-      padding-bottom: 0.75rem;
-    }
-    :where(h3) {
-      font-size: 1.75rem;
-    }
-    :where(h4) {
-      font-size: 1.35rem;
-    }
+  :where(h1, h2, h3, h4, h5, h6):hover a.anchor {
+    opacity: 0.6;
+  }
 
-    :where(p) {
-      margin: 0 0 var(--md-p-space);
-      opacity: 0.92;
-      text-align: justify;
-      hyphens: auto;
+  :where(h1, h2, h3, h4, h5, h6) a.anchor:hover {
+    opacity: 1;
+  }
+
+  /* --- 3. Body Elements --- */
+  :where(p, ul, ol, dl, table, blockquote) {
+    margin-top: 0;
+    margin-bottom: var(--md-p-space);
+    line-height: var(--md-leading); /* Explicitly set to ensure prose readability */
+  }
+
+  /* Compact spacing for pre/code triggers */
+  :where(pre) {
+    margin-top: 0;
+    margin-bottom: var(--md-p-space);
+    line-height: 1.8; /* Re-scaled for improved display */
+  }
+
+  /* Starry Night Separator */
+  :where(hr) {
+    margin: 8rem auto;
+    border: 0;
+    height: 1px;
+    width: 60%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in oklab, var(--md-primary) 40%, transparent) 25%,
+      var(--md-primary) 50%,
+      color-mix(in oklab, var(--md-primary) 40%, transparent) 75%,
+      transparent 100%
+    );
+    position: relative;
+    overflow: visible;
+    opacity: 0.8;
+  }
+
+  :where(hr)::after {
+    content: "· ✦ ·";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--background);
+    padding: 0 1.5rem;
+    color: var(--md-primary);
+    font-size: 1.1rem;
+    letter-spacing: 0.1rem;
+    text-shadow:
+      0 0 8px color-mix(in oklab, var(--md-primary) 50%, transparent),
+      0 0 16px color-mix(in oklab, var(--md-primary) 20%, transparent);
+    font-weight: 300;
+    white-space: nowrap;
+  }
+
+  .dark :where(hr)::after {
+    color: var(--md-primary);
+    filter: brightness(1.2) drop-shadow(0 0 2px var(--md-primary));
+  }
+
+  :where(strong, b) {
+    font-weight: 800;
+    color: var(--md-foreground);
+  }
+  :where(em, i) {
+    font-style: italic;
+  }
+  :where(del) {
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
+  :where(sub, sup) {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+  :where(sub) {
+    bottom: -0.25em;
+  }
+  :where(sup) {
+    top: -0.5em;
+  }
+
+  /* kbd */
+  :where(kbd) {
+    background: var(--md-bg-soft);
+    border: 1px solid var(--md-border);
+    border-radius: 4px;
+    box-shadow: 0 2px 0 var(--md-border);
+    color: var(--md-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 0.1em 0.4em;
+  }
+
+  /* Highlights */
+  :where(mark) {
+    background: linear-gradient(120deg, var(--md-bg-soft) 0%, transparent 100%);
+    border-bottom: 2px solid var(--md-primary);
+    color: var(--md-foreground);
+    padding: 0 0.2em;
+    font-weight: 700;
+  }
+
+  /* Code inline */
+  :where(code:not(pre code)) {
+    background: var(--md-code-bg);
+    color: var(--md-code-foreground);
+    padding: 0.2em 0.4em;
+    border-radius: 6px;
+    font-size: 0.9em;
+    font-family: var(--font-mono, monospace);
+    border: 1px solid var(--md-code-border);
+    transition: all 0.2s var(--ease-spring);
+    margin: 0 1px;
+    display: inline; /* Use inline to avoid bloating parent line-height */
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    vertical-align: baseline;
+  }
+
+  .dark :where(code):not(pre code) {
+    background: color-mix(in srgb, var(--md-primary), transparent 88%);
+    border-color: color-mix(in srgb, var(--md-primary), transparent 75%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  :where(code):not(pre code):hover {
+    background: color-mix(in srgb, var(--md-primary), transparent 86%);
+    border-color: var(--md-primary);
+    color: var(--md-primary);
+    box-shadow:
+      0 4px 12px color-mix(in srgb, var(--md-primary), transparent 85%),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transform: translateY(-0.5px);
+  }
+
+  /* --- 4. Links System --- */
+  :where(a) {
+    color: var(--md-link);
+    text-decoration: none;
+    font-weight: 600;
+    /* Elegant underline using semi-transparent border */
+    border-bottom: 2px solid color-mix(in srgb, var(--md-link), transparent 80%);
+    transition: all 0.2s var(--ease-spring);
+    padding: 0 2px;
+    margin: 0 -2px;
+    border-radius: 4px;
+    display: inline;
+  }
+
+  :where(a):hover {
+    color: var(--md-link-hover);
+    background: color-mix(in srgb, var(--md-link), transparent 92%);
+    border-bottom-color: var(--md-link-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--md-link), transparent 88%);
+    text-decoration: none;
+  }
+
+  .dark :where(a):hover {
+    background: color-mix(in srgb, var(--md-link), transparent 88%);
+    box-shadow: 0 4px 15px color-mix(in srgb, var(--md-link), transparent 82%);
+  }
+
+  :where(.internal-link, .wiki-link) {
+    color: var(--md-internal-link);
+    background: transparent;
+    border-bottom: 1px dashed var(--md-border-strong);
+  }
+
+  :where(.internal-link, .wiki-link):hover {
+    background: var(--md-bg-soft);
+    border-bottom: 1px solid var(--md-primary);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--md-primary), transparent 90%);
+    border-radius: 4px 4px 0 0;
+    transform: translateY(-1px);
+  }
+
+  :where(a.is-unresolved) {
+    color: var(--md-muted);
+    border-bottom-color: color-mix(in srgb, var(--md-muted), transparent 50%);
+  }
+
+  :target,
+  .is-highlighted {
+    animation: target-pulse 2s ease-out forwards;
+    scroll-margin-top: 100px;
+  }
+
+  @keyframes target-pulse {
+    0% {
+      background-color: var(--md-target-highlight);
+      box-shadow: 0 0 0 4px var(--md-target-highlight);
     }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
 
-  } /* End @scope (.markdown-body) */
+  /* --- 5. Blockquotes --- */
+  :where(blockquote) {
+    border-left: 4px solid var(--md-primary);
+    padding: 1rem 1.5rem;
+    margin: 2rem 0;
+    background: linear-gradient(90deg, var(--md-bg-soft), transparent);
+    border-radius: 0 8px 8px 0;
+    color: var(--md-muted);
+    font-style: italic;
+  }
+  :where(blockquote) > :last-child {
+    margin-bottom: 0;
+  }
 
-  /* --- 3. Interactive Elements (Badges/Tags) - Global Availability --- */
-  :where(.tag-badge, .premium-tag, .md-hashtag) {
+  /* --- 6. Tags/Hashtags --- */
+  :where(.md-hashtag) {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.2rem;
     padding: 2px 10px;
     border-radius: 99px;
-    font-size: 0.65rem;
+    font-size: 0.75em;
     font-weight: 700;
-    letter-spacing: 0.05em;
     font-family: var(--font-mono, monospace);
     color: var(--md-primary);
-    background: color-mix(in srgb, var(--md-primary), transparent 94%);
-    border: 1px solid color-mix(in srgb, var(--md-primary), transparent 75%);
-    
-    margin: 4px 0.2rem;
-    transition: all 0.3s var(--ease-spring);
-    user-select: none;
-    position: relative;
-    text-decoration: none !important;
+    background: var(--md-bg-soft);
+    border: 1px solid var(--md-border-strong);
+    margin: 0 4px;
+    transition: all 0.2s ease;
+    border-bottom: none !important;
   }
 
-  :where(.tag-badge:hover, .premium-tag:hover, .md-hashtag:hover) {
+  :where(.md-hashtag):hover {
     background: color-mix(in srgb, var(--md-primary), transparent 85%);
-    box-shadow: 0 4px 15px color-mix(in srgb, var(--md-primary), transparent 80%);
-    transform: translateY(-1.5px);
-    color: var(--md-primary) !important;
+    box-shadow: var(--md-shadow-sm);
+    transform: translateY(-2px);
+    border-bottom: 1px solid var(--md-border-strong) !important;
   }
 
-  :where(.md-hashtag) {
-      vertical-align: middle;
-      margin-top: -2px;
+  /* --- 7. Lists --- */
+  :where(ul, ol) {
+    padding-left: 2rem;
+  }
+  :where(ul) {
+    list-style: none;
+  }
+  :where(ul) > li {
+    position: relative;
+  }
+  :where(ul) > li::before {
+    content: "✦";
+    position: absolute;
+    left: -1.25rem;
+    color: var(--md-primary);
+    font-size: 0.8em;
+    top: 0.2em;
+  }
+  :where(ul ul) > li::before {
+    content: "✧";
+  }
+  :where(ul ul ul) > li::before {
+    content: "◦";
   }
 
-  :where(.badge-primary) {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 2.5px 12px;
-    border-radius: 99px;
-    font-size: 0.68rem;
+  :where(ol) {
+    list-style: decimal;
+  }
+  :where(ol) > li::marker {
+    color: var(--md-primary);
     font-weight: 800;
-    letter-spacing: 0.05em;
-    font-family: var(--font-mono, monospace);
-    background: var(--md-primary);
-    color: white;
-    box-shadow: 0 2px 10px color-mix(in srgb, var(--md-primary), transparent 80%);
-    transition: all 0.2s ease;
+    font-family: var(--font-mono);
   }
 
-  :where(.badge-primary:hover) {
-      transform: scale(1.02) translateY(-1px);
-      box-shadow: 0 4px 15px color-mix(in srgb, var(--md-primary), transparent 60%);
+  :where(li) {
+    margin-bottom: 0.5rem;
+  }
+  :where(li) > :where(p, blockquote, ul, ol, pre) {
+    margin-top: 0.5rem;
   }
 
-  :where(.badge-outline) {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 2.5px 12px;
-    border-radius: 99px;
-    font-size: 0.68rem;
-    font-weight: 700;
-    font-family: var(--font-mono, monospace);
-    border: 1px solid var(--md-border);
+  /* --- 8. Footnotes --- */
+  :where(.footnotes) {
+    margin-top: 5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--md-border);
+    font-size: 0.9em;
+    color: var(--md-muted);
+  }
+  :where(.footnotes) hr {
+    display: none;
+  }
+  :where(.footnotes) h2 {
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
     color: var(--md-foreground);
-    opacity: 0.6;
-    transition: all 0.2s ease;
   }
-
-  @scope (.markdown-body) {
-    /* --- 4. Lists & Tables --- */
-    :where(ul, ol) {
-      margin: 2.5rem 0;
-      padding-left: 2.5rem;
-    }
-
-    :where(ul) {
-      list-style-type: "✦ ";
-    }
-    :where(ul) li::marker {
-      color: var(--md-primary);
-      font-size: 0.9rem;
-      text-shadow: 0 0 10px color-mix(in srgb, var(--md-primary), transparent 50%);
-    }
-
-    :where(ol) {
-      list-style-type: decimal;
-    }
-    :where(ol) li::marker {
-      color: var(--md-primary);
-      font-weight: 900;
-      font-family: var(--font-mono, monospace);
-    }
-
-    :where(li) {
-      margin-bottom: 1.25rem;
-      line-height: 1.8;
-      opacity: 0.95;
-      padding-left: 0.5rem;
-    }
-
-    :where(ul) ul {
-      list-style-type: "✧ ";
-    }
-    :where(ul) ul ul {
-      list-style-type: "◦ ";
-    }
-
-    :where(td) {
-      border-bottom: 1px solid color-mix(in srgb, var(--md-foreground), transparent 95%) !important;
-      padding: 1.25rem 1.5rem !important;
-    }
-
-    /* --- 5. Inline Prose & Quotes --- */
-    :where(strong) {
-      color: var(--md-foreground);
-      font-weight: 900;
-    }
-
-    :where(code):not(pre code, .math-source-content, .language-math, .math-inline, .math-block) {
-      background: color-mix(in srgb, var(--md-primary), transparent 92%);
-      color: var(--md-primary);
-      padding: 0.2rem 0.45rem;
-      border-radius: 6px;
-      font-size: 0.85em;
-      font-family: var(--font-mono, monospace);
-      font-weight: 600;
-      border: 1px solid color-mix(in srgb, var(--md-primary), transparent 85%);
-    }
-
-    :where(blockquote) {
-      border-left: 8px solid var(--md-primary);
-      padding: 0.75rem 1.5rem;
-      margin: 1.5rem 0;
-      font-style: italic;
-      background: linear-gradient(90deg, color-mix(in srgb, var(--md-primary), transparent 94%), transparent);
-      border-radius: 4px;
-      position: relative;
-      opacity: 0.95;
-      line-height: var(--md-leading-compact);
-    }
-
-    :where(blockquote) > :first-child { margin-top: 0 !important; }
-    :where(blockquote) > :last-child { margin-bottom: 0 !important; }
+  :where(.data-footnote-backref) {
+    font-family: var(--font-mono);
+    color: var(--md-primary);
+    text-decoration: none;
+    border: none !important;
+    padding: 0 4px;
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  :where(.data-footnote-backref):hover {
+    transform: translateX(3px) scale(1.1);
+  }
+  :where([data-footnote-ref]) {
+    border-bottom: none !important;
+    padding: 0 2px;
+    font-weight: 800;
+    color: var(--md-primary);
+  }
+  :where([data-footnote-ref])::before {
+    content: "[";
+    color: var(--md-muted);
+  }
+  :where([data-footnote-ref])::after {
+    content: "]";
+    color: var(--md-muted);
   }
 }

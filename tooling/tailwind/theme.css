@@ -31,6 +31,12 @@
 
 	--color-destructive: var(--destructive);
 	--color-destructive-foreground: var(--destructive-foreground);
+	--color-success: var(--success);
+	--color-success-foreground: var(--success-foreground);
+	--color-warning: var(--warning);
+	--color-warning-foreground: var(--warning-foreground);
+	--color-info: var(--info);
+	--color-info-foreground: var(--info-foreground);
 
 	--color-border: var(--border);
 	--color-input: var(--input);
@@ -82,14 +88,14 @@
 	:root {
 		color-scheme: light;
 
-		/* Background: 极致干净的冷白 */
-		--background: oklch(0.995 0.002 255);
-		--foreground: oklch(0.20 0.02 260);
+		/* Background: 带一丝星云紫调的暖冷中性色，避免死白 */
+		--background: oklch(0.985 0.007 285);
+		--foreground: oklch(0.24 0.028 278);
 		/* 深灰偏一点蓝，代替纯黑 */
 
-		--card: oklch(1 0 0);
+		--card: oklch(0.993 0.008 285);
 		--card-foreground: var(--foreground);
-		--popover: oklch(1 0 0);
+		--popover: oklch(0.996 0.006 285);
 		--popover-foreground: var(--foreground);
 
 		/* Primary: 你指定的沉稳皇家紫 */
@@ -97,40 +103,46 @@
 		--primary-rgb: 81, 59, 178;
 		--primary-foreground: oklch(1 0 0);
 
-		/* Secondary / Muted: 柔和的浅灰色背景，用于次要区域和代码块 */
-		--secondary: oklch(0.96 0.005 255);
-		--secondary-foreground: oklch(0.30 0.03 260);
-		--muted: oklch(0.96 0.005 255);
-		--muted-foreground: oklch(0.55 0.01 255);
+		/* Secondary / Muted: 保留空气感，但引入更明显的星云染色 */
+		--secondary: oklch(0.958 0.015 285);
+		--secondary-foreground: oklch(0.33 0.038 278);
+		--muted: oklch(0.968 0.011 272);
+		--muted-foreground: oklch(0.52 0.025 272);
 
-		/* Accent: 鼠标 Hover 时的淡紫色高光 */
-		--accent: color-mix(in oklab, var(--primary) 8%, white);
-		--accent-foreground: var(--primary);
+		/* Accent: 让悬停和次级强调带一点极光青的层次 */
+		--accent: color-mix(in oklab, var(--aurora) 14%, white);
+		--accent-foreground: oklch(0.33 0.05 250);
 
 		--destructive: oklch(0.60 0.20 25);
 		--destructive-foreground: oklch(1 0 0);
+		--success: oklch(0.69 0.12 160);
+		--success-foreground: oklch(0.25 0.04 170);
+		--warning: oklch(0.78 0.14 82);
+		--warning-foreground: oklch(0.34 0.06 72);
+		--info: oklch(0.69 0.11 238);
+		--info-foreground: oklch(0.28 0.04 246);
 
-		--border: oklch(0.90 0.01 255);
+		--border: oklch(0.90 0.016 278);
 		--input: var(--border);
-		--ring: color-mix(in oklab, var(--primary) 40%, transparent);
+		--ring: color-mix(in oklab, var(--aurora) 36%, var(--primary) 28%, transparent);
 		/* 聚焦环颜色 */
 
 		/* 品牌氛围光 */
-		--aurora: oklch(0.70 0.12 230);
+		--aurora: oklch(0.73 0.12 230);
 		/* 浅色下的极光青 */
-		--starlight: oklch(0.75 0.15 315);
+		--starlight: oklch(0.76 0.15 322);
 		/* 浅色下的星光粉 */
-		--glow: color-mix(in oklab, var(--primary) 10%, transparent);
-		--ambient: color-mix(in oklab, var(--primary) 3%, transparent);
+		--glow: color-mix(in oklab, var(--primary) 10%, var(--starlight) 6%, transparent);
+		--ambient: color-mix(in oklab, var(--aurora) 4%, var(--primary) 3%, transparent);
 		
 		--nebula: oklch(0.25 0.05 270); /* 深邃底色 */
-		--glass: rgba(255, 255, 255, 0.7);
+		--glass: color-mix(in srgb, white 72%, rgb(var(--primary-rgb)) 4%);
 		--laser: oklch(0.60 0.22 295); /* 激光紫色 */
 
 		/* Pure CSS Ambient Background for Light Mode (Zero JS Overhead) */
-		--sky-spot-1: radial-gradient(circle at 20% 30%, color-mix(in oklch, var(--primary) 3%, transparent) 0%, transparent 50%);
-		--sky-spot-2: radial-gradient(circle at 80% 70%, color-mix(in oklch, var(--aurora) 3%, transparent) 0%, transparent 40%);
-		--sky-spot-3: radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--starlight) 2%, transparent) 0%, transparent 60%);
+		--sky-spot-1: radial-gradient(circle at 20% 30%, color-mix(in oklch, var(--primary) 4%, transparent) 0%, transparent 52%);
+		--sky-spot-2: radial-gradient(circle at 80% 70%, color-mix(in oklch, var(--aurora) 5%, transparent) 0%, transparent 42%);
+		--sky-spot-3: radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--starlight) 3%, transparent) 0%, transparent 62%);
 		--sky-gradient: var(--sky-spot-1), var(--sky-spot-2), var(--sky-spot-3);
 
 		/* Atomic Tokens for StarryBackground (Clouds) */
@@ -172,18 +184,24 @@
 
 		--destructive: oklch(0.65 0.20 25);
 		--destructive-foreground: oklch(0.96 0.01 265);
+		--success: oklch(0.78 0.13 160);
+		--success-foreground: oklch(0.18 0.03 175);
+		--warning: oklch(0.84 0.14 85);
+		--warning-foreground: oklch(0.22 0.04 78);
+		--info: oklch(0.80 0.12 235);
+		--info-foreground: oklch(0.18 0.03 245);
 
 		--border: oklch(0.22 0.02 270);
 		--input: var(--border);
-		--ring: var(--primary);
+		--ring: color-mix(in oklab, var(--aurora) 34%, var(--primary) 42%);
 
 		--aurora: oklch(0.78 0.16 220);
 		--starlight: oklch(0.80 0.18 320);
-		--glow: color-mix(in oklab, var(--primary) 25%, transparent);
-		--ambient: color-mix(in oklab, var(--primary) 10%, transparent);
+		--glow: color-mix(in oklab, var(--primary) 24%, var(--starlight) 8%, transparent);
+		--ambient: color-mix(in oklab, var(--aurora) 10%, var(--primary) 9%, transparent);
 
 		--nebula: oklch(0.15 0.04 275);
-		--glass: rgba(0, 0, 0, 0.4);
+		--glass: color-mix(in srgb, rgb(7 10 21) 74%, rgb(var(--primary-rgb)) 8%);
 		--laser: var(--primary);
 	}
 }

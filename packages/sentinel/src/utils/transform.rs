@@ -85,22 +85,36 @@ pub fn resolve_placeholders_in_html(html: &str, links: &[LinkInstance]) -> Strin
             let escaped_url = url.replace("\"", "&quot;");
             
             if link.kind == "EMBED" {
-                // Replace image embed data-src
-                // We match the data-src attribute specifically to be more robust
-                let re_str = format!(r##"(?i)class="wiki-embed"([^>]*)data-src="{}"##, target_escaped);
+                // Replace image embed data-src attribute only, preserving other attributes
+                let re_str = format!(r##"(?i)data-src\s*=\s*"{}"([^>]*?)>"##, target_escaped);
                 if let Ok(re) = Regex::new(&re_str) {
-                    let repl = format!("class=\"wiki-embed resolved-image\"$1data-src=\"{}\"", escaped_url);
-                    final_html = re.replace_all(&final_html, repl.as_str()).to_string();
+                    final_html = re.replace_all(&final_html, |caps: &regex::Captures| {
+                        let attrs_after = &caps[1];
+                        format!("data-src=\"{}\"{} >", escaped_url, attrs_after)
+                    }).to_string();
+                }
+                
+                // Also ensure the classes are updated to reflect resolution
+                let re_class = format!(r##"(?i)<span([^>]+?)data-src="{}"([^>]*?)>"##, regex::escape(&escaped_url));
+                if let Ok(re) = Regex::new(&re_class) {
+                    final_html = re.replace_all(&final_html, |caps: &regex::Captures| {
+                        let attrs_before = &caps[1];
+                        let attrs_after = &caps[2];
+                        let mut new_attrs = attrs_before.to_string();
+                        if !new_attrs.contains("resolved-image") {
+                            new_attrs.push_str(" resolved-image");
+                        }
+                        format!("<span{}data-src=\"{}\"{}>", new_attrs, escaped_url, attrs_after)
+                    }).to_string();
                 }
             } else {
-                // Link to an attachment file
-                let re_str = format!(r##"(?i)class="wiki-link"([^>]*)data-target="{}"([^>]*)href="#"##, target_escaped);
+                // Link to an attachment file - replace href attribute
+                let re_str = format!(r##"(?i)data-target\s*=\s*"{}"([^>]*)href\s*=\s*"#""##, target_escaped);
                 if let Ok(re) = Regex::new(&re_str) {
-                    let repl = format!("class=\"wiki-link resolved-attachment\"$1data-target=\"{link_target}\"$2href=\"{url}\"", 
-                        link_target = &link.target, 
-                        url = &url
-                    );
-                    final_html = re.replace_all(&final_html, repl.as_str()).to_string();
+                    final_html = re.replace_all(&final_html, |caps: &regex::Captures| {
+                        let attrs_between = &caps[1];
+                        format!("data-target=\"{}\"{}href=\"{}\"", &link.target, attrs_between, escaped_url)
+                    }).to_string();
                 }
             }
         } 
@@ -116,13 +130,16 @@ pub fn resolve_placeholders_in_html(html: &str, links: &[LinkInstance]) -> Strin
                 
                 let full_href = format!("{}/{}", base_path, slug);
                 
+                // We match any element with data-target and href="#"
                 let re_str = format!(r##"(?i)data-target="{}"([^>]*)href="#"##, target_escaped);
                 if let Ok(re) = Regex::new(&re_str) {
-                    let repl = format!("data-target=\"{link_target}\"$1href=\"{full_href}\"", 
-                        link_target = &link.target, 
-                        full_href = &full_href
-                    );
-                    final_html = re.replace_all(&final_html, repl.as_str()).to_string();
+                    final_html = re.replace_all(&final_html, |caps: &regex::Captures| {
+                        let attrs_between = &caps[1];
+                        format!(
+                            "data-target=\"{}\"{}href=\"{}\"", 
+                            &link.target, attrs_between, &full_href
+                        )
+                    }).to_string();
                 }
             }
         }

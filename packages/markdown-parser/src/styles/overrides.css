@@ -1,0 +1,14 @@
+@scope (.markdown-body) {
+  /* --- DaisyUI Mockup Overrides --- */
+  /* Why: These overrides ensure that DaisyUI components used inside Markdown 
+     conform to our Starry Night design tokens and don't introduce unwanted 
+     borders or backgrounds. */
+  .code-fence-container .mockup-code {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    backdrop-filter: none !important;
+    width: 100% !important;
+  }
+}

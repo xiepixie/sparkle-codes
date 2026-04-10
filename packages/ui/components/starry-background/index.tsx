@@ -21,6 +21,18 @@ const SKY_SCENE_STATE_KEY = "sky-scene";
 const GOLD_COLOR = "255, 215, 0";
 const IS_DEV = process.env.NODE_ENV !== "production";
 
+// Static theme colors to avoid heavy getComputedStyle calls on theme toggle
+const THEME_COLORS = {
+  light: {
+    primary: "186, 230, 253",
+    secondary: "205, 180, 255",
+  },
+  dark: {
+    primary: "191, 123, 255",
+    secondary: "126, 214, 255",
+  }
+};
+
 interface ThemeColors {
   primary: string;
   secondary: string;
@@ -806,10 +818,13 @@ export function StarryBackground() {
       return;
     }
 
-    const rootStyles = getComputedStyle(document.documentElement);
+    // Use static mapping instead of getComputedStyle to avoid forced synchronous layout
+    const mode = themeRef.current === "dark" ? "dark" : "light";
+    const colors = THEME_COLORS[mode];
+    
     GlobalSkyCache.colors = {
-      primary: rootStyles.getPropertyValue("--cloud-primary").trim() || "191, 123, 255",
-      secondary: rootStyles.getPropertyValue("--cloud-secondary").trim() || "126, 214, 255",
+      primary: colors.primary,
+      secondary: colors.secondary,
       white: "255, 255, 255",
     };
 
@@ -838,8 +853,23 @@ export function StarryBackground() {
     }
   }, []);
 
-  useLayoutEffect(() => {
-    start();
+  // Optimized Theme Switch: Defer the expensive background restart to an idle period.
+  // This ensures the main UI (text, buttons, navigation) updates instantly 
+  // without being blocked by the Canvas initialization.
+  useEffect(() => {
+    const handleStart = () => {
+      if (typeof window === "undefined") return;
+      
+      // Use requestIdleCallback if available, fallback to a small timeout
+      // This splits the long task of scene rebuilding from the theme toggle interaction.
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(() => start(), { timeout: 200 });
+      } else {
+        setTimeout(start, 50);
+      }
+    };
+
+    handleStart();
   }, [isDark, start]);
 
   useEffect(() => {
@@ -869,9 +899,13 @@ export function StarryBackground() {
       mouseRef.current = { x: event.clientX, y: event.clientY };
     };
 
+    let resizeTimer: number | undefined;
     const handleResize = () => {
-      rebuildScene(window.innerWidth, window.innerHeight);
-      drawFrame();
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        rebuildScene(window.innerWidth, window.innerHeight);
+        drawFrame();
+      }, 150);
     };
 
     const handleVisibility = () => {
@@ -942,6 +976,7 @@ export function StarryBackground() {
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibility);
       clearInterval(syncInterval);
+      if (resizeTimer) window.clearTimeout(resizeTimer);
       // NOTE: We don't call stop() here because this effect re-runs on theme switch.
       // Transitioning should NOT kill the animation loop.
     };

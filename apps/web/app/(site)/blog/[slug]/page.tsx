@@ -1,16 +1,10 @@
-// Post Page Component - High Performance Server Component with PPR.
-import { notFound } from "next/navigation";
-import Link from "next/link";
 import { Calendar, ChevronLeft } from "lucide-react";
-import { getPostBySlug, getAllPostSummaries } from "@/lib/blog";
+import Link from "next/link";
+import { notFound, permanentRedirect } from "next/navigation";
+
 import { ReadingHeader } from "@/components/ReadingHeader";
-
-/**
- * Technical Post Page - High Performance Server Component.
- * Optimized for React 19 / Turbopack with BFCache support.
- */
-
 import { MarkdownInteractivity } from "@/components/markdown-interactivity";
+import { getAllPostSummaries, getPostBySlug } from "@/lib/blog";
 
 const BUILD_PLACEHOLDER_SLUG = "__build-placeholder__";
 
@@ -28,12 +22,23 @@ export default async function PostPage({ params }: PostPageProps) {
     notFound();
   }
 
-  // 🚀 Fetch post from DB
+  // 1. Fetch post from DB
+  // 🚀 Industrial Rule: The database is the single source of truth (SSOT) for canonicalization.
+  // Instead of guessing or manual normalization (normalizeSlug), we perform a unified lookup.
   const post = await getPostBySlug(slug);
 
   if (!post) {
-    console.error(`[SLUG ERROR] Post not found for decoded slug: ${slug}`);
+    console.error(`[ROUTE ERROR] No post found for slug: ${slug}`);
     notFound();
+  }
+
+  // 2. Canonical Slug Enforcement (Fail-safe)
+  // 为什么这样做：保证系统只有唯一的 SEO 路径。哪怕用户通过短路径 (README) 或大小写错误的路径进入，
+  // 也会通过 301 重定向到数据库定义的 Canonical Slug。
+  // 注意：我们在服务器端预渲染阶段 (blog.ts) 已经重写了绝大部分 Wiki 链接。
+  // 此处逻辑仅作为手动输入、外部外链或旧链接的兜底标准化。
+  if (post.slug !== slug) {
+    permanentRedirect(`/blog/${encodeURIComponent(post.slug)}`);
   }
 
   // Fetch some suggested posts as fallback for reading history from the global cache

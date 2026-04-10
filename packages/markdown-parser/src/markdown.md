@@ -40,8 +40,8 @@ Once we have the initial HTML structure, we apply specialized transformations fo
 #### 3. Obsidian Callouts ([!type])
 *   **Pass 2.7**: Identifies blockquotes starting with Obsidian callout syntax.
 *   **Transformation**: Converts the blockquote into a structured `<blockquote class="md-callout" data-callout-type="type">` with a header and body. This ensures **SSR/CSR structural parity** and seamless alignment with the design system.
-*   **Semantic Header**: Extracts the `[!type]` and optional `TITLE` into a `md-callout-header` div.
-*   **Body Preservation**: Captures the remaining blockquote content into a `md-callout-body` div, preserving nested markdown elements (like lists or math).
+*   **Semantic Header**: Extracts the `[!type]` and optional `TITLE` into a `md-callout__header` div.
+*   **Body Preservation**: Captures the remaining blockquote content into a `md-callout__content` div, preserving nested markdown elements (like lists or math).
 
 #### 4. Wiki-Links & Inline Entities
 *   **Wiki-Link Hardening**: The parser uses a 512-character lookahead limit and **strict boundary stops**. If it encounters `<`, `>`, `&`, or `\n`, it aborts the wiki-link match. This prevents unclosed `[[` from swallowing subsequent content.

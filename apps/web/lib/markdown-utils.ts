@@ -28,10 +28,10 @@ export function highlightLatex(tex: string): string {
     };
     source = source.replace(/\\\\/g, m => createToken(m, 'tex-newline'));
     source = source.replace(/\\[a-zA-Z]+/g, m => {
-        if (LATEX_GREEK.has(m)) return createToken(m, 'tex-greek');
-        if (LATEX_FUNCTIONS.has(m)) return createToken(m, 'tex-function');
-        if (LATEX_SYMBOLS.has(m)) return createToken(m, 'tex-symbol');
-        if (m === '\\begin' || m === '\\end') return createToken(m, 'tex-env-cmd');
+        if (LATEX_GREEK.has(m)) { return createToken(m, 'tex-greek'); }
+        if (LATEX_FUNCTIONS.has(m)) { return createToken(m, 'tex-function'); }
+        if (LATEX_SYMBOLS.has(m)) { return createToken(m, 'tex-symbol'); }
+        if (m === '\\begin' || m === '\\end') { return createToken(m, 'tex-env-cmd'); }
         return createToken(m, 'tex-command');
     });
     source = source.replace(/(\{)([a-zA-Z*]+)(\})/g, (_match, p1, p2, p3) => {

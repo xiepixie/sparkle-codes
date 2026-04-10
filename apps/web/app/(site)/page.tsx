@@ -1,18 +1,20 @@
-import { getAppUrl } from "@repo/utils";
-import { TiltWrapper } from "@repo/ui";
-import { GithubActivity } from "@/components/SiteWidgets";
 import {
-  ArrowRight,
-  Bot,
-  BrainCircuit,
-  CalendarClock,
-  Mail,
-  NotebookPen,
-  Sparkles,
-  TestTube2,
-  Workflow,
+	ArrowRight,
+	Bot,
+	BrainCircuit,
+	CalendarClock,
+	Mail,
+	NotebookPen,
+	Sparkles,
+	TestTube2,
+	Workflow,
 } from "lucide-react";
 import Link from "next/link";
+import { BlogWarmup } from "@/components/Blog/BlogWarmup";
+import { GithubActivity } from "@/components/SiteWidgets";
+import { warm } from "@/lib/blog";
+import { TiltWrapper } from "@repo/ui";
+import { getAppUrl } from "@repo/utils";
 
 const focusAreas = [
   {
@@ -78,8 +80,6 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
   );
 }
 
-import { warm } from "@/lib/blog";
-import { BlogWarmup } from "@/components/Blog/BlogWarmup";
 
 
 export default async function HomePage() {
@@ -102,10 +102,10 @@ export default async function HomePage() {
               xpx personal lab
             </div>
 
-            <h1 className="mt-8 max-w-[14ch] text-balance text-[clamp(3.5rem,7vw,6.5rem)] font-bold leading-[1.05] tracking-[-0.04em] text-foreground">
+            <h1 className="mt-8 max-w-[10rem] text-balance text-[clamp(3.5rem,7vw,6.5rem)] font-bold leading-[1.05] tracking-[-0.04em] text-foreground">
               Crafting AI tools & quiet automation.
             </h1>
-            <p className="mt-8 max-w-[54ch] text-[1.15rem] leading-[1.8] text-muted-foreground/90">
+            <p className="mt-8 max-w-[32rem] text-[1.15rem] leading-[1.8] text-muted-foreground/90">
               Hi, I'm <span className="font-semibold text-foreground">Xavier Pax (xpx)</span>. 
               I build full-stack interfaces, rigorous testing systems, and practical AI applications 
               that replace daily chaos with calm momentum.
@@ -201,9 +201,9 @@ export default async function HomePage() {
                       <h3 className="mt-3 text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em] group-hover:text-primary transition-colors">
                         {title}
                       </h3>
-                      <p className="mt-5 max-w-[45ch] text-[1.1rem] leading-[1.7] text-muted-foreground [overflow-wrap:anywhere]">
-                        {description}
-                      </p>
+                        <p className="mt-5 max-w-[28rem] text-[1.1rem] leading-[1.7] text-muted-foreground [overflow-wrap:anywhere]">
+                          {description}
+                        </p>
                     </div>
                     <div className="hidden shrink-0 sm:flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/5 text-primary transition-transform group-hover:rotate-6">
                       <Icon className="h-7 w-7" />
@@ -236,7 +236,7 @@ export default async function HomePage() {
           <h2 className="text-[clamp(2.2rem,4vw,3.5rem)] font-bold leading-[1.1] tracking-[-0.03em]">
             Want to see how it's built?
           </h2>
-          <p className="mt-6 max-w-[44ch] text-[1.15rem] leading-[1.7] text-muted-foreground">
+          <p className="mt-6 max-w-[27rem] text-[1.15rem] leading-[1.7] text-muted-foreground">
             I document my implementations, testing strategies, and architecture decisions openly in my notes.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row gap-4 w-full sm:w-auto">

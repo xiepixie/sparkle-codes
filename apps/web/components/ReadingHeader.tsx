@@ -122,6 +122,73 @@ export function ReadingHeader({
 	const lastScrollY = useRef(0);
 	const isGuarding = useRef(false);
 
+	const renderKatex = useMemo(() => {
+		return (text: string) => {
+			if (typeof window === "undefined" || !text) {
+				return text;
+			}
+
+			if (katexCache.current[text]) {
+				return katexCache.current[text];
+			}
+
+			if (text.includes("katex-html")) {
+				return text;
+			}
+
+			let result: string;
+			const restoredText = text.replace(/__SPARKLE_ESCAPED_HASH__/g, "#");
+
+			const hasMathClasses =
+				restoredText.includes("math-inline") ||
+				restoredText.includes("math-block") ||
+				restoredText.includes("sparkle-math");
+
+			if (hasMathClasses) {
+				const temp = document.createElement("div");
+				temp.innerHTML = restoredText;
+				temp
+					.querySelectorAll(".math-inline, .math-block, .sparkle-math")
+					.forEach((el) => {
+						const tex = el.getAttribute("data-tex");
+						if (tex) {
+							try {
+								el.innerHTML = katex.renderToString(tex, {
+									throwOnError: false,
+									displayMode: false,
+								});
+								(el as HTMLElement).style.margin = "0";
+								(el as HTMLElement).style.padding = "0";
+							} catch (_error) {}
+						}
+					});
+				result = temp.innerHTML;
+			} else {
+				result = restoredText
+					.split(/(\$\$?[\s\S]+?\$\$?)/g)
+					.map((part) => {
+						if (part.startsWith("$")) {
+							const isBlock = part.startsWith("$$");
+							const formula = isBlock ? part.slice(2, -2) : part.slice(1, -1);
+							try {
+								return katex.renderToString(formula, {
+									displayMode: false,
+									throwOnError: false,
+								});
+							} catch (_error) {
+								return part;
+							}
+						}
+						return part;
+					})
+					.join("");
+			}
+
+			katexCache.current[text] = result;
+			return result;
+		};
+	}, []);
+
 	const [isNavigating, startNavTransition] = useTransition();
 	const [pendingUrl, setPendingUrl] = useState<string | null>(null);
 	const router = useRouter();
@@ -176,33 +243,41 @@ export function ReadingHeader({
 		if (entry?.sectionSlug) {
 			const targetId = entry.sectionSlug;
 
-			const restoreScroll = () => {
-				// Safety: Never trigger restoration during a theme transition
-				if ((window as any).__SPARKLE_THEME_TRANSITION__) {
-					return false;
-				}
-				const element = document.getElementById(targetId);
-				if (element) {
-					isRestoring.current = true;
-					isGuarding.current = true;
+		const restoreScroll = () => {
+			// Safety: Never trigger restoration during a theme transition
+			if ((window as any).__SPARKLE_THEME_TRANSITION__) {
+				return false;
+			}
+			
+			const element = document.getElementById(targetId);
+			if (element) {
+				isRestoring.current = true;
+				isGuarding.current = true;
 
-					const headerOffset = 100;
-					const top =
-						element.getBoundingClientRect().top + window.scrollY - headerOffset;
+				const headerOffset = 100;
+				// We use a RAF to ensure we calculate the position after the current paint cycle
+				requestAnimationFrame(() => {
+					const rect = element.getBoundingClientRect();
+					const top = rect.top + window.scrollY - headerOffset;
 
 					window.scrollTo({ top, behavior: "smooth" });
 
-					// Apply highlight effect using CSS animation defined in JUMP_HIGHLIGHT_STYLE
+					// Apply highlight effect
 					element.classList.add("jump-highlight");
 					setTimeout(() => {
 						element.classList.remove("jump-highlight");
 						isGuarding.current = false;
+						// Only allow re-restoration after a significant cooling period
+						setTimeout(() => {
+							isRestoring.current = false;
+						}, 3000);
 					}, 2000);
+				});
 
-					return true;
-				}
-				return false;
-			};
+				return true;
+			}
+			return false;
+		};
 
 			// Attempt immediate restoration or wait for content hydration via MutationObserver
 			if (!restoreScroll()) {
@@ -297,24 +372,21 @@ export function ReadingHeader({
 				return [];
 			}
 
+			// We only scan H1-H3 for the navigator to keep the menu clean and performant
 			const headings = Array.from(
-				markdownBody.querySelectorAll("h1, h2, h3, h4"),
+				markdownBody.querySelectorAll("h1, h2, h3"),
 			) as HTMLElement[];
 
-			// Headings discovery no longer requires scrollY for top calculations
-			// as active tracking is handled by the IntersectionObserver.
-
 			return headings.map((h, i) => {
-				// We expect the Rust parser to have provided IDs already.
 				if (!h.id) {
 					const text = h.textContent?.trim() || "";
-					const slug = text
+					const slugified = text
 						.toLowerCase()
 						.replace(/[^a-z0-9]+/g, "-")
 						.replace(/-+$/, "")
 						.replace(/^-+/, "");
 
-					h.id = `h-${slug || i}`;
+					h.id = `h-${slugified || i}`;
 				}
 
 				const rawTitle = h.innerHTML;
@@ -325,11 +397,11 @@ export function ReadingHeader({
 					renderedTitle: renderKatex(rawTitle),
 					rawTitle: rawTitle,
 					level: Number.parseInt(h.tagName.substring(1), 10),
-					top: 0, // No longer using rect.top for scroll tracking
+					top: 0,
 				};
 			});
 		};
-	}, []);
+	}, [renderKatex]); // renderKatex is now properly memoized
 
 	useEffect(() => {
 		const target = document.querySelector(".markdown-body") as HTMLElement;
@@ -365,6 +437,9 @@ export function ReadingHeader({
 		};
 
 		const updateSegments = () => {
+			if ((window as any).__SPARKLE_THEME_TRANSITION__) {
+				return;
+			}
 			const nextSegments = discoverSegments();
 			setSegments((prev) =>
 				areSegmentsEqual(prev, nextSegments) ? prev : nextSegments,
@@ -476,77 +551,6 @@ export function ReadingHeader({
 		isRestoring.current = false;
 		katexCache.current = {};
 	}, [slug]);
-
-	const renderKatex = (text: string) => {
-		if (typeof window === "undefined" || !text) {
-			return text;
-		}
-
-		if (katexCache.current[text]) {
-			return katexCache.current[text];
-		}
-
-		// Prevent double-rendering if KaTeX is already present
-		if (text.includes("katex-html")) {
-			return text;
-		}
-
-		let result: string;
-
-		// 1. Restore escaped hashtags from Rust placeholder BEFORE regex split
-		const restoredText = text.replace(/__SPARKLE_ESCAPED_HASH__/g, "#");
-
-		const hasMathClasses =
-			restoredText.includes("math-inline") ||
-			restoredText.includes("math-block") ||
-			restoredText.includes("sparkle-math");
-
-		if (hasMathClasses) {
-			const temp = document.createElement("div");
-			temp.innerHTML = restoredText;
-			temp
-				.querySelectorAll(".math-inline, .math-block, .sparkle-math")
-				.forEach((el) => {
-					const tex = el.getAttribute("data-tex");
-					if (tex) {
-						try {
-							// ALWAYS use inline mode for header/lists to prevent large vertical gaps
-							el.innerHTML = katex.renderToString(tex, {
-								throwOnError: false,
-								displayMode: false,
-							});
-							// Strip unnecessary margins often added by KaTeX displays
-							(el as HTMLElement).style.margin = "0";
-							(el as HTMLElement).style.padding = "0";
-						} catch (_error) {}
-					}
-				});
-			result = temp.innerHTML;
-		} else {
-			// Fallback for raw $ formula $
-			result = restoredText
-				.split(/(\$\$?[\s\S]+?\$\$?)/g)
-				.map((part) => {
-					if (part.startsWith("$")) {
-						const isBlock = part.startsWith("$$");
-						const formula = isBlock ? part.slice(2, -2) : part.slice(1, -1);
-						try {
-							return katex.renderToString(formula, {
-								displayMode: false, // Force inline for header readability
-								throwOnError: false,
-							});
-						} catch (_error) {
-							return part;
-						}
-					}
-					return part;
-				})
-				.join("");
-		}
-
-		katexCache.current[text] = result;
-		return result;
-	};
 
 	const activeSegment = segments.find((s) => s.id === activeSegmentId);
 	const centerLabel = activeSegment?.renderedTitle || renderKatex(displayTitle);

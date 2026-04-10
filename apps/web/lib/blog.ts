@@ -11,9 +11,9 @@ import { cacheLife, cacheTag } from "next/cache";
 import { createHighlighter } from "shiki";
 import {
 	escapeHtml,
+	highlightLatex,
 	normalizeWhitespace,
 	renderMarkdownSnippet as renderSearchSnippet,
-	highlightLatex,
 } from "./markdown-utils";
 
 // === SHIKI SINGLETON PRE-WARMING ===
@@ -208,7 +208,6 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 	if (processed.includes("sparkle-math")) {
 		const mathRegex =
 			/<(span|div)[^>]*?class="[^"]*?sparkle-math[^"]*?"[^>]*?data-tex="([^"]*?)"[^>]*?>([\s\S]*?)<\/\1>/g;
-		const highlighter = await getHighlighter();
 
 		processed = await asyncReplace(
 			processed,

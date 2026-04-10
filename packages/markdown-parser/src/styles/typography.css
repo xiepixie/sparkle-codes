@@ -180,34 +180,41 @@
 
   /* Code inline */
   :where(code:not(pre code)) {
-    background: var(--md-code-bg);
-    color: var(--md-code-foreground);
-    padding: 0.2em 0.4em;
-    border-radius: 6px;
-    font-size: 0.9em;
+    background: color-mix(in srgb, var(--md-primary), transparent 90%);
+    color: var(--md-primary);
+    padding: 0.15em 0.35em;
+    border-radius: 4px;
+    font-size: 0.88em;
     font-family: var(--font-mono, monospace);
-    border: 1px solid var(--md-code-border);
-    transition: all 0.2s var(--ease-spring);
+    border: 1.2px solid color-mix(in srgb, var(--md-primary), transparent 70%);
+    transition: 
+      background-color 0.2s var(--ease-spring),
+      color 0.2s var(--ease-spring),
+      border-color 0.2s var(--ease-spring),
+      box-shadow 0.2s var(--ease-spring),
+      transform 0.2s var(--ease-spring);
     margin: 0 1px;
     display: inline; /* Use inline to avoid bloating parent line-height */
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
     vertical-align: baseline;
+    font-weight: 600;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   .dark :where(code):not(pre code) {
-    background: color-mix(in srgb, var(--md-primary), transparent 88%);
-    border-color: color-mix(in srgb, var(--md-primary), transparent 75%);
+    background: color-mix(in srgb, var(--md-primary), transparent 85%);
+    border-color: color-mix(in srgb, var(--md-primary), transparent 60%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   :where(code):not(pre code):hover {
-    background: color-mix(in srgb, var(--md-primary), transparent 86%);
+    background: color-mix(in srgb, var(--md-primary), transparent 82%);
     border-color: var(--md-primary);
     color: var(--md-primary);
     box-shadow:
       0 4px 12px color-mix(in srgb, var(--md-primary), transparent 85%),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
     transform: translateY(-0.5px);
   }
 
@@ -218,7 +225,12 @@
     font-weight: 600;
     /* Elegant underline using semi-transparent border */
     border-bottom: 2px solid color-mix(in srgb, var(--md-link), transparent 80%);
-    transition: all 0.2s var(--ease-spring);
+    transition: 
+      background-color 0.2s var(--ease-spring),
+      color 0.2s var(--ease-spring),
+      border-color 0.2s var(--ease-spring),
+      box-shadow 0.2s var(--ease-spring),
+      transform 0.2s var(--ease-spring);
     padding: 0 2px;
     margin: 0 -2px;
     border-radius: 4px;
@@ -303,7 +315,10 @@
     background: var(--md-bg-soft);
     border: 1px solid var(--md-border-strong);
     margin: 0 4px;
-    transition: all 0.2s ease;
+    transition: 
+      background-color 0.2s ease,
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
     border-bottom: none !important;
   }
 

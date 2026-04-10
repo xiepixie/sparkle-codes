@@ -189,9 +189,9 @@ class MathRenderHub {
 	private estimateComplexity(el: HTMLElement): number {
 		const tex = el.dataset.tex || el.textContent || '';
 		let score = tex.length;
-		if (tex.includes('\\begin{')) score += 50;
-		if (tex.includes('\\frac') || tex.includes('\\matrix')) score += 30;
-		if (tex.includes('\\int') || tex.includes('\\sum')) score += 20;
+		if (tex.includes('\\begin{')) { score += 50; }
+		if (tex.includes('\\frac') || tex.includes('\\matrix')) { score += 30; }
+		if (tex.includes('\\int') || tex.includes('\\sum')) { score += 20; }
 		return score;
 	}
 
@@ -255,10 +255,10 @@ function highlightLatex(tex: string): string {
     };
     source = source.replace(/\\\\/g, m => createToken(m, 'tex-newline'));
     source = source.replace(/\\[a-zA-Z]+/g, m => {
-        if (LATEX_GREEK.has(m)) return createToken(m, 'tex-greek');
-        if (LATEX_FUNCTIONS.has(m)) return createToken(m, 'tex-function');
-        if (LATEX_SYMBOLS.has(m)) return createToken(m, 'tex-symbol');
-        if (m === '\\begin' || m === '\\end') return createToken(m, 'tex-env-cmd');
+        if (LATEX_GREEK.has(m)) { return createToken(m, 'tex-greek'); }
+        if (LATEX_FUNCTIONS.has(m)) { return createToken(m, 'tex-function'); }
+        if (LATEX_SYMBOLS.has(m)) { return createToken(m, 'tex-symbol'); }
+        if (m === '\\begin' || m === '\\end') { return createToken(m, 'tex-env-cmd'); }
         return createToken(m, 'tex-command');
     });
     source = source.replace(/(\{)([a-zA-Z*]+)(\})/g, (_match, p1, p2, p3) => {
@@ -305,11 +305,11 @@ function formatLatexSource(tex: string): string[] {
     const INDENT = '  ';
     for (const line of rawLines) {
         const endMatch = line.match(/^\\end{([\w*]+)}/);
-        if (endMatch && nestingEnvs.has(endMatch[1])) depth = Math.max(0, depth - 1);
+        if (endMatch && nestingEnvs.has(endMatch[1])) { depth = Math.max(0, depth - 1); }
         result.push(INDENT.repeat(depth) + line);
         const beginMatch = line.match(/^\\begin{([\w*]+)}/);
         if (beginMatch && nestingEnvs.has(beginMatch[1])) {
-            if (!line.includes(`\\end{${beginMatch[1]}}`)) depth++;
+            if (!line.includes(`\\end{${beginMatch[1]}}`)) { depth++; }
         }
     }
     return result.length > 0 ? result : [''];
@@ -599,78 +599,23 @@ async function hydrateMermaid(el: HTMLElement, isDark: boolean, force = false) {
 }
 
 function hydrateCalloutIcons(el: HTMLElement) {
-	// Base Lucide-inspired SVG components for reuse and consistency
-	const SVG = {
-		INFO: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-		CHECK:
-			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
-		CHECK_CIRCLE:
-			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-		ALERT:
-			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-		X_CIRCLE:
-			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
-		HELP: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
-		BUG: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/><path d="m10 4 1 2"/><path d="m14 4-1 2"/></svg>',
-		PENCIL:
-			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>',
-		SPARKLE:
-			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
-		LIST: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
-		QUOTE:
-			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1 0 2.5 0 6-2 7Zm14 0c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1 0 2.5 0 6-2 7Z"/></svg>',
-		ZAP: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-2 10h10L11 22l2-10H3Z"/></svg>',
-		CLIPBOARD_LIST:
-			'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>',
-	};
-
-	// Reduced redundancy by mapping types into functional groups
-	const calloutIcons: Record<string, string> = {
-		note: SVG.PENCIL,
-		todo: SVG.CHECK_CIRCLE,
-		info: SVG.INFO,
-		abstract: SVG.CLIPBOARD_LIST,
-		summary: SVG.CLIPBOARD_LIST,
-		tldr: SVG.CLIPBOARD_LIST,
-		tip: SVG.SPARKLE,
-		hint: SVG.SPARKLE,
-		important: SVG.SPARKLE,
-		success: SVG.CHECK,
-		done: SVG.CHECK,
-		check: SVG.CHECK,
-		question: SVG.HELP,
-		help: SVG.HELP,
-		faq: SVG.HELP,
-		warning: SVG.ALERT,
-		attention: SVG.ALERT,
-		caution: SVG.ALERT,
-		failure: SVG.X_CIRCLE,
-		fail: SVG.X_CIRCLE,
-		missing: SVG.X_CIRCLE,
-		danger: SVG.ZAP,
-		error: SVG.ZAP,
-		bug: SVG.BUG,
-		example: SVG.LIST,
-		quote: SVG.QUOTE,
-		cite: SVG.QUOTE,
-	};
-
+	/**
+	 * HYDRATION ANXIETY MITIGATION (Vector-in-CSS)
+	 * -------------------------------------------
+	 * Why: JS-based injection caused Layout Shifts (CLS) and visual flicker during hydration.
+	 * Decision: Render strictly in CSS using |-webkit-mask-image| and |--callout-icon|.
+	 * Constraint: This function only markers hydration state without modifying the DOM structure.
+	 */
 	const type = el.dataset.calloutType?.toLowerCase() || "note";
 	const customIcon = el.dataset.calloutIcon?.toLowerCase();
-
-	if (el.dataset.iconHydrated === (customIcon || type)) {
-		return;
-	}
 
 	const iconEl = el.querySelector(
 		".md-callout__icon, .md-callout-icon, .callout-icon",
 	);
+
 	if (iconEl) {
-		// Priority: User custom icon > Type-based icon > Note fallback
-		iconEl.innerHTML =
-			calloutIcons[customIcon || ""] || calloutIcons[type] || calloutIcons.note;
+		el.dataset.iconHydrated = customIcon || type;
 	}
-	el.dataset.iconHydrated = customIcon || type;
 }
 
 function hydrateImageEmbed(el: HTMLElement) {
@@ -915,7 +860,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 					mathHub.register(root);
 				}
 
-				// Priority 2: Interaction (Can be deferred to idle)
+				// Priority 2: Deferred Interactions (Performance)
 				ric(
 					() => {
 						// Hydrate Code Blocks
@@ -942,14 +887,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 							hydrateMermaid(root, isDark);
 						}
 
-						// Hydrate Callouts
-						root.querySelectorAll(".md-callout, .callout").forEach((el) => {
-							hydrateCalloutIcons(el as HTMLElement);
-						});
-						if (root.matches(".md-callout, .callout")) {
-							hydrateCalloutIcons(root);
-						}
-
 						// Hydrate Images
 						root
 							.querySelectorAll(".wiki-embed[data-embed-kind='image']")
@@ -966,7 +903,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 
 			// If it's the first mount and we have valid initial HTML, we can skip the heavy
 			// morphdom pass and just perform interactive hydration.
-			// This dramatically reduces styles recalculation on first load.
 			if (isFirstMount.current) {
 				isFirstMount.current = false;
 				lastHtmlRef.current = stableHtml;
@@ -990,9 +926,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 					return;
 				}
 
-				// Why: most blog navigations render stable SSR HTML on first paint.
-				// Deferring sanitize + morphdom until the content truly changes keeps
-				// the initial client work small without weakening later update safety.
 				const fragment = DOMPurify.sanitize(stableHtml, {
 					RETURN_DOM_FRAGMENT: true,
 					ADD_ATTR: [
@@ -1042,16 +975,31 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 							}
 							return false;
 						}
-						// Callout Fold state preservation
+						// Callout preservation (Icons and Folds)
 						if (
 							from.matches(".md-callout, .callout") &&
 							from.getAttribute("data-callout-type") ===
-								to.getAttribute("data-callout-type") &&
-							from.hasAttribute("data-callout-fold")
+								to.getAttribute("data-callout-type")
 						) {
-							const liveFoldState = from.getAttribute("data-callout-fold");
-							if (liveFoldState) {
-								to.setAttribute("data-callout-fold", liveFoldState);
+							// Preserve Icons
+							if (from.dataset.iconHydrated) {
+								const fromIcon = from.querySelector(
+									".md-callout__icon, .callout-icon",
+								);
+								const toIcon = to.querySelector(
+									".md-callout__icon, .callout-icon",
+								);
+								if (fromIcon && toIcon && fromIcon.innerHTML) {
+									toIcon.innerHTML = fromIcon.innerHTML;
+									to.dataset.iconHydrated = from.dataset.iconHydrated;
+								}
+							}
+							// Preserve Fold State
+							if (from.hasAttribute("data-callout-fold")) {
+								const liveFoldState = from.getAttribute("data-callout-fold");
+								if (liveFoldState) {
+									to.setAttribute("data-callout-fold", liveFoldState);
+								}
 							}
 						}
 						return true;
@@ -1076,6 +1024,22 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 				cancelled = true;
 			};
 		}, [stableHtml, onNodeAdded]);
+
+		// 2.5 Sync Hydration for visual-critical elements (Icons, etc.)
+		// Why: using useLayoutEffect ensures these are in the DOM before paint
+		// and before View Transition snapshots are taken.
+		// Note: This must be at the top level of the component.
+		useLayoutEffect(() => {
+			const container = containerRef.current;
+			if (!container || !stableHtml) { return; }
+
+			container.querySelectorAll(".md-callout, .callout").forEach((el) => {
+				hydrateCalloutIcons(el as HTMLElement);
+			});
+			if (container.matches(".md-callout, .callout")) {
+				hydrateCalloutIcons(container);
+			}
+		}, [stableHtml]);
 
 		// 3. Theme-Specific Updates (Optimization for JANK)
 		// Why: content re-morphing on theme change is expensive and triggers forced reflows.

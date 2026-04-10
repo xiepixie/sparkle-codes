@@ -74,67 +74,67 @@
     @font-face {
         font-family: 'KaTeX_Main';
         src: local('KaTeX_Main-Regular'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Main-Regular.woff2') format('woff2');
-        font-weight: normal; font-style: normal; font-display: swap;
+        font-weight: normal; font-style: normal; font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Main';
         src: local('KaTeX_Main-Bold'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Main-Bold.woff2') format('woff2');
-        font-weight: bold; font-style: normal; font-display: swap;
+        font-weight: bold; font-style: normal; font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Math';
         src: local('KaTeX_Math-Italic'), url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Math-Italic.woff2') format('woff2');
-        font-weight: normal; font-style: italic; font-display: swap;
+        font-weight: normal; font-style: italic; font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Size1';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Size1-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Size2';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Size2-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Size3';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Size3-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Size4';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Size4-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_AMS';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_AMS-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Caligraphic';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Caligraphic-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Fraktur';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Fraktur-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_SansSerif';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_SansSerif-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Script';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Script-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
     @font-face {
         font-family: 'KaTeX_Typewriter';
         src: url('https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/fonts/KaTeX_Typewriter-Regular.woff2') format('woff2');
-        font-display: swap;
+        font-display: block;
     }
 }
 
@@ -144,8 +144,10 @@
 @layer components {
 	/* --- Integrated Shared Components UI --- */
 
+	html,
 	body {
 		isolation: isolate;
+		scrollbar-gutter: stable !important; /* Why: Prevents horizontal layout jumps when scrollbars appear/disappear during theme transitions */
 	}
 
 	/* --- Shared Premium Entities handled in @repo/ui --- */
@@ -173,11 +175,6 @@
         animation: none;
         mix-blend-mode: normal;
         display: block;
-        height: 100vh !important;
-        width: 100vw !important;
-        position: fixed !important;
-        inset: 0 !important;
-        object-fit: cover !important;
     }
 
     ::view-transition-old(root) {
@@ -202,6 +199,9 @@
     .theme-transitioning * {
         overflow-anchor: none !important;
         scroll-behavior: auto !important;
+        /* Why: specifying discrete properties prevents 'transition: all' from animating layout properties (width, height) 
+           which causes jank. We explicitly include 'opacity' now to prevent icons from flickering or disappearing. */
+        transition-property: background-color, border-color, color, fill, stroke, opacity !important;
     }
 
     .theme-toggle-nova {

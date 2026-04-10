@@ -1,7 +1,15 @@
-@scope (.markdown-body) {
+  /* 
+   * HYDRATION ANXIETY & CLS MITIGATION
+   * ----------------------------------
+   * Problem: JS-based icon injection caused "Hydration Anxiety" and Layout Shifts.
+   * Solution: Vector-in-CSS pipeline using |mask-image| and |--callout-icon|.
+   * Implementation: Symmetrical mapping for both .md-callout and .callout.
+   */
   .md-callout,
   .callout {
     --callout-color: var(--md-note);
+    /* Default fallback icon: Info Circle */
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
     --callout-bg: color-mix(in srgb, var(--callout-color), var(--background, white) 92%);
     margin: 2rem 0;
     padding: 1.25rem 1.5rem;
@@ -12,7 +20,11 @@
     backdrop-filter: blur(8px);
     position: relative;
     font-style: normal;
-    transition: all 0.3s var(--ease-spring);
+    transition: 
+      background-color 0.3s var(--ease-spring),
+      border-color 0.3s var(--ease-spring),
+      box-shadow 0.3s var(--ease-spring),
+      transform 0.3s var(--ease-spring);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -36,16 +48,116 @@
     margin-bottom: 0.25rem;
   }
 
+@scope (.markdown-body) {
+  /* ICON INFRASTRUCTURE
+     Why: Absolute dimension locking (24px) prevents layout shifts. 
+     Note: Now uses var(--callout-icon) for simplified semantic mapping. */
   :where(.md-callout__icon, .callout-icon) {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+    width: 24px !important;
+    height: 24px !important;
+    background-color: var(--callout-color);
+    -webkit-mask-image: var(--callout-icon);
+    mask-image: var(--callout-icon);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: 18px 18px;
+    mask-size: 18px 18px;
+    contain: strict;
+    overflow: hidden;
+    line-height: 1 !important;
     opacity: 0.95;
+    transition: filter 0.3s var(--ease-spring), color 0.3s ease;
   }
 
-  :where(.md-callout__icon, .callout-icon):empty::before {
-    content: "✦";
-    font-size: 1.1rem;
+  /* --- RICH HIERARCHICAL MAPPING --- 
+     Logic: Categorize by [Icon Category] -> then by [Semantic Color].
+     This ensures that similar tones share logic while maintaining sharp semantic distinction. */
+
+  /* 1. Category: THE SOURCE (Pencil / Document) */
+  [data-callout-type="note"],
+  [data-callout-type="cite"],
+  [data-callout-type="quote"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'/%3E%3Cpath d='m15 5 4 4'/%3E%3C/svg%3E");
+  }
+  [data-callout-type="abstract"],
+  [data-callout-type="summary"],
+  [data-callout-type="tldr"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z'/%3E%3Cpolyline points='14 2 14 8 20 8'/%3E%3Cline x1='16' y1='13' x2='8' y2='13'/%3E%3Cline x1='16' y1='17' x2='8' y2='17'/%3E%3Cline x1='10' y1='9' x2='8' y2='9'/%3E%3C/svg%3E");
+  }
+
+  /* 2. Category: THE GUIDANCE (Info / Helping Hand) */
+  [data-callout-type="info"],
+  [data-callout-type="todo"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 12v4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
+  }
+  [data-callout-type="question"],
+  [data-callout-type="help"],
+  [data-callout-type="faq"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17'/%3E%3C/svg%3E");
+  }
+
+  /* 3. Category: THE SPARK (Light / Sparkle) */
+  [data-callout-type="tip"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E");
+  }
+  [data-callout-type="hint"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z'/%3E%3C/svg%3E");
+  }
+
+  /* 4. Category: THE FOCUS (Bookmark / Flag) */
+  [data-callout-type="important"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z'/%3E%3C/svg%3E");
+  }
+  [data-callout-type="example"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z'/%3E%3Cline x1='4' y1='22' x2='4' y2='15'/%3E%3C/svg%3E");
+  }
+
+  /* 5. Category: THE VERIFY (Check Circle) */
+  [data-callout-type="success"],
+  [data-callout-type="check"],
+  [data-callout-type="done"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/xml' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/%3E%3Cpolyline points='22 4 12 14.01 9 11.01'/%3E%3C/svg%3E");
+  }
+
+  /* 6. Category: THE WARNING (Triangle / Circle Alert) */
+  [data-callout-type="warning"],
+  [data-callout-type="attention"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+  }
+  [data-callout-type="caution"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' y1='8' x2='12' y2='12'/%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'/%3E%3C/svg%3E");
+  }
+
+  /* 7. Category: THE DANGER (Octagon / Shield / Bolt) */
+  [data-callout-type="error"],
+  [data-callout-type="fail"],
+  [data-callout-type="failure"],
+  [data-callout-type="missing"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2z'/%3E%3Cpath d='m15 9-6 6'/%3E%3Cpath d='m9 9 6 6'/%3E%3C/svg%3E");
+  }
+  [data-callout-type="danger"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3Cline x1='12' y1='8' x2='12' y2='12'/%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'/%3E%3C/svg%3E");
+  }
+
+  /* 8. Category: THE SYSTEM (Bug / Atom) */
+  [data-callout-type="bug"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='8' height='14' x='8' y='6' rx='4'/%3E%3Cpath d='m19 7-3 2'/%3E%3Cpath d='m5 7 3 2'/%3E%3Cpath d='m19 19-3-2'/%3E%3Cpath d='m5 19 3-2'/%3E%3Cpath d='M20 13h-4'/%3E%3Cpath d='M4 13h4'/%3E%3Cpath d='m10 4 1 2'/%3E%3Cpath d='m14 4-1 2'/%3E%3C/svg%3E");
+  }
+  [data-callout-type="theory"] {
+    --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M21 12c0 3.314-4.03 6-9 6s-9-2.686-9-6 4.03-6 9-6 9 2.686 9 6Z'/%3E%3Cpath d='M12 3c3.314 0 6 4.03 6 9s-2.686 9-9 9-6-4.03-6-9 2.686-9 6-9Z'/%3E%3C/svg%3E");
+  }
+
+  /* STARRY NIGHT THEME EXTENSIONS
+     Why: Adds a premium, theme-specific glow to icons when the starry night theme is active.
+     Aesthetic: 6px white/color mix creates a "neon" effect that matches our design system tokens. */
+  .starry-night-theme :where(.md-callout__icon, .callout-icon) {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--callout-color), white 40%));
   }
 
   :where(.md-callout__title, .callout-title-inner) {
@@ -53,58 +165,48 @@
     filter: brightness(1.1);
   }
 
-  /* Callout Types Semantic Mapping */
-  :where(.md-callout, .callout)[data-callout-type="note"] {
-    --callout-color: var(--md-note);
-  }
-  :where(.md-callout, .callout)[data-callout-type="todo"] {
-    --callout-color: var(--md-info);
-  }
-  :where(.md-callout, .callout)[data-callout-type="tip"],
-  :where(.md-callout, .callout)[data-callout-type="hint"] {
-    --callout-color: var(--md-success);
-  }
-  :where(.md-callout, .callout)[data-callout-type="warning"],
-  :where(.md-callout, .callout)[data-callout-type="caution"],
-  :where(.md-callout, .callout)[data-callout-type="attention"] {
-    --callout-color: var(--md-warning);
-  }
-  :where(.md-callout, .callout)[data-callout-type="danger"],
-  :where(.md-callout, .callout)[data-callout-type="error"],
-  :where(.md-callout, .callout)[data-callout-type="bug"] {
-    --callout-color: var(--md-danger);
-  }
-  :where(.md-callout, .callout)[data-callout-type="info"] {
-    --callout-color: var(--md-info);
-  }
-  :where(.md-callout, .callout)[data-callout-type="success"],
-  :where(.md-callout, .callout)[data-callout-type="check"],
-  :where(.md-callout, .callout)[data-callout-type="done"] {
-    --callout-color: var(--md-success);
-  }
-  :where(.md-callout, .callout)[data-callout-type="question"],
-  :where(.md-callout, .callout)[data-callout-type="help"],
-  :where(.md-callout, .callout)[data-callout-type="faq"] {
-    --callout-color: var(--md-question);
-  }
-  :where(.md-callout, .callout)[data-callout-type="failure"],
-  :where(.md-callout, .callout)[data-callout-type="fail"],
-  :where(.md-callout, .callout)[data-callout-type="missing"] {
-    --callout-color: var(--md-cancelled);
-  }
+  /* SEGMENTED SEMANTIC COLOR MAPPING
+     Logic: Defines unique color tokens within each icon category to refine information hierarchy. */
+
+  /* Neutral Group */
+  :where(.md-callout, .callout)[data-callout-type="note"] { --callout-color: var(--md-note); }
   :where(.md-callout, .callout)[data-callout-type="abstract"],
   :where(.md-callout, .callout)[data-callout-type="summary"],
-  :where(.md-callout, .callout)[data-callout-type="tldr"] {
-    --callout-color: var(--md-info);
-  }
+  :where(.md-callout, .callout)[data-callout-type="tldr"] { --callout-color: var(--md-info); }
+  :where(.md-callout, .callout)[data-callout-type="info"],
+  :where(.md-callout, .callout)[data-callout-type="todo"] { --callout-color: var(--md-info); }
   :where(.md-callout, .callout)[data-callout-type="quote"],
-  :where(.md-callout, .callout)[data-callout-type="cite"] {
-    --callout-color: var(--md-muted);
-  }
+  :where(.md-callout, .callout)[data-callout-type="cite"] { --callout-color: var(--md-muted); }
+
+  /* Positive Group */
+  :where(.md-callout, .callout)[data-callout-type="tip"],
+  :where(.md-callout, .callout)[data-callout-type="hint"],
+  :where(.md-callout, .callout)[data-callout-type="success"],
+  :where(.md-callout, .callout)[data-callout-type="check"],
+  :where(.md-callout, .callout)[data-callout-type="done"] { --callout-color: var(--md-success); }
+
+  /* Focus Group */
   :where(.md-callout, .callout)[data-callout-type="important"],
-  :where(.md-callout, .callout)[data-callout-type="example"] {
-    --callout-color: var(--md-primary);
-  }
+  :where(.md-callout, .callout)[data-callout-type="example"] { --callout-color: var(--md-primary); }
+
+  /* Caution Group */
+  :where(.md-callout, .callout)[data-callout-type="warning"],
+  :where(.md-callout, .callout)[data-callout-type="caution"],
+  :where(.md-callout, .callout)[data-callout-type="attention"] { --callout-color: var(--md-warning); }
+
+  /* Critical Group */
+  :where(.md-callout, .callout)[data-callout-type="danger"],
+  :where(.md-callout, .callout)[data-callout-type="error"],
+  :where(.md-callout, .callout)[data-callout-type="bug"] { --callout-color: var(--md-danger); }
+  :where(.md-callout, .callout)[data-callout-type="failure"],
+  :where(.md-callout, .callout)[data-callout-type="fail"],
+  :where(.md-callout, .callout)[data-callout-type="missing"] { --callout-color: var(--md-cancelled); }
+
+  /* Knowledge Group */
+  :where(.md-callout, .callout)[data-callout-type="theory"] { --callout-color: var(--md-primary); }
+  :where(.md-callout, .callout)[data-callout-type="question"],
+  :where(.md-callout, .callout)[data-callout-type="help"],
+  :where(.md-callout, .callout)[data-callout-type="faq"] { --callout-color: var(--md-question); }
 
   .md-callout__content {
     width: 100%;

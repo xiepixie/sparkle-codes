@@ -2,6 +2,7 @@
 
 import { Check, Copy, Terminal } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
+import { highlightLatex } from "@/lib/markdown-utils";
 
 // Refined Import: Global Markdown Design System
 import "../../../../../packages/markdown-parser/src/markdown.css";

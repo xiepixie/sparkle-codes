@@ -66,7 +66,7 @@ export default async function PostPage({ params }: PostPageProps) {
           suggestedPosts={suggestedPosts}
         />
 
-        <div className="grid grid-cols-1 gap-y-12 lg:grid-cols-[1fr_min(72ch,100%)_1fr] lg:gap-x-16">
+        <div className="grid grid-cols-1 gap-y-12 lg:grid-cols-[1fr_min(45rem,100%)_1fr] lg:gap-x-16">
             {/* Sidebar Left: Navigation & Context (Commented out for next phase)
             <aside className="hidden lg:sticky lg:top-32 lg:block lg:h-fit lg:pt-12">
                 <Link 

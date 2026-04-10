@@ -117,7 +117,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			let targetH = 32;
 
 			let ringLerp = 0.25;
-			let magneticCorePull = 0; // 0 = follow mouse true, 1 = snapped to center
 
 			// --- Removed Magnetism & Refined Framing ---
 			switch (s.mode) {
@@ -129,7 +128,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 						// No forced displacement: ring follows pointer but snaps bounds
                         targetX = b.cx;
                         targetY = b.cy;
-						magneticCorePull = 0; // Principle: No forced movement of the core
 					}
 					break;
 				case "hover-link":
@@ -139,7 +137,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 						targetH = b.h + 6;
 						targetX = b.cx;
 						targetY = b.cy;
-						magneticCorePull = 0;
 					}
 					break;
 				case "hover-card":

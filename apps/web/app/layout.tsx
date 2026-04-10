@@ -7,7 +7,7 @@ import { NavBar } from "@/components/Layout/NavBar";
 
 const poppins = Poppins({
 	subsets: ["latin"],
-	weight: ["400", "500", "600", "700"],
+	weight: ["400", "500", "600", "700", "800", "900"],
 	display: "swap",
 });
 const jetbrainsMono = JetBrains_Mono({

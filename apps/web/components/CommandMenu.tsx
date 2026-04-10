@@ -60,73 +60,31 @@ function normalizeSearchResults(data: unknown): SearchResultItem[] {
     return [];
   }
 
-  const results: Array<SearchResultItem | null> = data.map((item, index) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
+  // Pre-filter and map in one pass for performance
+  return data.reduce<SearchResultItem[]>((acc, item, index) => {
+    if (!item || typeof item !== "object") return acc;
 
-      const candidate = item as Record<string, unknown>;
-      const title = typeof candidate.title === "string" ? candidate.title : typeof candidate.name === "string" ? candidate.name : null;
-      const url = typeof candidate.url === "string" ? candidate.url : typeof candidate.href === "string" ? candidate.href : null;
-      const description =
-        typeof candidate.description === "string"
-          ? candidate.description
-          : typeof candidate.content === "string"
-            ? candidate.content
-            : typeof candidate.excerpt === "string"
-              ? candidate.excerpt
-              : "";
-      const section =
-        typeof candidate.section === "string"
-          ? candidate.section
-          : typeof candidate.type === "string"
-            ? candidate.type
-            : undefined;
-      const bodyPreview =
-        typeof candidate.bodyPreview === "string"
-          ? candidate.bodyPreview
-          : undefined;
-      const context =
-        typeof candidate.context === "string"
-          ? candidate.context
-          : undefined;
-      const highlightedTitle =
-        typeof candidate.highlightedTitle === "string"
-          ? candidate.highlightedTitle
-          : undefined;
-      const highlightedDescription =
-        typeof candidate.highlightedDescription === "string"
-          ? candidate.highlightedDescription
-          : undefined;
-      const highlightedBodyPreview =
-        typeof candidate.highlightedBodyPreview === "string"
-          ? candidate.highlightedBodyPreview
-          : undefined;
-      const highlightedContext =
-        typeof candidate.highlightedContext === "string"
-          ? candidate.highlightedContext
-          : undefined;
+    const candidate = item as Record<string, unknown>;
+    const title = typeof candidate.title === "string" ? candidate.title : typeof candidate.name === "string" ? candidate.name : null;
+    const url = typeof candidate.url === "string" ? candidate.url : typeof candidate.href === "string" ? candidate.href : null;
+    
+    if (!title || !url) return acc;
 
-      if (!title || !url) {
-        return null;
-      }
-
-      return {
-        id: typeof candidate.id === "string" ? candidate.id : `${url}-${index}`,
-        title,
-        description,
-        bodyPreview,
-        url,
-        section,
-        context,
-        highlightedTitle,
-        highlightedDescription,
-        highlightedBodyPreview,
-        highlightedContext,
-      };
+    acc.push({
+      id: typeof candidate.id === "string" ? candidate.id : `${url}-${index}`,
+      title,
+      description: String(candidate.description || candidate.content || candidate.excerpt || ""),
+      bodyPreview: candidate.bodyPreview as string | undefined,
+      url,
+      section: candidate.section as string | undefined,
+      context: candidate.context as string | undefined,
+      highlightedTitle: candidate.highlightedTitle as string | undefined,
+      highlightedDescription: candidate.highlightedDescription as string | undefined,
+      highlightedBodyPreview: candidate.highlightedBodyPreview as string | undefined,
+      highlightedContext: candidate.highlightedContext as string | undefined,
     });
-
-  return results.filter((item): item is SearchResultItem => item !== null);
+    return acc;
+  }, []);
 }
 
 export function CommandMenu() {
@@ -239,14 +197,13 @@ export function CommandMenu() {
     setRecentHistory(readFilteredHistory(pathname).slice(0, 4));
   }, [open, pathname]);
 
-  // A11Y & Control: Manual focus instead of autoFocus
+  // A11Y & Performance: Defer focus to allow animation to settle
   useEffect(() => {
     if (open) {
-      // Small delay to ensure the animation/modal mounting is ready
-      const timer = setTimeout(() => {
+      const timer = window.setTimeout(() => {
         inputRef.current?.focus();
-      }, 50);
-      return () => clearTimeout(timer);
+      }, 150);
+      return () => window.clearTimeout(timer);
     }
   }, [open]);
 
@@ -363,12 +320,13 @@ export function CommandMenu() {
   }, [jumpQuery, readingContext, pathname]);
 
   const navigateToBlogPost = (url: string) => {
-    if (pendingUrl) {
-      return; 
-    }
+    if (pendingUrl) return; 
     
+    const target = normalizeSlug(url);
+    const current = normalizeSlug(pathname);
+
     // Snappy UX: If target is current page, just hide menu immediately
-    if (normalizeSlug(url) === normalizeSlug(pathname)) {
+    if (target === current) {
       setOpen(false);
       return;
     }

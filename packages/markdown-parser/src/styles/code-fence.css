@@ -119,7 +119,13 @@
   .format-toggle-btn {
     cursor: pointer;
     opacity: 0; /* Hidden by default for a clean 'Industrial' aesthetic */
-    transition: all 0.25s var(--ease-spring);
+    transition: 
+      opacity 0.25s var(--ease-spring),
+      background-color 0.25s var(--ease-spring),
+      color 0.25s var(--ease-spring),
+      transform 0.25s var(--ease-spring),
+      border-color 0.25s var(--ease-spring),
+      box-shadow 0.25s var(--ease-spring);
     border: 1px solid transparent;
     background: transparent;
     color: var(--md-muted);

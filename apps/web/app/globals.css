@@ -185,6 +185,16 @@
     }
     ::view-transition-new(root) {
         z-index: 2; /* Needs to be above old to cover it up */
+        animation: nova-reveal 0.7s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+    }
+
+    @keyframes nova-reveal {
+        from {
+            clip-path: circle(0% at var(--x) var(--y));
+        }
+        to {
+            clip-path: circle(var(--r) at var(--x) var(--y));
+        }
     }
 
     /* Prevent scroll anchoring and smooth-scrolling jumps during theme transitions */
@@ -332,8 +342,13 @@
         box-shadow: 0 18px 38px -30px color-mix(in oklab, var(--primary) 22%, transparent);
         /* Why: Diagrams are rendered client-side. Reserving space prevents CLS. */
         content-visibility: auto;
+        contain: layout paint;
         contain-intrinsic-size: auto 200px;
         min-height: 100px;
+        /* Performance & Stacking: Ensure diagram stays behind fixed-pos cursor */
+        position: relative;
+        z-index: 1; 
+        isolation: auto !important;
     }
 
     .mermaid-mobile-preview,
@@ -347,6 +362,10 @@
     }
 
     /* Fixed Clipping: Force visibility and add horizontal breathing room */
+    .mermaid-render-container svg {
+        overflow: visible !important;
+        max-width: 100%;
+    }
     .mermaid-render-container svg .label foreignObject {
         overflow: visible !important;
     }
@@ -356,7 +375,11 @@
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
+        height: 100% !important; /* Force full height for vertical centering */
+        white-space: nowrap !important;
+        line-height: 1 !important; /* Standardize baseline */
     }
+
 
     /* Node Interactivity & Style */
     .mermaid-render-container svg .node rect,
@@ -438,6 +461,27 @@
             max-width: none !important;
             min-width: min(120vw, 42rem);
         }
+    }
+
+    /* 针对 Mermaid 内部文字的强制修复 */
+    .mermaid-render-container svg text, 
+    .mermaid-render-container svg .node label {
+        font-family: "PingFang SC", "Arial", sans-serif !important; /* 使用宽度更标准的字体 */
+        line-height: 1.2 !important; /* 减小行高，防止垂直方向溢出 */
+    }
+
+    /* 允许 foreignObject 溢出，防止文字被边缘切断 */
+    .mermaid-render-container foreignObject {
+        overflow: visible !important;
+    }
+
+    /* 确保作为容器的 pre 标签不干扰布局 */
+    pre.mermaid-render-container {
+        white-space: normal !important;
+        margin: 0 !important;
+        background: transparent !important;
+        padding: 0 !important;
+        line-height: normal !important;
     }
 }
 

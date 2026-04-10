@@ -13,6 +13,40 @@ export function escapeHtml(text: string) {
     .replace(/'/g, "&#39;");
 }
 
+const LATEX_GREEK = new Set(['\\alpha', '\\beta', '\\gamma', '\\delta', '\\epsilon', '\\zeta', '\\eta', '\\theta', '\\iota', '\\kappa', '\\lambda', '\\mu', '\\nu', '\\xi', '\\pi', '\\rho', '\\sigma', '\\tau', '\\upsilon', '\\phi', '\\chi', '\\psi', '\\omega', '\\Gamma', '\\Delta', '\\Theta', '\\Lambda', '\\Xi', '\\Pi', '\\Sigma', '\\Upsilon', '\\Phi', '\\Psi', '\\Omega', '\\varepsilon', '\\varphi', '\\varpi', '\\varrho', '\\varsigma', '\\vartheta']);
+const LATEX_FUNCTIONS = new Set(['\\sin', '\\cos', '\\tan', '\\log', '\\ln', '\\exp', '\\lim', '\\max', '\\min', '\\sup', '\\inf', '\\det', '\\deg', '\\dim', '\\ker', '\\arg', '\\arccos', '\\arcsin', '\\arctan', '\\sinh', '\\cosh', '\\tanh', '\\cot', '\\sec', '\\csc', '\\arcsinh', '\\arccosh', '\\arctanh']);
+const LATEX_SYMBOLS = new Set(['\\sum', '\\int', '\\prod', '\\partial', '\\nabla', '\\infty', '\\forall', '\\exists', '\\in', '\\notin', '\\subset', '\\supset', '\\cup', '\\cap', '\\to', '\\rightarrow', '\\Rightarrow', '\\gets', '\\leftarrow', '\\Leftarrow', '\\leftrightarrow', '\\Leftrightarrow', '\\approx', '\\neq', '\\le', '\\ge', '\\times', '\\cdot', '\\pm', '\\mp', '\\hbar', '\\imath', '\\jmath', '\\ell', '\\wp', '\\Re', '\\Im', '\\aleph', '\\beth', '\\daleth', '\\gimel', '\\complement', '\\ell', '\\eth', '\\hbar', '\\hslash', '\\mho', '\\partial', '\\sqsubset', '\\sqsupset', '\\vartriangle', '\\triangledown', '\\triangleleft', '\\triangleright', '\\Box', '\\Diamond', '\\flat', '\\natural', '\\sharp', '\\clubsuit', '\\diamondsuit', '\\heartsuit', '\\spadesuit', '\\surd', '\\top', '\\bottom', '\\neg', '\\lnot', '\\land', '\\lor', '\\ni', '\\owns', '\\propto', '\\sim', '\\perp', '\\cdot', '\\circ', '\\ast', '\\times', '\\div', '\\pm', '\\mp', '\\oplus', '\\ominus', '\\otimes', '\\oslash', '\\odot', '\\wedge', '\\vee', '\\cap', '\\cup', '\\sqcap', '\\sqcup', '\\uplus', '\\amalg', '\\setminus', '\\bullet', '\\star', '\\dagger', '\\ddagger', '\\wr']);
+
+export function highlightLatex(tex: string): string {
+    let source = tex.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const tokens: Array<{ placeholder: string; html: string }> = [];
+    let tokenId = 0;
+    const createToken = (match: string, className: string): string => {
+        const placeholder = `\x00T${tokenId++}\x00`;
+        tokens.push({ placeholder, html: `<span class="${className}">${escapeHtml(match)}</span>` });
+        return placeholder;
+    };
+    source = source.replace(/\\\\/g, m => createToken(m, 'tex-newline'));
+    source = source.replace(/\\[a-zA-Z]+/g, m => {
+        if (LATEX_GREEK.has(m)) return createToken(m, 'tex-greek');
+        if (LATEX_FUNCTIONS.has(m)) return createToken(m, 'tex-function');
+        if (LATEX_SYMBOLS.has(m)) return createToken(m, 'tex-symbol');
+        if (m === '\\begin' || m === '\\end') return createToken(m, 'tex-env-cmd');
+        return createToken(m, 'tex-command');
+    });
+    source = source.replace(/(\{)([a-zA-Z*]+)(\})/g, (_match, p1, p2, p3) => {
+        return createToken(p1, 'tex-brace') + createToken(p2, 'tex-env-name') + createToken(p3, 'tex-brace');
+    });
+    source = source.replace(/\\[{}$#%&_^~]/g, m => createToken(m, 'tex-escape'));
+    source = source.replace(/[{}[\]()]/g, m => createToken(m, 'tex-brace'));
+    source = source.replace(/[&_^=+\-*/<>]|\\pm|\\mp|\\to|\\approx/g, m => createToken(m, 'tex-operator'));
+    source = escapeHtml(source);
+    for (const { placeholder, html } of tokens) {
+        source = source.replace(placeholder, html);
+    }
+    return source;
+}
+
 export function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

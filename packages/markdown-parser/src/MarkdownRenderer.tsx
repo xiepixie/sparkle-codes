@@ -186,6 +186,15 @@ class MathRenderHub {
 		ric((deadline: any) => this.sweep(deadline), { timeout: 2000 });
 	}
 
+	private estimateComplexity(el: HTMLElement): number {
+		const tex = el.dataset.tex || el.textContent || '';
+		let score = tex.length;
+		if (tex.includes('\\begin{')) score += 50;
+		if (tex.includes('\\frac') || tex.includes('\\matrix')) score += 30;
+		if (tex.includes('\\int') || tex.includes('\\sum')) score += 20;
+		return score;
+	}
+
 	private sweep(deadline: any) {
 		const items = Array.from(this.queue);
 		if (items.length === 0) {
@@ -193,17 +202,26 @@ class MathRenderHub {
 			return;
 		}
 
+		const scoredItems = items
+			.filter(el => document.contains(el) && !el.dataset.renderedKey)
+			.map(el => ({ el, priority: this.estimateComplexity(el) }))
+			.sort((a, b) => a.priority - b.priority);
+
 		let i = 0;
 		while (
-			i < items.length &&
+			i < scoredItems.length &&
 			(deadline.timeRemaining() > 1 || deadline.didTimeout)
 		) {
-			const el = items[i];
-			if (document.contains(el) && !el.dataset.renderedKey) {
-				renderMathElement(el);
-			}
+			const { el } = scoredItems[i];
+			renderMathElement(el);
 			this.queue.delete(el);
 			i++;
+		}
+
+		for (const el of items) {
+			if (!document.contains(el) || el.dataset.renderedKey) {
+				this.queue.delete(el);
+			}
 		}
 
 		if (this.queue.size > 0) {
@@ -222,6 +240,81 @@ class MathRenderHub {
 	}
 }
 
+const LATEX_GREEK = new Set(['\\alpha', '\\beta', '\\gamma', '\\delta', '\\epsilon', '\\zeta', '\\eta', '\\theta', '\\iota', '\\kappa', '\\lambda', '\\mu', '\\nu', '\\xi', '\\pi', '\\rho', '\\sigma', '\\tau', '\\upsilon', '\\phi', '\\chi', '\\psi', '\\omega', '\\Gamma', '\\Delta', '\\Theta', '\\Lambda', '\\Xi', '\\Pi', '\\Sigma', '\\Upsilon', '\\Phi', '\\Psi', '\\Omega', '\\varepsilon', '\\varphi', '\\varpi', '\\varrho', '\\varsigma', '\\vartheta']);
+const LATEX_FUNCTIONS = new Set(['\\sin', '\\cos', '\\tan', '\\log', '\\ln', '\\exp', '\\lim', '\\max', '\\min', '\\sup', '\\inf', '\\det', '\\deg', '\\dim', '\\ker', '\\arg', '\\arccos', '\\arcsin', '\\arctan', '\\sinh', '\\cosh', '\\tanh', '\\cot', '\\sec', '\\csc', '\\arcsinh', '\\arccosh', '\\arctanh']);
+const LATEX_SYMBOLS = new Set(['\\sum', '\\int', '\\prod', '\\partial', '\\nabla', '\\infty', '\\forall', '\\exists', '\\in', '\\notin', '\\subset', '\\supset', '\\cup', '\\cap', '\\to', '\\rightarrow', '\\Rightarrow', '\\gets', '\\leftarrow', '\\Leftarrow', '\\leftrightarrow', '\\Leftrightarrow', '\\approx', '\\neq', '\\le', '\\ge', '\\times', '\\cdot', '\\pm', '\\mp', '\\hbar', '\\imath', '\\jmath', '\\ell', '\\wp', '\\Re', '\\Im', '\\aleph', '\\beth', '\\daleth', '\\gimel', '\\complement', '\\ell', '\\eth', '\\hbar', '\\hslash', '\\mho', '\\partial', '\\sqsubset', '\\sqsupset', '\\vartriangle', '\\triangledown', '\\triangleleft', '\\triangleright', '\\Box', '\\Diamond', '\\flat', '\\natural', '\\sharp', '\\clubsuit', '\\diamondsuit', '\\heartsuit', '\\spadesuit', '\\surd', '\\top', '\\bottom', '\\neg', '\\lnot', '\\land', '\\lor', '\\ni', '\\owns', '\\propto', '\\sim', '\\perp', '\\cdot', '\\circ', '\\ast', '\\times', '\\div', '\\pm', '\\mp', '\\oplus', '\\ominus', '\\otimes', '\\oslash', '\\odot', '\\wedge', '\\vee', '\\cap', '\\cup', '\\sqcap', '\\sqcup', '\\uplus', '\\amalg', '\\setminus', '\\bullet', '\\star', '\\dagger', '\\ddagger', '\\wr']);
+
+function highlightLatex(tex: string): string {
+    let source = tex.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const tokens: Array<{ placeholder: string; html: string }> = [];
+    let tokenId = 0;
+    const createToken = (match: string, className: string): string => {
+        const placeholder = `\x00T${tokenId++}\x00`;
+        tokens.push({ placeholder, html: `<span class="${className}">${escapeHtml(match)}</span>` });
+        return placeholder;
+    };
+    source = source.replace(/\\\\/g, m => createToken(m, 'tex-newline'));
+    source = source.replace(/\\[a-zA-Z]+/g, m => {
+        if (LATEX_GREEK.has(m)) return createToken(m, 'tex-greek');
+        if (LATEX_FUNCTIONS.has(m)) return createToken(m, 'tex-function');
+        if (LATEX_SYMBOLS.has(m)) return createToken(m, 'tex-symbol');
+        if (m === '\\begin' || m === '\\end') return createToken(m, 'tex-env-cmd');
+        return createToken(m, 'tex-command');
+    });
+    source = source.replace(/(\{)([a-zA-Z*]+)(\})/g, (_match, p1, p2, p3) => {
+        return createToken(p1, 'tex-brace') + createToken(p2, 'tex-env-name') + createToken(p3, 'tex-brace');
+    });
+    source = source.replace(/\\[{}$#%&_^~]/g, m => createToken(m, 'tex-escape'));
+    source = source.replace(/[{}[\]()]/g, m => createToken(m, 'tex-brace'));
+    source = source.replace(/[&_^=+\-*/<>]|\\pm|\\mp|\\to|\\approx/g, m => createToken(m, 'tex-operator'));
+    source = escapeHtml(source);
+    for (const { placeholder, html } of tokens) {
+        source = source.replace(placeholder, html);
+    }
+    return source;
+}
+
+function formatLatexSource(tex: string): string[] {
+    let source = tex.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    source = source.replace(/(\\begin\{[^}]+\})/g, '\n$1\n');
+    source = source.replace(/(\\end\{[^}]+\})/g, '\n$1\n');
+    source = source.replace(/\\\\/g, '\\\\\n');
+    source = source.replace(/\s*&\s*/g, ' & ');
+    if (!source.includes('\n') && source.length > 50) {
+        let depth = 0; let result = '';
+        for (let i = 0; i < source.length; i++) {
+            const char = source[i];
+            if (char === '{') { depth++; } else if (char === '}') { depth--; }
+            if (depth === 0 && i > 25 && char === '=' && source[i - 1] !== '\\' && source[i - 1] !== '<' && source[i - 1] !== '>') {
+                result += '\n  = '; continue;
+            }
+            result += char;
+        }
+        source = result;
+    }
+    const rawLines = source.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const nestingEnvs = new Set([
+        'aligned', 'align', 'align*', 'alignat', 'alignat*', 'flalign', 'flalign*',
+        'eqnarray', 'eqnarray*', 'cases', 'dcases', 'rcases', 'dcases*', 'rcases*',
+        'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'smallmatrix',
+        'array', 'tabular', 'tabular*', 'equation', 'equation*', 'gather', 'gather*',
+        'multline', 'multline*', 'split', 'subequations', 'empheq',
+    ]);
+    const result: string[] = [];
+    let depth = 0;
+    const INDENT = '  ';
+    for (const line of rawLines) {
+        const endMatch = line.match(/^\\end{([\w*]+)}/);
+        if (endMatch && nestingEnvs.has(endMatch[1])) depth = Math.max(0, depth - 1);
+        result.push(INDENT.repeat(depth) + line);
+        const beginMatch = line.match(/^\\begin{([\w*]+)}/);
+        if (beginMatch && nestingEnvs.has(beginMatch[1])) {
+            if (!line.includes(`\\end{${beginMatch[1]}}`)) depth++;
+        }
+    }
+    return result.length > 0 ? result : [''];
+}
+
 function buildMathRenderedContent(
 	renderedHtml: string,
 	cleanTex: string,
@@ -236,52 +329,64 @@ function buildMathRenderedContent(
 
 	if (!isBlock) {
 		const inlineSource = document.createElement("span");
-		inlineSource.className = "latex-source-inline";
-		inlineSource.textContent = cleanTex;
+		inlineSource.className = "shiki-inline latex-source-inline";
+		inlineSource.innerHTML = highlightLatex(cleanTex);
 		fragment.appendChild(inlineSource);
 		return fragment;
 	}
 
 	const sourceContainer = document.createElement("div");
-	sourceContainer.className = "latex-source";
+	sourceContainer.className = "latex-source code-fence-container";
 
 	const header = document.createElement("div");
-	header.className = "code-fence-header";
+	header.className = "code-fence-header group/latex-hdr";
 
 	const headerLeft = document.createElement("div");
 	headerLeft.className = "code-header-left";
+	const dotsContent = document.createElement("div");
+	dotsContent.className = "code-dots";
+	dotsContent.innerHTML = `<div class="code-dot code-dot-red"></div><div class="code-dot code-dot-amber"></div><div class="code-dot code-dot-green"></div>`;
+	headerLeft.appendChild(dotsContent);
+
+	const headerRight = document.createElement("div");
+	headerRight.className = "code-header-right flex items-center gap-4";
 	const headerLabel = document.createElement("span");
 	headerLabel.className = "code-lang-text";
 	headerLabel.textContent = "LaTeX";
-	headerLeft.appendChild(headerLabel);
+	headerRight.appendChild(headerLabel);
 
-	const headerRight = document.createElement("div");
-	headerRight.className = "code-header-right";
+	const actionContainer = document.createElement("div");
+	actionContainer.className = "flex items-center gap-1 opacity-0 group-hover/latex-hdr:opacity-100 transition-all duration-300";
 
 	const copyBtn = document.createElement("button");
 	copyBtn.type = "button";
-	copyBtn.className = "code-copy-btn-math";
+	copyBtn.className = "code-copy-btn-math ml-2 flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-primary uppercase active:scale-95";
 	copyBtn.title = "Copy LaTeX";
-	copyBtn.textContent = "COPY";
+	copyBtn.innerHTML = "<span>COPY</span>";
 
 	const closeBtn = document.createElement("button");
 	closeBtn.type = "button";
-	closeBtn.className = "code-close-btn";
+	closeBtn.className = "code-close-btn flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-white/50 hover:text-white uppercase active:scale-95";
 	closeBtn.title = "Close Source";
-	closeBtn.textContent = "CLOSE";
+	closeBtn.innerHTML = "<span>BACK</span>";
 
-	headerRight.appendChild(copyBtn);
-	headerRight.appendChild(closeBtn);
+	actionContainer.appendChild(copyBtn);
+	actionContainer.appendChild(closeBtn);
+	headerRight.appendChild(actionContainer);
+
 	header.appendChild(headerLeft);
 	header.appendChild(headerRight);
 
 	const sourceCodeWrapper = document.createElement("div");
-	sourceCodeWrapper.className = "mockup-code";
-	const pre = document.createElement("pre");
-	const code = document.createElement("code");
-	code.textContent = cleanTex;
-	pre.appendChild(code);
-	sourceCodeWrapper.appendChild(pre);
+	sourceCodeWrapper.className = "code-fence mockup-code";
+    
+	const formattedLines = formatLatexSource(cleanTex);
+	const blockId = `math-src-${generateContentHash(cleanTex)}`;
+    
+	sourceCodeWrapper.innerHTML = formattedLines.map((line, i) => {
+		const lineId = `${blockId}-L${i + 1}`;
+		return `<pre id="${lineId}" data-key="${lineId}" tabindex="-1" data-prefix="${i + 1}" data-line="${i + 1}"><code>${highlightLatex(line)}</code></pre>`;
+	}).join('');
 
 	sourceContainer.appendChild(header);
 	sourceContainer.appendChild(sourceCodeWrapper);
@@ -1194,5 +1299,35 @@ export const LatexRenderer: React.FC<{
 };
 
 export function sanitizeLatex(tex: string): string {
-	return tex.replace(/\\htmlData|\\url|\\href/g, "");
+    const dangerousCommands = [
+        '\\htmlData',
+        '\\HTML',
+        '\\htmlClass',
+        '\\htmlId',
+        '\\htmlStyle'
+    ];
+
+    let clean = tex.trim();
+
+    // Fix: Strip Obsidian-style blockquote prefixes if they leaked into the math content
+    clean = clean.split('\n').map(line => line.replace(/^\s*>\s*/, '')).join('\n').trim();
+
+    // Fix: Robustly strip delimiters if they were captured 
+    while ((clean.startsWith('$$') && clean.endsWith('$$')) || (clean.startsWith('$') && clean.endsWith('$'))) {
+        if (clean.startsWith('$$') && clean.endsWith('$$') && clean.length >= 4) {
+            clean = clean.substring(2, clean.length - 2).trim();
+        } else if (clean.startsWith('$') && clean.endsWith('$') && clean.length >= 2) {
+            clean = clean.substring(1, clean.length - 1).trim();
+        } else {
+            break;
+        }
+    }
+
+    for (const cmd of dangerousCommands) {
+        const regex = new RegExp(`${cmd.replace(/\\/g, '\\\\')}(?![a-zA-Z])`, 'g');
+        if (regex.test(clean)) {
+            clean = clean.replace(regex, `\\text{[BLOCKED: ${cmd}]} `);
+        }
+    }
+    return clean;
 }

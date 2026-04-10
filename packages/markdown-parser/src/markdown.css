@@ -85,7 +85,7 @@
         --md-link: color-mix(in oklab, var(--aurora, #38bdf8) 62%, var(--md-primary));
         --md-link-hover: color-mix(in oklab, var(--md-link) 78%, white);
         
-        --md-code-bg: color-mix(in oklab, var(--background, #111) 74%, var(--md-primary) 15%, var(--aurora, #38bdf8) 4%);
+        --md-code-bg: color-mix(in oklab, var(--background, #111) 85%, var(--md-primary) 12%, var(--aurora, #38bdf8) 3%);
         --md-code-header-bg: color-mix(in oklab, var(--background, #111) 70%, var(--starlight, #f472b6) 6%, var(--md-primary) 8%);
         --md-callout-bg: color-mix(in oklab, var(--background, #111) 78%, var(--md-primary) 8%, var(--aurora, #38bdf8) 2%);
         --md-table-head-bg: color-mix(in oklab, var(--background, #111) 62%, var(--md-primary) 18%, var(--aurora, #38bdf8) 5%);

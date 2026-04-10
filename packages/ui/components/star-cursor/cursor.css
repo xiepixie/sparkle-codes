@@ -1,393 +1,204 @@
-.custom-cursor-active,
-.custom-cursor-active a,
-.custom-cursor-active button,
-.custom-cursor-active [role="button"],
-.custom-cursor-active input,
-.custom-cursor-active label,
-.custom-cursor-active select,
-.custom-cursor-active textarea,
-.interactive,
-.premium-link,
-.premium-tag,
-.interactive-card {
-	cursor: none !important;
+/* ============================================================
+   LAYER 3: AURA (Atmospheric Glow - DARK MODE ONLY)
+   ============================================================ */
+.cursor-aura {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    margin-top: -100px;
+    margin-left: -100px;
+    background: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--primary) 15%, transparent) 0%,
+        transparent 70%
+    );
+    border-radius: 50%;
+    filter: blur(20px);
+    pointer-events: none;
+    will-change: transform;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: -1;
 }
 
-/* --- Dot (The "Star Core / Shining Star") --- */
-.cursor-dot {
+.dark .cursor-aura {
+    opacity: 1;
+}
+
+.cursor-aura.mode-hover-link,
+.cursor-aura.mode-hover-button {
+    background: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--primary) 25%, transparent) 0%,
+        transparent 75%
+    );
+}
+
+.cursor-aura.mode-pressed {
+    opacity: 1;
+    background: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--primary) 40%, transparent) 0%,
+        transparent 80%
+    );
+}
+
+/* ============================================================
+   LAYER 1: CORE (Absolute Precision)
+   ============================================================ */
+.cursor-core {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
     background: var(--primary);
     border-radius: 50%;
+    margin-top: -3px;
+    margin-left: -3px;
+    will-change: transform;
     pointer-events: none;
-    transform: translate(-50%, -50%);
-    transition: width 0.3s ease, height 0.3s ease, opacity 0.3s ease, background 0.3s ease;
-    /* Soft center glow */
-    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--primary) 70%, transparent);
-    will-change: transform, opacity;
+    /* Soft diffuse glow attached to core */
+    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--primary) 40%, transparent);
+    transition: background 0.3s ease, transform 0.1s ease-out;
 }
 
-/* Base Star Spikes (The Diffraction Effect) */
-.cursor-dot::before,
-.cursor-dot::after {
+.dark .cursor-core {
+    background: #fff;
+    box-shadow: 
+        0 0 15px 2px var(--primary),
+        0 0 4px 1px white inset;
+}
+
+/* Polar star lines (diffraction spikes) for extreme precision feel */
+.cursor-core::before,
+.cursor-core::after {
     content: "";
     position: absolute;
     background: inherit;
     top: 50%;
     left: 50%;
-    opacity: 0.7;
-    border-radius: 50%; /* Tapered spikes */
-    filter: blur(0.2px);
-    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, width 0.3s ease, height 0.3s ease;
+    opacity: 0.5;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
 }
 
-/* Horizontal & Vertical Spikes (Cardinal) */
-.cursor-dot::before {
-    width: 20px;
-    height: 1px;
-    margin-left: -10px;
-    margin-top: -0.5px;
-    box-shadow: 0 0 4px var(--primary);
-}
+.cursor-core::before { width: 14px; height: 1px; }
+.cursor-core::after { width: 1px; height: 14px; }
 
-.cursor-dot::after {
-    width: 1px;
-    height: 20px;
-    margin-left: -0.5px;
-    margin-top: -10px;
-    box-shadow: 0 0 4px var(--primary);
-}
-
-/* Dark Mode: The "Polaris" Look - White core with intense purple aura */
-.dark .cursor-dot {
-    background: #fff;
-    box-shadow: 
-        0 0 12px 2px var(--primary),
-        0 0 4px 1px white inset;
-}
-
-.dark .cursor-dot::before,
-.dark .cursor-dot::after {
-    background: #fff;
-    box-shadow: 0 0 8px var(--primary);
-    opacity: 0.85;
-}
-
-.cursor-dot.mode-contrast {
-    background: white;
-    box-shadow: 0 0 12px white;
-}
-
-/* Redefine dot for mode-framing to make it a precision indicator */
-.cursor-dot.mode-framing {
-    width: 2.5px;
-    height: 2.5px;
-    box-shadow: 0 0 8px 1.5px var(--primary);
-    filter: brightness(1.2);
-}
-.cursor-dot.mode-framing::before,
-.cursor-dot.mode-framing::after {
-    opacity: 0;
-    transform: scale(0.2);
-}
-
-.cursor-dot.magnetic-active {
-    width: 6px;
-    height: 6px;
-    filter: brightness(1.3);
-    box-shadow: 0 0 15px 3px var(--primary);
-}
-.cursor-dot.magnetic-active::before { width: 30px; opacity: 1; }
-.cursor-dot.magnetic-active::after { height: 30px; opacity: 1; }
-
-.cursor-dot.mode-card {
-    width: 3.5px;
-    height: 3.5px;
-    box-shadow:
-        0 0 0 5px color-mix(in srgb, var(--primary) 8%, transparent),
-        0 0 12px 2px color-mix(in srgb, var(--primary) 40%, transparent);
-}
-.cursor-dot.mode-card::before,
-.cursor-dot.mode-card::after {
-    opacity: 0.15;
-    transform: scale(0.3);
-}
-
-.dark .cursor-dot.mode-card {
-    box-shadow:
-        0 0 0 6px color-mix(in srgb, white 6%, transparent),
-        0 0 14px 2px color-mix(in srgb, var(--primary) 50%, transparent);
-}
-
-/* --- Frame (The "Orbit" & "Targeting Box") --- */
-.cursor-frame {
+/* ============================================================
+   LAYER 2: RING (Physical Interaction & Framing)
+   ============================================================ */
+.cursor-ring {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 100%;
-    height: 100%;
+    width: 28px;
+    height: 28px;
+    border: 1px dashed color-mix(in srgb, var(--primary) 30%, transparent);
+    border-radius: 50%; /* Pure circular satellite orbit */
+    will-change: transform, width, height;
     pointer-events: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-sizing: border-box;
-    transform: translate(-50%, -50%);
+    opacity: 1;
     
-    border: 1px solid transparent;
-    border-radius: 50%;
     transition: 
-        border-color 0.4s ease, 
-        border-radius 0.4s cubic-bezier(0.22, 1, 0.36, 1), 
-        opacity 0.2s ease, 
-        background 0.3s ease;
-    will-change: transform, width, height, opacity;
+        border-color 0.2s ease,
+        border-radius 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 0.2s ease,
+        border-style 0.3s ease;
 }
 
-/* Default state: subtle trailing orbit (Dashed orbit path) */
-.cursor-frame.mode-default {
-    border: 1px dashed color-mix(in srgb, var(--primary) 40%, transparent);
+.dark .cursor-ring {
+    border-color: color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
-.dark .cursor-frame.mode-default {
-    border-color: color-mix(in srgb, var(--primary) 35%, transparent);
-    box-shadow: inset 0 0 10px color-mix(in srgb, var(--primary) 15%, transparent);
+.cursor-ring.mode-hidden,
+.cursor-ring.mode-text,
+.cursor-ring.mode-disabled {
+    opacity: 0;
 }
 
-/* Framing state: gently hugs interactive elements - No Background to avoid blocking! */
-.cursor-frame.mode-framing {
-    border-radius: 6px;
-    border-color: color-mix(in srgb, var(--primary) 30%, transparent);
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--primary) 6%, transparent),
-        transparent 45%,
-        color-mix(in srgb, var(--primary) 4%, transparent)
-    );
+/* Interactive States: Circular in quiet, Rectangular in action */
+.cursor-ring.mode-hover-link {
+    border-radius: 4px; /* Morph to frame-like rect */
+    border-style: solid;
+    border-width: 1px;
+    border-color: color-mix(in srgb, var(--primary) 50%, transparent);
 }
 
-.dark .cursor-frame.mode-framing {
-    border-color: color-mix(in srgb, var(--primary) 40%, transparent);
-    box-shadow: 0 0 20px color-mix(in srgb, var(--primary) 20%, transparent), inset 0 0 10px color-mix(in srgb, var(--primary) 5%, transparent);
+.cursor-ring.mode-hover-button {
+    border-radius: 6px; /* Slightly larger radius for buttons */
+    border-style: solid;
+    border-width: 1.5px;
+    border-color: color-mix(in srgb, var(--primary) 80%, transparent);
 }
 
-.cursor-frame.mode-contrast {
-    border-color: color-mix(in srgb, white 40%, transparent);
+.cursor-ring.mode-hover-card {
+    border-radius: 12px;
+    border: 1.5px dashed color-mix(in srgb, var(--primary) 40%, transparent);
 }
 
-/* --- Constellation Brackets --- */
+.cursor-ring.contrast {
+    border-color: white !important;
+}
+
+/* --- Constellation Brackets (Ornamental) --- */
 .cursor-brackets {
     position: absolute;
-    inset: 0;
-    overflow: visible;
+    inset: -6px;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: scale(0.9);
 }
 
-.cursor-frame-sheen {
-    position: absolute;
-    inset: 2px;
-    border-radius: inherit;
-    opacity: 0;
-    background:
-        linear-gradient(
-            135deg,
-            color-mix(in srgb, white 18%, transparent),
-            transparent 32%,
-            color-mix(in srgb, var(--primary) 6%, transparent) 72%,
-            transparent
-        );
-    transition: opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+.cursor-ring.mode-hover-button .cursor-brackets,
+.cursor-ring.mode-hover-card .cursor-brackets {
+    opacity: 0.8;
+    transform: scale(1.05);
+}
+
+/* Global active class triggers native cursor removal */
+.custom-cursor-active,
+.custom-cursor-active * {
+    cursor: none !important;
+}
+
+/* Selective restoration for text/editors */
+.custom-cursor-active pre,
+.custom-cursor-active code,
+.custom-cursor-active textarea,
+.custom-cursor-active input,
+.custom-cursor-active [contenteditable],
+.custom-cursor-active .math-display {
+    cursor: text !important;
+}
+
+.cursor-ring.mode-hover-button .cursor-brackets {
+    opacity: 1;
+    transform: scale(1); /* Snaps nicely into place on button hover */
 }
 
 .cursor-corner {
 	position: absolute;
-	width: 10px;
-	height: 10px;
+	width: 8px;
+	height: 8px;
 	border: 1.5px solid var(--primary);
-	pointer-events: none;
-    opacity: 0;
-	filter: drop-shadow(0 0 5px color-mix(in srgb, var(--primary) 28%, transparent));
-	transition:
-        opacity 0.22s ease,
-        border-color 0.22s ease,
-        transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-        filter 0.24s ease;
 }
 
-.cursor-corner-node {
-    position: absolute;
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: var(--primary);
-    box-shadow: 0 0 4px var(--primary);
-    opacity: 0;
-    transform: scale(0.7);
-    transition:
-        opacity 0.2s ease 0.06s,
-        transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
+.corner-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 3px; }
+.corner-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 3px; }
+.corner-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 3px; }
+.corner-br { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 3px; }
 
-.dark .cursor-corner-node {
-    background: color-mix(in srgb, white 60%, var(--primary));
-    box-shadow: 0 0 6px var(--primary);
-}
-
-/* Outer snap effect positions */
-.corner-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 4px; transform: translate(-6px, -6px); }
-.corner-tl .cursor-corner-node { top: -2px; left: -2px; }
-
-.corner-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 4px; transform: translate(6px, -6px); }
-.corner-tr .cursor-corner-node { top: -2px; right: -2px; }
-
-.corner-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 4px; transform: translate(-6px, 6px); }
-.corner-bl .cursor-corner-node { bottom: -2px; left: -2px; }
-
-.corner-br { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 4px; transform: translate(6px, 6px); }
-.corner-br .cursor-corner-node { bottom: -2px; right: -2px; }
-
-/* When framing, snap the brackets in and reveal nodes */
-.mode-framing .cursor-frame-sheen {
-    opacity: 1;
-}
-
-.mode-framing .cursor-corner {
-	opacity: 1;
-    transform: translate(0, 0);
-    filter: drop-shadow(0 0 9px color-mix(in srgb, var(--primary) 40%, transparent));
-}
-
-.mode-framing .cursor-corner-node {
-    opacity: 1;
-    transform: scale(1);
-}
-
-.mode-framing .cursor-corner-node {
-    opacity: 1;
-    transform: scale(1);
-}
-
-.mode-default .cursor-corner,
-.mode-default .cursor-frame-sheen,
-.mode-card .cursor-corner,
-.mode-card .cursor-frame-sheen,
-.mode-hidden .cursor-corner,
-.mode-hidden .cursor-frame-sheen {
-	opacity: 0 !important;
-}
-
-.mode-contrast .cursor-corner {
-	border-color: white !important;
-}
-.mode-contrast .cursor-corner-node {
-    background: white;
-    box-shadow: 0 0 6px white;
-}
-
-/* --- Magnetic Interaction Feedback --- */
-.cursor-frame.magnetic-active {
-	opacity: 0.8 !important;
-    background: color-mix(in srgb, var(--primary) 12%, transparent);
-}
-
-.cursor-frame.magnetic-click-pulse {
-	filter: brightness(1.4);
-}
-
-/* Global Hidden */
-.mode-hidden {
-    opacity: 0 !important;
-    pointer-events: none;
-}
-
-.cursor-frame.mode-card {
-    opacity: 0 !important;
-    border-color: transparent;
-    box-shadow: none;
-}
-
-/* --- Theme Transition Pairing --- */
-/* Hide cursor during View Transitions to prevent double-ghosting and flicker. */
-.theme-transitioning .cursor-dot-wrapper,
-.theme-transitioning .cursor-frame-wrapper {
-    opacity: 0 !important;
-    transition: opacity 0.2s ease;
-}
-
-/* Optimize OS cursor hiding during theme transition */
-.theme-transitioning.custom-cursor-active {
-    cursor: none !important;
-}
-
+/* ============================================================
+   ACCESSIBILITY & DEGRADATION
+   ============================================================ */
 @media (prefers-reduced-motion: reduce) {
-    .cursor-dot,
-    .cursor-dot::before,
-    .cursor-dot::after,
-    .cursor-frame,
-    .cursor-corner,
-    .cursor-corner-node,
-    .cursor-frame-sheen {
-        transition-duration: 0.01ms !important;
+    .cursor-core,
+    .cursor-ring,
+    .cursor-brackets {
+        transition: none !important;
         animation: none !important;
     }
-}
-/* --- Global Premium Entities --- */
-.premium-link {
-    color: var(--primary);
-    font-weight: 600;
-    text-decoration: none;
-    border-bottom: 1px solid color-mix(in srgb, var(--primary), transparent 80%);
-    transition: all 0.3s ease;
-}
-
-.premium-link:hover {
-    border-bottom-color: var(--primary);
-    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--primary), transparent 60%));
-}
-
-/* --- Universal Tag System --- */
-.premium-tag {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 10px;
-    border-radius: 99px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    user-select: none;
-    background: color-mix(in srgb, var(--primary), transparent 94%);
-    border: 1px solid color-mix(in srgb, var(--primary), transparent 80%);
-    color: color-mix(in srgb, var(--primary), transparent 20%);
-    text-decoration: none !important;
-}
-
-.premium-tag:hover {
-    background: color-mix(in srgb, var(--primary), transparent 85%);
-    border-color: var(--primary);
-    color: var(--primary);
-    transform: translateY(-1.5px);
-    box-shadow: 0 4px 15px color-mix(in srgb, var(--primary), transparent 90%);
-}
-
-.md-hashtag {
-    font-family: var(--font-mono);
-    opacity: 0.8;
-}
-
-.dark .premium-tag {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: var(--foreground);
-    opacity: 0.6;
-}
-
-.dark .premium-tag:hover {
-    background: color-mix(in oklab, var(--primary) 15%, transparent);
-    border-color: var(--primary);
-    color: var(--primary);
-    opacity: 1;
-    box-shadow: 0 0 20px color-mix(in oklab, var(--primary) 10%, transparent);
 }

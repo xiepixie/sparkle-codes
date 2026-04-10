@@ -131,7 +131,7 @@ export default async function HomePage() {
 
           <div className="lg:col-span-5 xl:col-span-4 mt-8 lg:mt-0">
             <TiltWrapper className="rounded-[2rem]" variant="nebula" tiltAngle={5}>
-              <div className="rounded-[1.9rem] border border-primary/15 bg-background/40 p-7 backdrop-blur-xl">
+              <div className="p-7">
                 <SectionEyebrow>Status</SectionEyebrow>
                 <h2 className="mt-3 text-[1.5rem] font-semibold leading-[1.2] tracking-[-0.03em]">
                   Building rhythm
@@ -154,9 +154,9 @@ export default async function HomePage() {
           {focusAreas.map(({ title, description, icon: Icon }) => (
             <div
               key={title}
-              className="group rounded-[2rem] border border-border/40 bg-background/30 p-8 backdrop-blur-md transition-colors hover:border-primary/20 hover:bg-background/50"
+              className="group rounded-[2rem] bg-background/25 p-8 backdrop-blur-md transition-colors hover:bg-background/40"
             >
-              <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/15 bg-primary/5 text-primary transition-transform group-hover:scale-110">
+              <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5 text-primary transition-transform group-hover:scale-110">
                 <Icon className="h-6 w-6" />
               </div>
               <h2 className="text-[1.2rem] font-semibold leading-7 tracking-[-0.02em] text-foreground/90">
@@ -193,7 +193,7 @@ export default async function HomePage() {
                   href={href}
                   target="_blank"
                   rel="noreferrer"
-                  className="group block rounded-[2.4rem] border border-border/50 bg-background/40 p-8 backdrop-blur-xl transition-all hover:border-primary/30 hover:bg-background/60 sm:p-10"
+                  className="group block transition-all sm:p-2"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
                     <div>
@@ -205,7 +205,7 @@ export default async function HomePage() {
                         {description}
                       </p>
                     </div>
-                    <div className="hidden shrink-0 sm:flex h-16 w-16 items-center justify-center rounded-3xl border border-primary/20 bg-primary/10 text-primary transition-transform group-hover:rotate-6">
+                    <div className="hidden shrink-0 sm:flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/5 text-primary transition-transform group-hover:rotate-6">
                       <Icon className="h-7 w-7" />
                     </div>
                   </div>
@@ -214,7 +214,7 @@ export default async function HomePage() {
                     {bullets.map((bullet) => (
                       <div
                         key={bullet}
-                        className="rounded-full border border-border/80 bg-background/80 px-4 py-2 text-[0.9rem] font-medium text-foreground/80"
+                        className="rounded-full bg-background/60 px-4 py-2 text-[0.9rem] font-medium text-foreground/80"
                       >
                         {bullet}
                       </div>
@@ -229,7 +229,7 @@ export default async function HomePage() {
 
       {/* Writing & Docs CTA */}
       <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-24 sm:px-6">
-        <div className="flex flex-col items-center text-center rounded-[3rem] border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent p-12 sm:p-20 backdrop-blur-xl">
+        <div className="flex flex-col items-center text-center rounded-[3rem] bg-gradient-to-b from-primary/5 to-transparent p-12 sm:p-20 backdrop-blur-xl">
           <div className="inline-flex items-center justify-center rounded-full bg-primary/10 p-4 mb-6">
             <NotebookPen className="h-8 w-8 text-primary" />
           </div>
@@ -248,7 +248,7 @@ export default async function HomePage() {
             </Link>
             <Link
               href={getAppUrl('docs')}
-              className="inline-flex h-14 items-center justify-center rounded-2xl border border-border/80 bg-background/50 px-10 text-[1.05rem] font-medium transition-colors hover:bg-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="inline-flex h-14 items-center justify-center rounded-2xl bg-background/50 px-10 text-[1.05rem] font-medium transition-colors hover:bg-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Read the Docs
             </Link>
@@ -256,7 +256,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <footer className="relative z-10 border-t border-border/40 bg-background/30 px-5 py-12 backdrop-blur-md sm:px-6">
+      <footer className="relative z-10 bg-background/30 px-5 py-12 backdrop-blur-md sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">

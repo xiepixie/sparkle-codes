@@ -13,6 +13,7 @@ import {
 	escapeHtml,
 	normalizeWhitespace,
 	renderMarkdownSnippet as renderSearchSnippet,
+	highlightLatex,
 } from "./markdown-utils";
 
 // === SHIKI SINGLETON PRE-WARMING ===
@@ -237,78 +238,49 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 					let highlightedSource = "";
 					try {
 						// Detect indentation levels for LaTeX to improve source readability (e.g., matrices, cases)
-						const lineMetadata: { indent: number }[] = [];
+						const lineMetadata: { indent: number; text: string }[] = [];
 						let currentDepth = 0;
-						decodedTex.split("\n").forEach((line: string) => {
+						
+						// Basic source formatting
+						const normalizedTex = decodedTex
+							.replace(/\r\n/g, '\n')
+							.replace(/\r/g, '\n')
+							.replace(/(\\begin\{[^}]+\})/g, '\n$1\n')
+							.replace(/(\\end\{[^}]+\})/g, '\n$1\n')
+							.replace(/\\\\/g, '\\\\\n')
+							.replace(/\s*&\s*/g, ' & ');
+
+						const lines = normalizedTex.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+
+						lines.forEach((line: string) => {
 							const begins = (line.match(/\\begin\{/g) || []).length;
 							const ends = (line.match(/\\end\{/g) || []).length;
 							
-							// If the line starts with \end, outdent it immediately
-							if (line.trim().startsWith("\\end{")) {
+							if (line.startsWith("\\end{")) {
 								currentDepth = Math.max(0, currentDepth - 1);
-								lineMetadata.push({ indent: currentDepth });
-								// Adjust for next line, accounting for the end we just processed
+								lineMetadata.push({ indent: currentDepth, text: line });
 								currentDepth = Math.max(0, currentDepth + begins - (ends - 1));
 							} else {
-								lineMetadata.push({ indent: currentDepth });
-								// Adjust for next line
+								lineMetadata.push({ indent: currentDepth, text: line });
 								currentDepth = Math.max(0, currentDepth + begins - ends);
 							}
 						});
 
-						// Why: Shiki provides accurate LaTeX syntax highlighting for both inline and block math.
-						// We use transformers to adapt Shiki's output to our 'Starry Night' UI components.
-						highlightedSource = highlighter.codeToHtml(decodedTex, {
-							lang: "latex",
-							themes: {
-								light: "github-light",
-								dark: "github-dark",
-							},
-							defaultColor: false,
-							cssVariablePrefix: "--shiki-",
-							transformers: [
-								{
-									pre(node: any) {
-										// Why: We swap the <pre> for a <div> in block mode to allow nested <pre> lines,
-										// or a <span> for inline mode to maintain flow.
-										node.tagName = isDisplay ? "div" : "span";
-										node.properties.class = `${node.properties.class || ""} ${isDisplay ? "code-fence mockup-code" : "shiki-inline"}`;
-										node.properties.style = node.properties.style || "";
-									},
-									code(node: any) {
-										node.tagName = isDisplay ? "div" : "span";
-									},
-									line(node: any, line: any) {
-										// Why: For matrices and multiline formulas, we preserve indentation and handle line numbers.
-										if (isDisplay) {
-											node.tagName = "pre";
-											node.properties = { "data-prefix": line };
-
-											const depth = lineMetadata[line - 1]?.indent || 0;
-											
-											// Why: We wrap the code content in a dedicated span to isolate indentation from line numbers.
-											node.children = [
-												{
-													type: "element",
-													tagName: "span",
-													properties: {
-														class: "line-code",
-														style: depth > 0 ? `--indent-level: ${depth};` : undefined,
-													},
-													children: node.children,
-												},
-											];
-										} else {
-											node.tagName = "span";
-										}
-									},
-								},
-							],
-						});
+						if (isDisplay) {
+							// Why: We build a pre+code block structure similar to shiki to maintain CSS compatibility
+							const formattedLines = lineMetadata.map((meta, i) => {
+								const lineNum = i + 1;
+								const indentStyle = meta.indent > 0 ? ` style="--indent-level: ${meta.indent};"` : "";
+								return `<pre data-prefix="${lineNum}"><span class="line-code"${indentStyle}>${highlightLatex(meta.text)}</span></pre>`;
+							}).join("");
+							highlightedSource = `<div class="code-fence mockup-code">${formattedLines}</div>`;
+						} else {
+							highlightedSource = `<span class="shiki-inline">${highlightLatex(decodedTex)}</span>`;
+						}
 					} catch (e) {
-						console.error("Shiki math highlighting error:", e);
+						console.error("Custom math highlighting error:", e);
 						highlightedSource = isDisplay
-							? `<div class="code-fence"><pre><code>${escapeHtml(decodedTex)}</code></pre></div>`
+							? `<div class="code-fence mockup-code"><pre><code>${escapeHtml(decodedTex)}</code></pre></div>`
 							: `<span class="shiki-inline">${escapeHtml(decodedTex)}</span>`;
 					}
 

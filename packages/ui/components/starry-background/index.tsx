@@ -1,8 +1,5 @@
-"use client";
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import "./styles.css";
-
 import { useTheme } from "next-themes";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   CONSTELLATIONS,
   TIME_SLOT_CONFIG,
@@ -16,6 +13,7 @@ import {
   type SpecialEffectState,
 } from "@repo/utils";
 import { readSharedJson, writeSharedJson } from "../../lib/shared-ui-state";
+import "./styles.css";
 
 const SKY_SCENE_STATE_KEY = "sky-scene";
 const GOLD_COLOR = "255, 215, 0";
@@ -45,6 +43,11 @@ interface ViewportState {
   dpr: number;
 }
 
+interface SpriteConfig {
+  canvas: HTMLCanvasElement;
+  offsets: Record<string, number>; // Maps color_size_glow to x position
+}
+
 interface StarNode {
   xRel: number;
   yRel: number;
@@ -61,6 +64,8 @@ interface StarNode {
   excitement: number;
   isHero: boolean;
   isCustomColor?: boolean;
+  colorRole: 0 | 1 | 2; // 0: primary, 1: secondary, 2: white
+  customColor?: string;
   hasSpike?: boolean;
   constellationName?: string;
   paletteRoll: number;
@@ -87,6 +92,8 @@ interface SkyCache {
   colors: ThemeColors;
   lastAppliedSceneKey: string | null;
   lastThemeMode: "light" | "dark" | null;
+  lastWidth: number;
+  lastHeight: number;
 }
 
 const GlobalSkyCache: SkyCache = {
@@ -105,6 +112,8 @@ const GlobalSkyCache: SkyCache = {
   },
   lastAppliedSceneKey: null,
   lastThemeMode: null,
+  lastWidth: 0,
+  lastHeight: 0,
 };
 
 function debugLog(event: string, details?: Record<string, unknown>) {
@@ -209,11 +218,8 @@ function createAmbientStar(
     : 1.15 + rng() * 1.95;
 
   const paletteRoll = rng();
-  const color = paletteRoll > 0.78
-    ? colors.primary
-    : paletteRoll > 0.52
-      ? colors.secondary
-      : colors.white;
+  const colorRole = paletteRoll > 0.78 ? 0 : paletteRoll > 0.52 ? 1 : 2;
+  const color = colorRole === 0 ? colors.primary : colorRole === 1 ? colors.secondary : colors.white;
 
   const ceiling = clamp(ambientOpacityMax + (depth === 1 ? 0.12 : 0.04), 0.2, 0.95);
   const floor = clamp(ceiling * 0.35, 0.1, 0.32);
@@ -234,6 +240,7 @@ function createAmbientStar(
     twinkleOffset: rng() * Math.PI * 2,
     excitement: 0,
     isHero: false,
+    colorRole,
     paletteRoll,
   };
 }
@@ -251,7 +258,11 @@ function createHeroStar(
   const baseOpacity = 0.65 + rng() * 0.25;
 
   // Convert hex color to RGB string if present, otherwise fallback to theme colors
-  const starColor = point.color ? hexToRgb(point.color) : (rng() > 0.45 ? colors.primary : colors.secondary);
+  const isCustomColor = Boolean(point.color);
+  const customColor = point.color ? hexToRgb(point.color) : undefined;
+  const paletteRoll = rng();
+  const colorRole = paletteRoll > 0.45 ? 0 : 1;
+  const starColor = customColor || (colorRole === 0 ? colors.primary : colors.secondary);
 
   return {
     xRel,
@@ -268,10 +279,12 @@ function createHeroStar(
     twinkleOffset: rng() * Math.PI * 2,
     excitement: 0,
     isHero: true,
-    isCustomColor: Boolean(point.color),
+    isCustomColor,
+    customColor,
+    colorRole,
     hasSpike: point.hasSpike,
     constellationName,
-    paletteRoll: rng(),
+    paletteRoll,
   };
 }
 
@@ -284,6 +297,12 @@ function hexToRgb(hex: string): string {
   return `${r}, ${g}, ${b}`;
 }
 
+/**
+ * STAR RESCALE LOGIC (决策型注释)
+ * 为什么：当窗口尺寸变化时，如果销毁重建所有星星会导致视觉跳动（Jank）。
+ * 通过保持相对位置 (xRel, yRel) 并线性缩放到新尺寸，实现了平滑的响应式设计，
+ * 且避免了重新进行伪随机位置生成的开销。
+ */
 function rescaleStars(stars: StarNode[], width: number, height: number) {
   for (const star of stars) {
     star.x = star.xRel * width;
@@ -291,21 +310,46 @@ function rescaleStars(stars: StarNode[], width: number, height: number) {
   }
 }
 
-function drawGlow(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  color: string,
-  alpha: number
-) {
-  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  gradient.addColorStop(0, `rgba(${color}, ${alpha})`);
-  gradient.addColorStop(1, "transparent");
-  ctx.fillStyle = gradient;
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
+function createSpritePool(colors: ThemeColors): SpriteConfig | null {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  const offsets: Record<string, number> = {};
+  
+  const sizes = [16, 32, 48]; // Glow sizes (scaled)
+  const roleColors = [colors.primary, colors.secondary, colors.white, GOLD_COLOR];
+  const roleNames = ["p", "s", "w", "g"];
+  
+  canvas.width = 1000; // Enough space
+  canvas.height = 100;
+  
+  let currentX = 0;
+  
+  roleColors.forEach((color, i) => {
+    const name = roleNames[i];
+    sizes.forEach(radius => {
+      const fullSize = radius * 2 + 10;
+      
+      const gradient = ctx.createRadialGradient(
+        currentX + radius + 5, radius + 5, 0,
+        currentX + radius + 5, radius + 5, radius
+      );
+      gradient.addColorStop(0, `rgba(${color}, 1)`);
+      gradient.addColorStop(1, "transparent");
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(currentX + radius + 5, radius + 5, radius, 0, Math.PI * 2);
+      ctx.fill();
+      
+      offsets[`${name}_${radius}`] = currentX + 5;
+      currentX += fullSize;
+    });
+  });
+  
+  return { canvas, offsets };
 }
 
 function drawStar(
@@ -313,61 +357,61 @@ function drawStar(
   star: StarNode, 
   isGoldEffect: boolean, 
   isSuppressed: boolean,
-  globalOpacityMultiplier = 1
+  globalOpacityMultiplier: number,
+  pool: SpriteConfig | null,
+  colorStrings: string[],
+  now: number
 ) {
-  // Hard-exit for invisibility to ensure 100% clean background in Light mode
-  if (globalOpacityMultiplier < 0.001) {
+  if (globalOpacityMultiplier < 0.001 || isSuppressed) {
     return;
   }
-
-  const now = performance.now();
   const shimmerFactor = isGoldEffect ? (Math.sin(now * 0.008 + star.x) * 0.25 + 0.75) : 1;
   const twinkleShimmer = Math.sin(now * star.twinkleSpeed + star.twinkleOffset);
   
-  const effectiveOpacity = isSuppressed 
-    ? 0 
-    : clamp(
-        (star.baseOpacity + twinkleShimmer * (star.isHero ? 0.18 : 0.1) + star.excitement * 0.65) * shimmerFactor * globalOpacityMultiplier,
-        0,
-        1
-      );
-  
-  const activeColor = isGoldEffect ? GOLD_COLOR : star.color;
+  const effectiveOpacity = clamp(
+    (star.baseOpacity + twinkleShimmer * (star.isHero ? 0.18 : 0.1) + star.excitement * 0.65) * shimmerFactor * globalOpacityMultiplier,
+    0, 1
+  );
+
+  if (effectiveOpacity < 0.005) {
+    return;
+  }
+
+  const roleName = isGoldEffect ? "g" : (star.colorRole === 0 ? "p" : star.colorRole === 1 ? "s" : "w");
   const effectiveSize = star.size * (isGoldEffect ? 1.08 : 1);
 
-  if (star.depth >= 1 || star.isHero || (effectiveOpacity > 0.1 && !isSuppressed)) {
+  // OPTIMIZATION: Use pre-rendered Glow sprites instead of radial gradients
+  if ((star.depth >= 1 || star.isHero) && pool) {
     const excitementGlow = star.isHero ? (star.excitement * 4) : 0;
-    const glowScale = star.isHero ? (isGoldEffect ? 12 : 8 + excitementGlow) : 4.5;
+    const baseGlowRadius = star.isHero ? (isGoldEffect ? 12 : 8 + excitementGlow) : 4.5;
+    const glowRadius = effectiveSize * baseGlowRadius;
     
-    // CRITICAL: Glow opacity MUST be multiplied by globalOpacityMultiplier
-    // to prevent "gray halos" on white background during theme switch.
-    const baseGlowOpacity = isGoldEffect
-      ? 0.35 * shimmerFactor
-      : star.isHero
-        ? star.excitement * 0.45
-        : 0.08;
+    // Choose closest pool size (16, 32, 48)
+    const poolRadius = glowRadius < 11 ? 16 : glowRadius < 24 ? 32 : 48;
+    const offsetX = pool.offsets[`${roleName}_${poolRadius}`];
     
-    const glowOpacity = isSuppressed ? 0 : baseGlowOpacity * globalOpacityMultiplier;
-
-    if (glowOpacity > 0.005) {
-      drawGlow(
-        ctx,
-        star.x,
-        star.y,
-        effectiveSize * glowScale,
-        activeColor,
-        glowOpacity
+    if (offsetX !== undefined) {
+      const baseGlowOpacity = isGoldEffect ? 0.35 * shimmerFactor : star.isHero ? star.excitement * 0.45 : 0.08;
+      ctx.globalAlpha = baseGlowOpacity * globalOpacityMultiplier;
+      
+      const drawSize = poolRadius * 2;
+      ctx.drawImage(
+        pool.canvas,
+        offsetX, 0, drawSize, drawSize,
+        star.x - poolRadius, star.y - poolRadius, drawSize, drawSize
       );
     }
   }
 
-  if (effectiveOpacity > 0.005) {
-    ctx.beginPath();
-    ctx.arc(star.x, star.y, effectiveSize, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(${activeColor}, ${effectiveOpacity})`;
-    ctx.fill();
-  }
-
+  // Draw the star core
+  ctx.globalAlpha = effectiveOpacity;
+  const activeColorIndex = isGoldEffect ? 3 : star.colorRole;
+  ctx.fillStyle = colorStrings[activeColorIndex]; 
+  
+  ctx.beginPath();
+  ctx.arc(star.x, star.y, effectiveSize, 0, Math.PI * 2);
+  ctx.fill();
+  
   // Hero stars with hasSpike property get a premium lens spike (十字星) as an Easter egg
   const shouldSpike = star.hasSpike && !isSuppressed && globalOpacityMultiplier > 0.1;
   const shouldFlare = (star.isHero && star.excitement > 0.85) || (!star.isHero && star.depth === 1) || (isGoldEffect && Math.sin(now * 0.005 + star.x) > 0.85);
@@ -383,7 +427,8 @@ function drawStar(
       
       const spikeAlpha = clamp((star.baseOpacity * 0.45 + twinkleShimmer * 0.1) * globalOpacityMultiplier, 0, 0.55);
       if (spikeAlpha > 0.01) {
-        ctx.strokeStyle = `rgba(${activeColor}, ${spikeAlpha})`;
+        ctx.globalAlpha = spikeAlpha;
+        ctx.strokeStyle = colorStrings[activeColorIndex];
         ctx.lineWidth = 0.4;
         
         // Horizontal/Vertical spikes (subtle and balanced)
@@ -415,7 +460,8 @@ function drawStar(
       const flareOpacity = clamp(baseFlareOpacity * globalOpacityMultiplier, 0, 0.75);
       
       if (flareOpacity > 0.01) {
-        ctx.strokeStyle = `rgba(${activeColor}, ${flareOpacity})`;
+        ctx.globalAlpha = flareOpacity;
+        ctx.strokeStyle = colorStrings[activeColorIndex];
         ctx.lineWidth = 0.35;
         const flareLen = star.isHero ? effectiveSize * 2.8 : effectiveSize * 1.2;
         ctx.beginPath();
@@ -425,13 +471,16 @@ function drawStar(
       }
     }
     ctx.restore();
+    ctx.globalAlpha = 1.0;
   }
 }
+
 
 
 export function StarryBackground() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const spritePool = useRef<SpriteConfig | null>(null);
   const viewportRef = useRef<ViewportState>({ width: 0, height: 0, dpr: 1 });
   const mouseRef = useRef({ x: -1000, y: -1000 });
   const rafId = useRef<number>(0);
@@ -591,10 +640,22 @@ export function StarryBackground() {
       return;
     }
 
-    resizeCanvas(width, height);
+    const dimensionsChanged = GlobalSkyCache.lastWidth !== width || GlobalSkyCache.lastHeight !== height;
+    
+    if (dimensionsChanged) {
+      resizeCanvas(width, height);
+      GlobalSkyCache.lastWidth = width;
+      GlobalSkyCache.lastHeight = height;
+    } else {
+      // FIX: Ensure transform persists if resize was skipped (prevents top-left shrinking)
+      const ctx = canvasRef.current?.getContext("2d");
+      if (ctx) {
+        const dpr = viewportRef.current.dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+    }
 
     const isKeyMatch = GlobalSkyCache.lastAppliedSceneKey === GlobalSkyCache.scene.sceneKey;
-    const isThemeMatch = GlobalSkyCache.lastThemeMode === (isDark ? "dark" : "light");
 
     if (!isKeyMatch) {
       // ATOMIC CLEANUP for structural changes
@@ -610,36 +671,9 @@ export function StarryBackground() {
     if (GlobalSkyCache.ambientStars.length === 0) {
       initSceneLayers(width, height, GlobalSkyCache.scene);
       GlobalSkyCache.lastThemeMode = isDark ? "dark" : "light";
-    } else if (!isThemeMatch) {
-      // Decoupled color reconcile without re-initializing positions
-      const colors = GlobalSkyCache.colors;
-      for (const star of GlobalSkyCache.ambientStars) {
-        // Re-assign colors from new theme tokens with stable paletteRoll
-        const roll = star.paletteRoll;
-        star.color = roll > 0.78 ? colors.primary : roll > 0.52 ? colors.secondary : colors.white;
-      }
-      for (const stars of GlobalSkyCache.heroStars.values()) {
-        for (const star of stars) {
-          if (!star.isCustomColor) {
-            star.color = star.paletteRoll > 0.45 ? colors.primary : colors.secondary;
-          }
-        }
-      }
-      GlobalSkyCache.lastThemeMode = isDark ? "dark" : "light";
-      if (!isDark) {
-        // Just clear excitation to prevent residual glows, but leave effect.active intact 
-        // to allow it to resume if the user switches back during its duration.
-        GlobalSkyCache.ambientStars.forEach(s => {
-          s.excitement = 0;
-        });
-        GlobalSkyCache.heroStars.forEach(stars => {
-          stars.forEach(s => {
-            s.excitement = 0;
-          });
-        });
-      }
+      spritePool.current = createSpritePool(GlobalSkyCache.colors);
       debugLog("scene:theme-reconciled", { isDark });
-    } else {
+    } else if (dimensionsChanged) {
       rescaleStars(GlobalSkyCache.ambientStars, width, height);
       for (const stars of GlobalSkyCache.heroStars.values()) {
         rescaleStars(stars, width, height);
@@ -664,6 +698,16 @@ export function StarryBackground() {
     }
 
     const { width, height } = viewportRef.current;
+    
+    // CACHED COLOR STRINGS
+    const colors = GlobalSkyCache.colors;
+    const colorStrings = [
+      `rgb(${colors.primary})`,
+      `rgb(${colors.secondary})`,
+      `rgb(${colors.white})`,
+      `rgb(${GOLD_COLOR})`
+    ];
+
     const fx = GlobalSkyCache.effect;
     const isGoldTime = fx.active && fx.type === "celestialGold";
     if (isGoldTime && performance.now() - fx.startedAt > fx.durationMs) {
@@ -729,10 +773,19 @@ export function StarryBackground() {
       } else {
         star.excitement *= 0.94;
       }
-
-      // Optimization: No movement in main loop, keeping coordinates fixed as per user request.
-      drawStar(ctx, star, false, globalOpacity < 0.05, globalOpacity);
     }
+
+    // GROUPED AMBIENT DRAWING
+    for (let role = 0; role < 3; role++) {
+      ctx.fillStyle = colorStrings[role];
+      for (const star of GlobalSkyCache.ambientStars) {
+        if (star.colorRole !== role) {
+          continue;
+        }
+        drawStar(ctx, star, false, globalOpacity < 0.05, globalOpacity, spritePool.current, colorStrings, now);
+      }
+    }
+
 
     for (const placedConstellation of GlobalSkyCache.placedConstellations) {
       const stars = GlobalSkyCache.heroStars.get(placedConstellation.name);
@@ -796,7 +849,7 @@ export function StarryBackground() {
 
       for (const star of stars) {
         star.baseOpacity = clamp(star.baseOpacity + heroOpacityBoost * 0.08, 0, 0.96);
-        drawStar(ctx, star, isGoldConstellation, globalOpacity < 0.05, globalOpacity);
+        drawStar(ctx, star, isGoldConstellation, globalOpacity < 0.05, globalOpacity, spritePool.current, colorStrings, now);
       }
     }
 
@@ -804,9 +857,15 @@ export function StarryBackground() {
   }, [isDark]); // Re-bind on theme change to ensure smooth transition trigger
 
   const animate = useCallback(() => {
-    if (!isAnimating.current) {
+    // CRITICAL: Stop animation loop during theme transitions or if disabled.
+    // This prevents CPU contention during browser snapshots and blending.
+    if (!isAnimating.current || (window as any).__SPARKLE_THEME_TRANSITION__) {
+      if (isAnimating.current) {
+        rafId.current = requestAnimationFrame(animate);
+      }
       return;
     }
+
     drawFrame();
     rafId.current = requestAnimationFrame(animate);
   }, [drawFrame]);
@@ -828,16 +887,17 @@ export function StarryBackground() {
       white: "255, 255, 255",
     };
 
+    /**
+     * PERFORMANCE POLICY (决策型注释)
+     * 为什么：在 Light 模式下禁用所有 Canvas 计算及动画。
+     * 1. 节省电力与 CPU：背景星星在浅色界面中对比度极低，视觉贡献小，禁掉它能显著提升页面响应性能。
+     * 2. 避免冗余重绘：浅色模式下背景通常是不透明白色，Canvas 渲染层完全被遮挡。
+     */
+    if (themeRef.current !== "dark") {
+      return;
+    }
+
     rebuildScene(width, height);
-
-    debugLog("start", {
-      width,
-      height,
-      theme: themeRef.current ? "dark" : "light",
-      hasScene: Boolean(GlobalSkyCache.scene),
-      particleCount: GlobalSkyCache.ambientStars.length,
-    });
-
     drawFrame();
 
     if (!isAnimating.current) {
@@ -856,21 +916,39 @@ export function StarryBackground() {
   // Optimized Theme Switch: Defer the expensive background restart to an idle period.
   // This ensures the main UI (text, buttons, navigation) updates instantly 
   // without being blocked by the Canvas initialization.
-  useEffect(() => {
-    const handleStart = () => {
-      if (typeof window === "undefined") return;
-      
-      // Use requestIdleCallback if available, fallback to a small timeout
-      // This splits the long task of scene rebuilding from the theme toggle interaction.
+  // SYNCHRONOUS PRE-WARM: Use useLayoutEffect to ensure the background re-calculates 
+  // colors and visibility BEFORE the View Transition API captures its snapshot.
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!isDark) {
+      stop();
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (canvas && ctx) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
+    }
+    
+    // Check for transition lock or flag
+    const isTransitioning = (window as any).__SPARKLE_THEME_TRANSITION__;
+
+    if (isTransitioning) {
+      // FORCED SYNC START: No delays during transitions.
+      start();
+    } else {
+      // Standard Load: Defer to idle callback for background performance
       if ("requestIdleCallback" in window) {
         window.requestIdleCallback(() => start(), { timeout: 200 });
       } else {
         setTimeout(start, 50);
       }
-    };
-
-    handleStart();
-  }, [isDark, start]);
+    }
+  }, [isDark, start, stop]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") {
@@ -901,7 +979,9 @@ export function StarryBackground() {
 
     let resizeTimer: number | undefined;
     const handleResize = () => {
-      if (resizeTimer) window.clearTimeout(resizeTimer);
+      if (resizeTimer) {
+        window.clearTimeout(resizeTimer);
+      }
       resizeTimer = window.setTimeout(() => {
         rebuildScene(window.innerWidth, window.innerHeight);
         drawFrame();
@@ -976,7 +1056,9 @@ export function StarryBackground() {
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibility);
       clearInterval(syncInterval);
-      if (resizeTimer) window.clearTimeout(resizeTimer);
+      if (resizeTimer) {
+        window.clearTimeout(resizeTimer);
+      }
       // NOTE: We don't call stop() here because this effect re-runs on theme switch.
       // Transitioning should NOT kill the animation loop.
     };

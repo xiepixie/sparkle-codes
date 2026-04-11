@@ -1,5 +1,5 @@
 import { cn } from "../lib";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export const BentoGrid = ({
   className,

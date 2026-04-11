@@ -102,9 +102,52 @@ export function getPrefetchedFeed(key: string) {
 
 /**
  * Detail Page Prefetching
+ * 
+ * Truthfully seeds the browser cache for a specific blog post.
+ * Returns a promise that resolves when the pre-warming cycle is complete.
  */
-export async function prefetchPost(_slug: string) {
-  // We use Next.js's built-in router prefetch for RSC payload, 
-  // but we can also hit the API or just rely on the router.
-  // In our case, the router prefetch is very efficient because getPostBySlug is cached on server.
+const postCache = new Set<string>();
+
+export async function prefetchPost(slug: string) {
+  if (typeof window === "undefined" || !slug) {
+    return false;
+  }
+
+  const normalizedSlug = slug
+    .normalize("NFC")
+    .replace(/^\/+/, "")
+    .replace(/^blog\//i, "");
+
+  if (postCache.has(normalizedSlug)) {
+    return true;
+  }
+
+  try {
+    const encodedSlug = normalizedSlug
+      .split("/")
+      .map(segment => encodeURIComponent(segment))
+      .join("/");
+    
+    const url = `/blog/${encodedSlug}`;
+    
+    // Industrial Pre-warming: Resolve both document and RSC payload
+    const response = await fetch(url, { 
+      priority: "low",
+      method: "GET",
+      headers: {
+        "x-next-cache-tag": "blog-post"
+      }
+    });
+
+    if (response.ok) {
+      postCache.add(normalizedSlug);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Industrial-Prefetch] Seeded cache for: ${normalizedSlug}`);
+      }
+      return true;
+    }
+    return false;
+  } catch (_error) {
+    return false;
+  }
 }

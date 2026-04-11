@@ -1,20 +1,38 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import Brackets from "./Brackets";
 import "./cursor.css";
+import Brackets from "./Brackets";
 
 export interface StarCursorProps {
 	pathname?: string;
 }
 
-type CursorMode =
-	| "hidden"
-	| "tracking"
-	| "hover-link"
-	| "hover-button"
-	| "hover-card"
+export type CursorKind =
+	| "none"
+	| "navigate"
+	| "action"
+	| "explore"
 	| "text"
+	| "tag"
 	| "disabled";
+
+export type CursorStrategy =
+	| "free"
+	| "frame-soft"
+	| "frame-tight"
+	| "suppress";
+
+export const getStrategy = (kind: CursorKind): CursorStrategy => {
+	switch (kind) {
+		case "navigate": return "frame-soft";
+		case "action": return "frame-tight";
+		case "explore": return "frame-soft";
+		case "text": return "free";
+		case "tag": return "frame-tight";
+		case "disabled": return "suppress";
+		default: return "free";
+	}
+};
 
 function canUseCustomCursor() {
 	if (typeof window === "undefined") {
@@ -36,13 +54,17 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 	// Pure Data State for the RAF loop
 	const state = useRef({
-		mode: "hidden" as CursorMode,
+		kind: "none" as CursorKind,
+		isHidden: true,
 		isContrast: false,
 		pointer: { x: -100, y: -100 },
 		ring: { x: -100, y: -100 },
 		ringSize: { w: 32, h: 32 },
 		isPressing: false,
 		started: false,
+		prevKind: "none" as CursorKind,
+		prevHidden: true,
+		lastMoveTime: 0,
 	});
 
 	// Magnetic Bounds Cache (Avoiding Layout Thrashing)
@@ -57,6 +79,13 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 	const rafId = useRef<number>(0);
 	const isAnimating = useRef(false);
+	const lastProcessedTarget = useRef<HTMLElement | null>(null);
+
+	// Memoization Caches (Industrial Performance Rule)
+	// Why: Deeply nested structures like KaTeX or Shiki cause hundreds of mouseover events.
+	// Redundant .closest() walks on every tiny span would eventually drop frames.
+	const kindCache = useRef(new WeakMap<HTMLElement, CursorKind>());
+	const contrastCache = useRef(new WeakMap<HTMLElement, boolean>());
 
 	// Method to update bounds from activeTarget safely
 	const updateTargetBounds = () => {
@@ -77,7 +106,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			const nextEnabled = canUseCustomCursor();
 			setIsEnabled(nextEnabled);
 			if (!nextEnabled) {
-				state.current.mode = "hidden";
+				state.current.isHidden = true;
 				isAnimating.current = false;
 				document.body.classList.remove("custom-cursor-active");
 			}
@@ -109,57 +138,76 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 			const s = state.current;
 			const b = bounds.current;
+			const strategy = getStrategy(s.kind);
 
 			// Base Target Definitions
 			let targetX = s.pointer.x;
 			let targetY = s.pointer.y;
 			let targetW = 32;
 			let targetH = 32;
+			let ringLerp = 0.35;
 
-			let ringLerp = 0.25;
+			// TEXT ZONE OPTIMIZATION: Hide the ring but keep the StarCore active 
+			// and Native pointer suppressed.
+			if (s.kind === "text") {
+				targetW = 0;
+				targetH = 0;
+			}
 
-			// --- Removed Magnetism & Refined Framing ---
-			switch (s.mode) {
-				case "hover-button":
-					ringLerp = 0.35;
-					if (b.isActive) {
-						targetW = b.w + 12;
-						targetH = b.h + 12;
-						// No forced displacement: ring follows pointer but snaps bounds
-                        targetX = b.cx;
-                        targetY = b.cy;
-					}
-					break;
-				case "hover-link":
-					ringLerp = 0.4;
-					if (b.isActive) {
-						targetW = b.w + 6;
-						targetH = b.h + 6;
-						targetX = b.cx;
-						targetY = b.cy;
-					}
-					break;
-				case "hover-card":
-					ringLerp = 0.15;
-					if (b.isActive) {
-						targetW = b.w + 24;
-						targetH = b.h + 24;
-						targetX = s.pointer.x;
-						targetY = s.pointer.y;
-					}
-					break;
-				case "text":
-				case "hidden":
-				case "disabled":
-					targetW = 0;
-					targetH = 0;
-					break;
-				// Default tracking behavior
-				default:
-					ringLerp = 0.3;
-					targetW = 28; // Slightly smaller for precision
-					targetH = 28;
-					break;
+			// --- Refined Semantic-driven kinematics ---
+			if (s.isHidden) {
+				targetW = 0;
+				targetH = 0;
+				ringLerp = 1.0;
+			} else {
+				switch (strategy) {
+					case "frame-tight":
+						ringLerp = 0.45;
+						if (b.isActive) {
+							targetW = b.w + 12;
+							targetH = b.h + 12;
+							targetX = b.cx;
+							targetY = b.cy;
+						} else {
+							targetW = 28;
+							targetH = 28;
+						}
+						break;
+					case "frame-soft":
+						if (s.kind === "explore") {
+							// AMBIENT EXPLORATION: For large display blocks (Math/Mermaid), 
+							// we stay pointer-centered but expand the ring to indicate the active zone. 
+							// This avoids the 'floating loose frame' feeling on oversized elements.
+							targetW = 64;
+							targetH = 64;
+							targetX = s.pointer.x;
+							targetY = s.pointer.y;
+							ringLerp = 0.35;
+						} else {
+							// NAVIGATE (Links): Soft snap to the text element
+							ringLerp = 0.5;
+							if (b.isActive) {
+								targetW = b.w + 6;
+								targetH = b.h + 6;
+								targetX = b.cx;
+								targetY = b.cy;
+							} else {
+								targetW = 32;
+								targetH = 32;
+							}
+						}
+						break;
+					case "suppress":
+						targetW = 0;
+						targetH = 0;
+						ringLerp = 1.0;
+						break;
+					default:
+						ringLerp = 0.4;
+						targetW = 28;
+						targetH = 28;
+						break;
+				}
 			}
 
 			// Apply Click Pulse
@@ -173,28 +221,47 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				}
 			}
 
+			// Snap-on-Reveal: If we just came from a hidden state, jump to pointer 
+			// to avoid the 'gliding' effect from previous stale coordinates.
+			const wasHidden = s.prevHidden || getStrategy(s.prevKind) === "suppress";
+			const isVisible = !s.isHidden && strategy !== "suppress";
+			if (wasHidden && isVisible && !b.isActive) {
+				s.ring.x = s.pointer.x;
+				s.ring.y = s.pointer.y;
+			}
+
 			// Kinematics: Lerp the ring towards expected targets
 			s.ring.x += (targetX - s.ring.x) * ringLerp;
 			s.ring.y += (targetY - s.ring.y) * ringLerp;
 			
 			// Morph ring size smoothly
-			s.ringSize.w += (targetW - s.ringSize.w) * 0.3;
-			s.ringSize.h += (targetH - s.ringSize.h) * 0.3;
+			s.ringSize.w += (targetW - s.ringSize.w) * 0.45;
+			s.ringSize.h += (targetH - s.ringSize.h) * 0.45;
+
+			s.prevKind = s.kind;
+			s.prevHidden = s.isHidden;
 
 			// -- DOM Writes --
-			// -- DOM Writes --
 			if (coreRef.current) {
+				// DECOUPLED SNAPPING: The star core remains free even when the frame is snapped.
+				// This allows the user to feel 'loose' and in control within the interaction zone.
 				const coreX = s.pointer.x;
 				const coreY = s.pointer.y;
-				let coreScale = s.isPressing ? 1.5 : 1;
-				if (s.mode === "text" || s.mode === "hidden" || s.mode === "disabled") {
+				
+				// INDUSTRIAL REFINEMENT: Keep core scale stable on press to maintain 'Starfire' precision
+				let coreScale = 1;
+				if (s.isHidden || strategy === "suppress") {
 					coreScale = 0;
 				}
+				
+				// Final Coordinate Delivery
 				coreRef.current.style.transform = `translate3d(${coreX}px, ${coreY}px, 0) scale(${coreScale})`;
 				
-				if (coreRef.current.dataset.contrast !== String(s.isContrast)) {
+				if (coreRef.current.dataset.contrast !== String(s.isContrast) || coreRef.current.dataset.pressing !== String(s.isPressing)) {
 					coreRef.current.dataset.contrast = String(s.isContrast);
-					coreRef.current.className = `cursor-core ${s.isContrast ? "contrast" : ""}`;
+					coreRef.current.dataset.pressing = String(s.isPressing);
+					// Preserve base identity while syncing semantic state
+					coreRef.current.className = `cursor-core ${s.isContrast ? "contrast" : ""} ${s.isPressing ? "is-pressing" : ""}`;
 				}
 			}
 
@@ -205,21 +272,80 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				ringRef.current.style.marginLeft = `${-s.ringSize.w / 2}px`;
 				ringRef.current.style.marginTop = `${-s.ringSize.h / 2}px`;
 				
-				if (ringRef.current.dataset.mode !== s.mode) {
-					ringRef.current.dataset.mode = s.mode;
-					ringRef.current.className = `cursor-ring mode-${s.mode} ${s.isContrast ? "contrast" : ""}`;
+				if (ringRef.current.dataset.kind !== s.kind || ringRef.current.dataset.strategy !== strategy || ringRef.current.dataset.snapped !== String(b.isActive) || ringRef.current.dataset.hidden !== String(s.isHidden) || ringRef.current.dataset.pressing !== String(s.isPressing)) {
+					ringRef.current.dataset.kind = s.kind;
+					ringRef.current.dataset.strategy = strategy;
+					ringRef.current.dataset.snapped = String(b.isActive);
+					ringRef.current.dataset.hidden = String(s.isHidden);
+					ringRef.current.dataset.pressing = String(s.isPressing);
+
+					let ringClassName = `cursor-ring kind-${s.kind} strategy-${strategy} ${s.isContrast ? "contrast" : ""} ${b.isActive ? "is-snapped" : ""} ${s.isPressing ? "is-pressing" : ""}`;
+					if (s.isHidden) {
+						ringClassName += " is-hidden";
+					}
+					ringRef.current.className = ringClassName;
+					
+					// INDUSTRIAL SYNC: Link JS state to DOM for CSS-level orchestration
+					document.body.dataset.cursorKind = s.kind;
+					document.body.dataset.cursorStrategy = strategy;
+					document.body.dataset.cursorPressing = String(s.isPressing);
 				}
 			}
 
 			if (auraRef.current) {
-				const isAuraActive = s.mode !== "hidden" && s.mode !== "text" && s.mode !== "disabled";
-				const aScale = isAuraActive ? (s.isPressing ? 1.4 : 1) : 0;
-				// Aura follows the core (true pointer) for most natural 'glow'
-				auraRef.current.style.transform = `translate3d(${s.pointer.x}px, ${s.pointer.y}px, 0) scale(${aScale})`;
+				// INDUSTRIAL FIX: Hide aura when locked/snapped to avoid messy visuals or misalignments
+				const isAuraActive = !s.isHidden && strategy !== "suppress" && !b.isActive; 
 				
-				if (auraRef.current.dataset.mode !== s.mode) {
-					auraRef.current.dataset.mode = s.mode;
-					auraRef.current.className = `cursor-aura mode-${s.mode}`;
+				// INDUSTRIAL FIX: Idle Fading
+				// Why: If the browser stops sending mousemove events (e.g. during native scrollbar drag),
+				// the custom cursor "freezes". We detect this idle state and fade it out.
+				const timeSinceMove = Date.now() - s.lastMoveTime;
+				const isIdle = timeSinceMove > 1500;
+				
+				// Aura Physics (Implosion Protocol)
+				// Scaled down from 200px to 100px base in CSS. 
+				// We now implode to 0.7x for a 'suction' feel.
+				const aScale = isAuraActive && !isIdle ? (s.isPressing ? 0.7 : 1) : 0;
+				const aOpacity = isAuraActive && !isIdle ? (s.isPressing ? 1 : 0.8) : 0;
+				
+				// Aura Physics (Atmospheric Persistence)
+				// We allow the aura to follow the pointer directly to maintain the 'flashlight' feel,
+				// while the interaction frame (ring) handles the snapping.
+				const auraX = s.pointer.x;
+				const auraY = s.pointer.y;
+				
+				auraRef.current.style.transform = `translate3d(${auraX}px, ${auraY}px, 0) scale(${aScale})`;
+				auraRef.current.style.opacity = String(aOpacity);
+				
+				if (auraRef.current.dataset.kind !== s.kind || auraRef.current.dataset.strategy !== strategy || auraRef.current.dataset.snapped !== String(b.isActive) || auraRef.current.dataset.hidden !== String(s.isHidden) || auraRef.current.dataset.pressing !== String(s.isPressing)) {
+					auraRef.current.dataset.kind = s.kind;
+					auraRef.current.dataset.strategy = strategy;
+					auraRef.current.dataset.snapped = String(b.isActive);
+					auraRef.current.dataset.hidden = String(s.isHidden);
+					auraRef.current.dataset.pressing = String(s.isPressing);
+
+					let auraClassName = `cursor-aura kind-${s.kind} strategy-${strategy} ${b.isActive ? "is-snapped" : ""} ${s.isPressing ? "is-pressing" : ""}`;
+					if (s.isHidden) {
+						auraClassName += " is-hidden";
+					}
+					auraRef.current.className = auraClassName;
+				}
+
+				// Apply idle opacity to ring and core as well
+				if (ringRef.current) {
+					ringRef.current.style.opacity = isIdle ? "0" : "1";
+				}
+				if (coreRef.current) {
+					coreRef.current.style.opacity = isIdle ? "0" : "1";
+				}
+
+				// INDUSTRIAL SYNC: Signal the current interaction state to the document body
+				// This enables CSS to perfectly orchestrate native cursor suppression/restoration.
+				if (document.body.dataset.cursorStrategy !== strategy) {
+					document.body.dataset.cursorStrategy = strategy;
+				}
+				if (document.body.dataset.cursorPressing !== String(s.isPressing)) {
+					document.body.dataset.cursorPressing = String(s.isPressing);
 				}
 			}
 
@@ -245,77 +371,120 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 			state.current.pointer.x = e.clientX;
 			state.current.pointer.y = e.clientY;
+			state.current.lastMoveTime = Date.now();
 
-			if (state.current.mode === "hidden") {
-				state.current.mode = "tracking";
+			if (state.current.isHidden) {
+				state.current.isHidden = false;
 			}
 		};
 
-		const getInteractiveMode = (target: HTMLElement | null): CursorMode => {
-			if (!target) {
-				return "tracking";
+		const getSemanticKind = (target: HTMLElement | null): CursorKind => {
+			if (!target) { return "none"; }
+			
+			const cached = kindCache.current.get(target);
+			if (cached) { return cached; }
+
+			let result: CursorKind = "none";
+
+			// Protocol 1: Explicit Data Attribute (Highest Priority)
+			const protocolTarget = target.closest('[data-cursor]');
+			if (protocolTarget) {
+				const protocolKind = protocolTarget.getAttribute('data-cursor') as CursorKind;
+				if (protocolKind && ["navigate", "action", "explore", "text", "tag", "disabled", "none"].includes(protocolKind)) {
+					kindCache.current.set(target, protocolKind);
+					return protocolKind;
+				}
 			}
 
-            // 1. High-Priority Interactive Elements (Linked/Buttons)
-			if (target.closest('button, [role="button"], .interactive, .tag-badge, .premium-tag')) {
-				return "hover-button";
+			// Protocol 2: Fallback Inference (Smooth Migration)
+			const semanticTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge');
+			
+			if (semanticTarget) {
+				const isLink = semanticTarget.tagName === "A" || 
+							 semanticTarget.classList.contains("premium-link") || 
+							 semanticTarget.classList.contains("wiki-link");
+
+				if (target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
+					// Inside display zones, we only lock onto true actions.
+					if (semanticTarget !== target.closest('.math-block, .math-display, .math-inline')) {
+						result = isLink ? "navigate" : "action";
+					} else {
+						result = isLink ? "navigate" : "none";
+					}
+				}
+				else if (target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence')) {
+					result = (semanticTarget.classList.contains('code-copy-btn') || semanticTarget.classList.contains('math-copy-option')) 
+						? "action" 
+						: "text";
+				}
+				else {
+					if (semanticTarget.classList.contains('interactive-card')) {
+						result = "explore";
+					} else {
+						result = isLink ? "navigate" : "action";
+					}
+				}
 			}
-			if (target.closest("a, .premium-link, .wiki-link")) {
-				return "hover-link";
+			// Background Zone Definitions (Priority 1: Rendered Zones)
+			if (target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
+				// In display zones, we prefer 'explore' (vibrant pointer-ring)
+				result = "explore";
+			}
+			// Priority 2: Text/Source Zones
+			else if (target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence')) {
+				result = "text";
 			}
 
-            // 2. High-Priority Display Elements (Mermaid/Math) - Must stay visible
-            if (target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex')) {
-                const parentLink = target.closest('a');
-                return parentLink ? "hover-link" : "tracking";
-            }
-
-			// 3. Fallback: Text editing / Code selection zones - Native Priority Hide
-			if (
-				target.closest(
-					'pre, code, textarea, input[type="text"], iframe, .no-custom-cursor',
-				)
-			) {
-				return "text";
-			}
-
-			return "tracking";
+			kindCache.current.set(target, result);
+			return result;
 		};
 
-		const checkContrast = (target: HTMLElement | null) => {
-			if (!target) {
-				return false;
-			}
-			return (
+		const checkContrast = (target: HTMLElement | null): boolean => {
+			if (!target) { return false; }
+			
+			const cached = contrastCache.current.get(target);
+			if (cached !== undefined) { return cached; }
+
+			const result = !!(
 				target.classList.contains("bg-primary") ||
 				target.getAttribute("data-variant") === "primary" ||
-				target.closest(".bg-primary") !== null
+				target.closest(".bg-primary")
 			);
+
+			contrastCache.current.set(target, result);
+			return result;
 		};
 
 		const handleMouseOver = (e: MouseEvent) => {
-			if (!state.current.started) {
-				return;
-			}
+			if (!state.current.started) { return; }
 			const target = e.target as HTMLElement;
-			const newMode = getInteractiveMode(target);
-			state.current.mode = newMode;
+			if (!target || target === lastProcessedTarget.current) { return; }
+			lastProcessedTarget.current = target;
+
+			const newKind = getSemanticKind(target);
+			state.current.kind = newKind;
 			state.current.isContrast = checkContrast(target);
 
-			// Activate Intelligence Bounds Cache when hovering specialized targets
-			if (newMode !== "tracking" && newMode !== "text") {
-				// Find exactly the semantic element, not its inner child
-				const semanticTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive');
-				if (semanticTarget !== activeTarget.current) {
+			const strategy = getStrategy(newKind);
+
+			// Activate Intelligence Bounds Cache for things we frame
+			if (strategy === "frame-tight" || strategy === "frame-soft") {
+				// We try to snap to the protocol target first, otherwise fallback to the semantic target
+				let frameTarget = target.closest('[data-cursor="navigate"], [data-cursor="action"], [data-cursor="explore"], [data-cursor="tag"]');
+				if (!frameTarget) {
+					frameTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge');
+				}
+
+				if (frameTarget !== activeTarget.current) {
 					if (activeTarget.current) {
 						resizeObserver.unobserve(activeTarget.current);
 					}
 					
-					activeTarget.current = semanticTarget as HTMLElement;
+					activeTarget.current = frameTarget as HTMLElement;
 					if (activeTarget.current) {
 						bounds.current.isActive = true;
-						updateTargetBounds(); // Initial cache
-						resizeObserver.observe(activeTarget.current); // Watch dynamically
+						updateTargetBounds();
+						resizeObserver.observe(activeTarget.current);
 					}
 				}
 			} else {
@@ -331,7 +500,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			if (e.button === 0) {
 				state.current.isPressing = true;
 			} else if (e.button === 2) {
-				state.current.mode = "hidden";
+				state.current.isHidden = true;
 			}
 		};
 
@@ -343,7 +512,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 		const handleMouseOut = (e: MouseEvent) => {
 			if (!e.relatedTarget) {
-				state.current.mode = "hidden";
+				state.current.isHidden = true;
 			}
 		};
 
@@ -361,10 +530,12 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				state.current.pointer.y
 			) as HTMLElement | null;
 			
-			const newMode = getInteractiveMode(hovered);
+			const newKind = getSemanticKind(hovered);
+			const strategy = getStrategy(newKind);
+
 			// Only update if it broke out of the target
-			if (newMode === "tracking" || newMode === "text") {
-				state.current.mode = newMode;
+			if (strategy === "free" || strategy === "suppress") {
+				state.current.kind = newKind;
 				state.current.isContrast = checkContrast(hovered);
 				bounds.current.isActive = false;
 			}
@@ -402,7 +573,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 	useLayoutEffect(() => {
 		if (typeof window !== "undefined" && state.current.started) {
-			state.current.mode = "tracking";
+			state.current.kind = "none";
 			state.current.isPressing = false;
 			bounds.current.isActive = false;
 		}
@@ -422,11 +593,11 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				zIndex: 999999,
 			}}
 		>
-			<div ref={auraRef} className="cursor-aura mode-hidden" />
-			<div ref={ringRef} className="cursor-ring mode-hidden">
+			<div ref={auraRef} className="cursor-aura is-hidden" />
+			<div ref={ringRef} className="cursor-ring is-hidden">
 				<Brackets />
 			</div>
-			<div ref={coreRef} className="cursor-core mode-hidden" />
+			<div ref={coreRef} className="cursor-core is-hidden" />
 		</div>
 	);
 }

@@ -4,14 +4,27 @@
 
 ## Goal
 
-This repository is an **industrial-grade technical blog and content-first knowledge platform** built with **Next.js App Router (v16+), Rust-driven content pipelines, and Neon Postgres**.
+This repository is an industrial-grade technical blog and content-first knowledge platform built with Next.js App Router (v16+), Rust-driven content pipelines, and Neon Postgres.
 
 Agents must optimize for the following priorities, in order:
 
-1. **Correctness** — prioritize small, verifiable, and well-tested changes.
-2. **Performance** — prioritize server-side rendering (SSR), `'use cache'` persistence, and minimal client-side JavaScript.
-3. **Content Integrity** — ensure that the Obsidian → Sentinel → Neon → Web rendering pipeline remains robust and low-latency.
-4. **Maintainability** — encapsulate business logic within workspace packages (`packages/*`) rather than page files.
+1. **Comprehension**
+   Understand the existing code, architecture, and intent before making changes. Preserve established behavior, interfaces, and content flow unless a change is explicitly required.
+
+2. **Correctness**
+   Prefer small, verifiable changes over broad refactors. Avoid regressions, and ensure changes can be reasoned about and tested in isolation.
+
+3. **Performance**
+   Prefer SSR-first rendering, persistent caching, and minimal client-side JavaScript. Follow existing patterns for `use cache`, streaming, and server data access where applicable.
+
+4. **Content Integrity**
+   Preserve the reliability, latency, and correctness of the Obsidian → Sentinel → Neon → Web content pipeline. Do not introduce changes that make ingestion, transformation, or rendering more fragile.
+
+5. **Maintainability**
+   Keep page and route files thin. Encapsulate domain logic, data transformations, and reusable orchestration inside workspace packages (`packages/*`) whenever possible.
+
+6. **Source-Level Governance**
+   Resolve issues at the root cause whenever possible. Do not rely on band-aid fixes, redundant overrides, or compensating layers of logic that merely mask structural or logical deficiencies.
 
 When requirements are unclear, follow existing patterns in the codebase rather than introducing new abstractions.
 
@@ -474,5 +487,6 @@ When choosing an implementation path:
 - **Logic Reuse**: Place shared logic in `packages/*`.
 - **Content**: Ensure compatibility with Fumadocs and MDX.
 - **AI**: Decouple ingestion from retrieval and generation.
+- **Problem Solving**: Prioritize root-cause resolution over surface-level patches.
 
 Build with a **content-first** mindset, layering in interactivity and AI features progressively.

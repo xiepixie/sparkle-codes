@@ -1,18 +1,23 @@
+"use client";
+
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   CONSTELLATIONS,
+  LAYOUT_SLOTS,
   TIME_SLOT_CONFIG,
   buildSceneForDate,
   getTimeSlotByHour,
   placeConstellation,
+  readSharedJson,
   resolveSlots,
+  writeSharedJson,
+  type LayoutSlotId,
   type PlacedConstellation,
   type PlacedConstellationPoint,
   type SelectedScene,
   type SpecialEffectState,
 } from "@repo/utils";
-import { readSharedJson, writeSharedJson } from "../../lib/shared-ui-state";
 import "./styles.css";
 
 const SKY_SCENE_STATE_KEY = "sky-scene";
@@ -135,37 +140,59 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function getSceneVisibilityProfile(timeSlot: SelectedScene["timeSlot"], isCompact: boolean) {
+function getSceneVisibilityProfile(timeSlot: SelectedScene["timeSlot"]) {
   const cfg = TIME_SLOT_CONFIG[timeSlot];
   
-  // High-performance star counts from config, reconciled for viewport
-  const nightCount = isCompact ? Math.floor(cfg.ambientCount * 0.55) : cfg.ambientCount;
+  // Drastically amplify the ambient stars so it looks lush and rich
+  const nightCount = Math.floor(cfg.ambientCount * 1.6);
   
   return {
     ambientCount: nightCount,
-    ambientOpacityMax: cfg.ambientOpacityMax,
+    // Slightly boost the max opacity to make the faint stars pop out more
+    ambientOpacityMax: Math.min(1.0, cfg.ambientOpacityMax + 0.15),
     renderConstellations: true,
     skyMode: timeSlot === "dawn" ? "faint-dawn" : timeSlot === "dusk" ? "cinematic-dusk" : "deep-night",
   } as const;
 }
 
-function getViewportProfile() {
+function getViewportProfile(width: number, height: number) {
   if (typeof window === "undefined") {
-    return {
-      isCompact: false,
-      densityMultiplier: 1,
-      coarsePointer: false,
-    };
+    return { densityMultiplier: 1, coarsePointer: false };
   }
 
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
-  const isCompact = coarsePointer || window.innerWidth < 768;
+  const isCompact = coarsePointer || width < 768;
+  const area = width * height;
+  
+  // Area-aware density normalization:
+  // We use 1440 * 900 as the reference "standard" area.
+  // Smaller screens get fewer stars to reduce layout burden.
+  const REFERENCE_AREA = 1440 * 900;
+  const areaRatio = Math.sqrt(clamp(area / REFERENCE_AREA, 0.45, 1.25));
 
   return {
-    isCompact,
-    densityMultiplier: isCompact ? 0.75 : 1,
+    densityMultiplier: (isCompact ? 1.0 : 1.35) * areaRatio, 
     coarsePointer,
   };
+}
+
+function isPointInSlot(xRel: number, yRel: number, slotId: LayoutSlotId): boolean {
+  const slot = LAYOUT_SLOTS[slotId];
+  if (!slot) {
+    return false;
+  }
+  
+  // A star is considered "in the slot area" if it's within a reasonable padding box 
+  // around the slot anchor.
+  const halfW = slot.width / 1.5; 
+  const halfH = slot.height / 1.5;
+  
+  return (
+    xRel >= (slot.anchorX - halfW) &&
+    xRel <= (slot.anchorX + halfW) &&
+    yRel >= (slot.anchorY - halfH) &&
+    yRel <= (slot.anchorY + halfH)
+  );
 }
 
 function isValidScene(scene: unknown): scene is SelectedScene {
@@ -199,30 +226,52 @@ function createAmbientStar(
   let yRel = rng();
   let attempts = 0;
 
-  while (attempts < 10) {
+  // 银河带偏置算法 (Milky Way Biasing):
+  // 我们模拟一条从左下到右上的斜贯银河带，增加带状区域附近的星星密度。
+  // 这消除了“噪点感”，增加了宇宙的结构感。
+  while (attempts < 15) {
     const dx = xRel - 0.5;
     const dy = yRel - 0.5;
-    if (Math.sqrt(dx * dx + dy * dy) > 0.18) {
-      break;
+    const distToCenter = Math.sqrt(dx * dx + dy * dy);
+    
+    // 1. 避开中心点区域 (UI 保护)
+    if (distToCenter < 0.18) {
+      xRel = rng();
+      yRel = rng();
+      attempts++;
+      continue;
     }
-    xRel = rng();
-    yRel = rng();
-    attempts++;
+
+    // 2. 银河带逻辑: 距离 y = x 线的距离
+    // 我们允许银河带随种子有一定的倾斜和偏移
+    const bandOffset = (rng() - 0.5) * 0.2;
+    const distToMilkyWay = Math.abs(xRel - yRel + bandOffset) / Math.sqrt(2);
+    
+    // 如果点在“银河带”外，我们以一定概率丢弃并重抽（以此提高带内密度）
+    // 概率公式：距离越远，被丢弃的可能性越高
+    if (distToMilkyWay > 0.15 && rng() > 0.35) {
+      xRel = rng();
+      yRel = rng();
+      attempts++;
+      continue;
+    }
+
+    break;
   }
 
   const depth = rng() > 0.65 ? 1 : 0;
   
   // ALWAYS use high-quality Dark specifications for the persistent structural cache
   const size = depth === 0
-    ? 0.72 + rng() * 1.08
-    : 1.15 + rng() * 1.95;
+    ? 0.85 + rng() * 1.25 // Increased base size for better visibility
+    : 1.35 + rng() * 2.2;
 
   const paletteRoll = rng();
   const colorRole = paletteRoll > 0.78 ? 0 : paletteRoll > 0.52 ? 1 : 2;
   const color = colorRole === 0 ? colors.primary : colorRole === 1 ? colors.secondary : colors.white;
 
-  const ceiling = clamp(ambientOpacityMax + (depth === 1 ? 0.12 : 0.04), 0.2, 0.95);
-  const floor = clamp(ceiling * 0.35, 0.1, 0.32);
+  const ceiling = clamp(ambientOpacityMax + (depth === 1 ? 0.15 : 0.05), 0.3, 0.95);
+  const floor = clamp(ceiling * 0.45, 0.2, 0.4);
   const baseOpacity = floor + rng() * Math.max(0.01, ceiling - floor);
 
   return {
@@ -235,7 +284,7 @@ function createAmbientStar(
     opacity: baseOpacity,
     color,
     depth,
-    drift: (rng() - 0.5) * (depth === 1 ? 0.003 : 0.0018),
+    drift: 0, // Static mode remains to prevent global sliding distraction
     twinkleSpeed: 0.0008 + rng() * (depth === 1 ? 0.002 : 0.0014),
     twinkleOffset: rng() * Math.PI * 2,
     excitement: 0,
@@ -274,7 +323,7 @@ function createHeroStar(
     opacity: baseOpacity,
     color: starColor,
     depth: 2,
-    drift: 0,
+    drift: 0, // Zero drift prevents annoying global movement
     twinkleSpeed: 0.0012 + rng() * 0.002,
     twinkleOffset: rng() * Math.PI * 2,
     excitement: 0,
@@ -543,8 +592,8 @@ export function StarryBackground() {
 
   const initSceneLayers = useCallback((width: number, height: number, scene: SelectedScene) => {
     const colors = GlobalSkyCache.colors;
-    const { densityMultiplier, isCompact } = getViewportProfile();
-    const visibility = getSceneVisibilityProfile(scene.timeSlot, isCompact);
+    const { densityMultiplier } = getViewportProfile(width, height);
+    const visibility = getSceneVisibilityProfile(scene.timeSlot);
     const rng = createSeededRandom(scene.seed || 0.5);
     
     debugLog("scene:init", { key: scene.sceneKey, timeSlot: scene.timeSlot });
@@ -555,18 +604,29 @@ export function StarryBackground() {
     const placed: PlacedConstellation[] = [];
     const heroMap = new Map<string, StarNode[]>();
 
-    for (let i = 0; i < ambientCount; i++) {
-      ambientStars.push(createAmbientStar(rng, colors, visibility.ambientOpacityMax));
-    }
-
     const { primarySlot, secondarySlot } = resolveSlots(scene.primary, scene.secondary, scene.seed);
     const shouldRenderConstellations = visibility.renderConstellations;
+
+    for (let i = 0; i < ambientCount; i++) {
+      const star = createAmbientStar(rng, colors, visibility.ambientOpacityMax);
+      
+      // 视觉削减 (Visual Culling): 如果随机星落在了星座槽位内，降低其基础亮度，确保星座英雄能脱颖而出
+      if (shouldRenderConstellations) {
+        const isInPrimary = primarySlot && isPointInSlot(star.xRel, star.yRel, primarySlot);
+        const isInSecondary = secondarySlot && isPointInSlot(star.xRel, star.yRel, secondarySlot);
+        if (isInPrimary || isInSecondary) {
+          star.baseOpacity *= 0.65;
+        }
+      }
+      
+      ambientStars.push(star);
+    }
 
     // (Type 1) PRIMARY: Main constellations fixed by PC Time rule
     if (shouldRenderConstellations && scene.primary && primarySlot) {
       const constellation = CONSTELLATIONS.find((item) => item.name === scene.primary);
       if (constellation) {
-        placed.push(placeConstellation(constellation, primarySlot, width, height));
+        placed.push(placeConstellation(constellation, primarySlot as LayoutSlotId, width, height));
       }
     }
 
@@ -574,7 +634,7 @@ export function StarryBackground() {
     if (shouldRenderConstellations && scene.secondary && secondarySlot) {
       const constellation = CONSTELLATIONS.find((item) => item.name === scene.secondary);
       if (constellation) {
-        placed.push(placeConstellation(constellation, secondarySlot, width, height));
+        placed.push(placeConstellation(constellation, secondarySlot as LayoutSlotId, width, height));
       }
     }
 
@@ -655,11 +715,13 @@ export function StarryBackground() {
       }
     }
 
-    const isKeyMatch = GlobalSkyCache.lastAppliedSceneKey === GlobalSkyCache.scene.sceneKey;
+    // V2 Force Cache Bust to ensure users see the updated star densities immediately
+    const currentStructureKey = `${GlobalSkyCache.scene.sceneKey}-V3`;
+    const isKeyMatch = GlobalSkyCache.lastAppliedSceneKey === currentStructureKey;
 
     if (!isKeyMatch) {
       // ATOMIC CLEANUP for structural changes
-      GlobalSkyCache.lastAppliedSceneKey = GlobalSkyCache.scene.sceneKey;
+      GlobalSkyCache.lastAppliedSceneKey = currentStructureKey;
       GlobalSkyCache.ambientStars = [];
       GlobalSkyCache.heroStars = new Map();
       GlobalSkyCache.placedConstellations = [];
@@ -672,8 +734,15 @@ export function StarryBackground() {
       initSceneLayers(width, height, GlobalSkyCache.scene);
       GlobalSkyCache.lastThemeMode = isDark ? "dark" : "light";
       spritePool.current = createSpritePool(GlobalSkyCache.colors);
-      debugLog("scene:theme-reconciled", { isDark });
+      debugLog("scene:initialized", { 
+        isDark, 
+        count: GlobalSkyCache.ambientStars.length,
+        width,
+        height 
+      });
     } else if (dimensionsChanged) {
+      // 性能优化：当尺寸变化时，如果已经有星星数组，只进行线性坐标重映射
+      // 这避免了昂贵的随机数生成和对象创建操作。
       rescaleStars(GlobalSkyCache.ambientStars, width, height);
       for (const stars of GlobalSkyCache.heroStars.values()) {
         rescaleStars(stars, width, height);
@@ -761,6 +830,7 @@ export function StarryBackground() {
       }
     }
 
+    // UI/UX Deep Logic: React to user cursor intuitively, but keep background location structurally static
     for (const star of GlobalSkyCache.ambientStars) {
       const dx = mouseX - star.x;
       const dy = mouseY - star.y;
@@ -805,8 +875,6 @@ export function StarryBackground() {
         } else {
           star.excitement *= 0.92;
         }
-
-        // Rescaling is handled outside the loop for performance.
       }
 
       const isGoldConstellation =
@@ -821,13 +889,15 @@ export function StarryBackground() {
           continue;
         }
 
-        const energy = clamp((a.excitement + b.excitement) / 2, 0, 1);
+        // Deep UX logic: Constellation lines have a persistent base glow so they are never 'missing'
+        // Hovering enhances the energy, but they always remain visible as the structural backdrop.
+        const baseEnergy = 0.25;
+        const energy = clamp((a.excitement + b.excitement) / 2 + baseEnergy, 0, 1);
         
-        // Polished hover threshold and line aesthetics with theme transition mapping
         if (globalOpacity > 0.1 && (energy > 0.05 || isGoldTime)) {
           const lineAlpha = isGoldConstellation 
-            ? 0.35 + Math.sin(now * 0.006 + a.x) * 0.15 
-            : energy * 0.42;
+            ? 0.45 + Math.sin(now * 0.006 + a.x) * 0.2 
+            : energy * 0.5;
           
           ctx.beginPath();
           ctx.strokeStyle = isGoldConstellation
@@ -971,7 +1041,7 @@ export function StarryBackground() {
       });
     }
 
-    const { coarsePointer } = getViewportProfile();
+    const { coarsePointer } = getViewportProfile(window.innerWidth, window.innerHeight);
 
     const handleMouseMove = (event: MouseEvent) => {
       mouseRef.current = { x: event.clientX, y: event.clientY };
@@ -979,13 +1049,21 @@ export function StarryBackground() {
 
     let resizeTimer: number | undefined;
     const handleResize = () => {
+      // 节流处理：Resize 触发时，我们只重置 Canvas 尺寸，延迟重新布局星星。
+      const canvas = canvasRef.current;
+      if (canvas) {
+        // 视觉上先拉伸，防止出现空白白边，真正的重算放在定时器里
+        canvas.style.width = `${window.innerWidth}px`;
+        canvas.style.height = `${window.innerHeight}px`;
+      }
+
       if (resizeTimer) {
         window.clearTimeout(resizeTimer);
       }
       resizeTimer = window.setTimeout(() => {
         rebuildScene(window.innerWidth, window.innerHeight);
         drawFrame();
-      }, 150);
+      }, 180);
     };
 
     const handleVisibility = () => {

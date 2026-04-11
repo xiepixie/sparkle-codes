@@ -3,6 +3,8 @@ export * from "./lib/astro/constellation-data";
 export * from "./lib/astro/constellation-schedule";
 export * from "./lib/astro/constellation-selection";
 export * from "./lib/astro/constellation-layout";
+export * from "./lib/astro/layout-slots";
 export * from "./lib/astro/constellation-easter-eggs";
 export * from "./lib/hash";
 export * from "./lib/wikilink";
+export * from "./lib/shared-ui-state";

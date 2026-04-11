@@ -2,63 +2,61 @@
    LAYER 3: AURA (Atmospheric Glow - DARK MODE ONLY)
    ============================================================ */
 .cursor-aura {
-    position: absolute;
-    width: 200px;
-    height: 200px;
-    margin-top: -100px;
-    margin-left: -100px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100px;
+    height: 100px;
+    /* Manual centering on the coordinate point */
+    margin-top: -50px;
+    margin-left: -50px;
+    border-radius: 50%;
     background: radial-gradient(
-        circle,
-        color-mix(in srgb, var(--primary) 15%, transparent) 0%,
+        circle at center,
+        color-mix(in oklab, var(--primary) 20%, transparent),
         transparent 70%
     );
-    border-radius: 50%;
-    filter: blur(20px);
+    z-index: 9999;
     pointer-events: none;
-    will-change: transform;
     opacity: 0;
-    transition: opacity 0.4s ease;
-    z-index: -1;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
-.dark .cursor-aura {
-    opacity: 1;
-}
-
-.cursor-aura.mode-hover-link,
-.cursor-aura.mode-hover-button {
+/* 
+   THE IMPLOSION PROTOCOL (Redesigned Pressing Effect)
+   Instead of expanding, the aura 'collapses' and intensifies, creating a suction feel.
+*/
+.cursor-aura.is-pressing {
     background: radial-gradient(
-        circle,
-        color-mix(in srgb, var(--primary) 25%, transparent) 0%,
-        transparent 75%
-    );
-}
-
-.cursor-aura.mode-pressed {
-    opacity: 1;
-    background: radial-gradient(
-        circle,
-        color-mix(in srgb, var(--primary) 40%, transparent) 0%,
+        circle at center,
+        color-mix(in oklab, var(--primary) 40%, transparent) 0%,
+        color-mix(in oklab, var(--primary) 10%, transparent) 40%,
         transparent 80%
     );
+    filter: brightness(1.5);
 }
 
 /* ============================================================
    LAYER 1: CORE (Absolute Precision)
    ============================================================ */
 .cursor-core {
-    position: absolute;
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 6px;
     height: 6px;
-    background: var(--primary);
-    border-radius: 50%;
+    /* Manual centering of the 6px dot on the mouse point */
     margin-top: -3px;
     margin-left: -3px;
-    will-change: transform;
+    border-radius: 50%;
+    /* INDUSTRIAL DEFAULT: Visible even if theme class fails */
+    background: var(--primary, #513bb2);
+    z-index: 10001;
     pointer-events: none;
-    /* Soft diffuse glow attached to core */
-    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--primary) 40%, transparent);
-    transition: background 0.3s ease, transform 0.1s ease-out;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .dark .cursor-core {
@@ -66,24 +64,65 @@
     box-shadow: 
         0 0 15px 2px var(--primary),
         0 0 4px 1px white inset;
+    animation: star-sparkle 4s ease-in-out infinite;
 }
 
-/* Polar star lines (diffraction spikes) for extreme precision feel */
+/* 
+   THE STARFIRE CORE (Robust Spikes)
+   Centering spikes as children of the core.
+*/
 .cursor-core::before,
 .cursor-core::after {
     content: "";
     position: absolute;
-    background: inherit;
     top: 50%;
     left: 50%;
-    opacity: 0.5;
-    border-radius: 50%;
+    background: currentColor; /* Inherits from core background */
     transform: translate(-50%, -50%);
     pointer-events: none;
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.3s ease, width 0.3s ease, height 0.3s ease;
 }
 
-.cursor-core::before { width: 14px; height: 1px; }
-.cursor-core::after { width: 1px; height: 14px; }
+.dark .cursor-core::before,
+.dark .cursor-core::after {
+    opacity: 0.85;
+    background: #fff;
+    box-shadow: 0 0 8px var(--primary);
+}
+
+/* Horizontal spike */
+.cursor-core::before { 
+    width: 20px; 
+    height: 1.5px; 
+}
+
+/* Vertical spike */
+.cursor-core::after { 
+    width: 1.5px; 
+    height: 20px; 
+}
+
+.dark .cursor-core {
+    background: #fff;
+    box-shadow: 
+        0 0 15px 2px var(--primary),
+        0 0 4px 1px white inset;
+    /* 
+       INDUSTRIAL RELIABILITY FIX: 
+       Animations MUST NOT use 'transform' on elements moving via JS 'translate3d'.
+       Using brightness/opacity for breathing instead.
+    */
+    animation: star-sparkle 4s ease-in-out infinite;
+}
+
+@keyframes star-sparkle {
+    0%, 100% { filter: brightness(1) drop-shadow(0 0 2px var(--primary)); opacity: 1; }
+    50% { filter: brightness(1.3) drop-shadow(0 0 8px var(--primary)); opacity: 0.85; }
+}
+
+
 
 /* ============================================================
    LAYER 2: RING (Physical Interaction & Framing)
@@ -94,7 +133,7 @@
     height: 28px;
     border: 1px dashed color-mix(in srgb, var(--primary) 30%, transparent);
     border-radius: 50%; /* Pure circular satellite orbit */
-    will-change: transform, width, height;
+    will-change: transform, width, height, opacity;
     pointer-events: none;
     display: flex;
     align-items: center;
@@ -112,30 +151,36 @@
     border-color: color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
-.cursor-ring.mode-hidden,
-.cursor-ring.mode-text,
-.cursor-ring.mode-disabled {
+.cursor-ring.strategy-suppress,
+.cursor-ring.is-hidden {
     opacity: 0;
 }
 
-/* Interactive States: Circular in quiet, Rectangular in action */
-.cursor-ring.mode-hover-link {
-    border-radius: 4px; /* Morph to frame-like rect */
-    border-style: solid;
+/* Interactive States: Circular in quiet, Rectangular in action (Only when snapped) */
+.cursor-ring.kind-navigate.is-snapped {
+    border-radius: 0; /* Sharp corners for links */
+    border-style: dashed;
     border-width: 1px;
-    border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+    border-color: color-mix(in srgb, var(--primary) 40%, transparent);
 }
 
-.cursor-ring.mode-hover-button {
+.cursor-ring.kind-action.is-snapped {
     border-radius: 6px; /* Slightly larger radius for buttons */
     border-style: solid;
     border-width: 1.5px;
     border-color: color-mix(in srgb, var(--primary) 80%, transparent);
 }
 
-.cursor-ring.mode-hover-card {
+.cursor-ring.kind-tag.is-snapped {
+    border-radius: 20px; /* Pill shape alignment */
+    border-style: solid;
+    border-width: 1px;
+    border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
+.cursor-ring.kind-explore.is-snapped {
     border-radius: 12px;
-    border: 1.5px dashed color-mix(in srgb, var(--primary) 40%, transparent);
+    border-color: transparent; /* Explore cards use brackets, not borders */
 }
 
 .cursor-ring.contrast {
@@ -152,31 +197,108 @@
     transform: scale(0.9);
 }
 
-.cursor-ring.mode-hover-button .cursor-brackets,
-.cursor-ring.mode-hover-card .cursor-brackets {
-    opacity: 0.8;
-    transform: scale(1.05);
-}
+/* 
+   NATIVE CURSOR MANAGEMENT
+   "Industrial Mutex Protocol: Either Native or StarCursor, never both."
+*/
 
-/* Global active class triggers native cursor removal */
-.custom-cursor-active,
-.custom-cursor-active * {
+/* 1. Industrial Mutex: Global suppression of native pointer when custom cursor is active */
+body.custom-cursor-active,
+body.custom-cursor-active * {
     cursor: none !important;
 }
 
-/* Selective restoration for text/editors */
-.custom-cursor-active pre,
-.custom-cursor-active code,
-.custom-cursor-active textarea,
-.custom-cursor-active input,
-.custom-cursor-active [contenteditable],
-.custom-cursor-active .math-display {
-    cursor: text !important;
+/* 2. Exception Protocol: Restore native cursor specifically for 'suppress' strategy (Disabled Mode) */
+body.custom-cursor-active[data-cursor-strategy="suppress"],
+body.custom-cursor-active[data-cursor-strategy="suppress"] * {
+    cursor: auto !important;
 }
 
-.cursor-ring.mode-hover-button .cursor-brackets {
+/* 3. Handle specific interactive overrides that might try to force a pointer */
+body.custom-cursor-active a, 
+body.custom-cursor-active button,
+body.custom-cursor-active [role="button"],
+body.custom-cursor-active .interactive-card,
+body.custom-cursor-active textarea,
+body.custom-cursor-active input,
+body.custom-cursor-active [contenteditable] {
+    cursor: none !important;
+}
+
+.cursor-ring.is-snapped.kind-action .cursor-brackets,
+.cursor-ring.is-snapped.kind-tag .cursor-brackets {
     opacity: 1;
-    transform: scale(1); /* Snaps nicely into place on button hover */
+    transform: scale(1.02);
+}
+
+/* 
+   Explore mode now uses a stable circle (Dash Ring) without brackets 
+   to avoid the 'floating cage' feeling on large rendering blocks.
+*/
+.cursor-ring.is-snapped.kind-explore .cursor-brackets {
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+/* Adapt Brackets to Frame Topology */
+.cursor-ring.kind-action .corner-tl { border-top-left-radius: 6px; }
+.cursor-ring.kind-action .corner-tr { border-top-right-radius: 6px; }
+.cursor-ring.kind-action .corner-bl { border-bottom-left-radius: 6px; }
+.cursor-ring.kind-action .corner-br { border-bottom-right-radius: 6px; }
+
+.cursor-ring.kind-tag .corner-tl { border-top-left-radius: 20px; }
+.cursor-ring.kind-tag .corner-tr { border-top-right-radius: 20px; }
+.cursor-ring.kind-tag .corner-bl { border-bottom-left-radius: 20px; }
+.cursor-ring.kind-tag .corner-br { border-bottom-right-radius: 20px; }
+
+.cursor-ring.kind-explore .corner-tl { border-top-left-radius: 12px; }
+.cursor-ring.kind-explore .corner-tr { border-top-right-radius: 12px; }
+.cursor-ring.kind-explore .corner-bl { border-bottom-left-radius: 12px; }
+.cursor-ring.kind-explore .corner-br { border-bottom-right-radius: 12px; }
+.cursor-ring.kind-explore .cursor-corner {
+    width: 14px;
+    height: 14px;
+}
+
+/* ============================================================
+   EXTERNAL CONTENT INTERACTION (Link Dashed Effect)
+   ============================================================ */
+.custom-cursor-active a:hover,
+.custom-cursor-active .premium-link:hover {
+    text-decoration: none !important;
+}
+
+.custom-cursor-active a:not(sup *),
+.custom-cursor-active .premium-link {
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+.custom-cursor-active a:not(sup *, .card-jump-overlay)::after,
+.custom-cursor-active .premium-link::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background-image: linear-gradient(to right, var(--primary) 50%, transparent 50%);
+    background-size: 4px 1px;
+    background-repeat: repeat-x;
+    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    opacity: 0;
+}
+
+.custom-cursor-active a:not(sup *):hover::after,
+.custom-cursor-active .premium-link:hover::after {
+    width: 100%;
+    opacity: 0.8;
+    animation: slide-dashed 1s linear infinite;
+}
+
+@keyframes slide-dashed {
+    from { background-position: 0 0; }
+    to { background-position: 8px 0; }
 }
 
 .cursor-corner {

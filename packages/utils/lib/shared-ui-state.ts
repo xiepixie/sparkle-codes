@@ -7,13 +7,17 @@ function getCookieKey(key: string) {
 }
 
 function readCookie(rawKey: string) {
-  if (typeof document === "undefined") return null;
+  if (typeof document === "undefined") {
+    return null;
+  }
 
   const key = `${encodeURIComponent(rawKey)}=`;
   const cookies = document.cookie ? document.cookie.split("; ") : [];
 
   for (const cookie of cookies) {
-    if (!cookie.startsWith(key)) continue;
+    if (!cookie.startsWith(key)) {
+      continue;
+    }
 
     const value = cookie.slice(key.length);
     try {
@@ -27,16 +31,21 @@ function readCookie(rawKey: string) {
 }
 
 function writeCookie(rawKey: string, value: string) {
-  if (typeof document === "undefined") return;
+  if (typeof document === "undefined") {
+    return;
+  }
 
   const encodedKey = encodeURIComponent(rawKey);
   const encodedValue = encodeURIComponent(value);
+  // biome-ignore lint: Primary primitive for library-less cookie orchestration.
   document.cookie =
     `${encodedKey}=${encodedValue}; Path=/; Max-Age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
 }
 
 export function readSharedJson<T>(key: string): T | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined") {
+    return null;
+  }
 
   const storageKey = getCookieKey(key);
   const stored =
@@ -44,7 +53,9 @@ export function readSharedJson<T>(key: string): T | null {
     window.localStorage.getItem(storageKey) ??
     readCookie(storageKey);
 
-  if (!stored) return null;
+  if (!stored) {
+    return null;
+  }
 
   try {
     return JSON.parse(stored) as T;
@@ -54,7 +65,9 @@ export function readSharedJson<T>(key: string): T | null {
 }
 
 export function writeSharedJson(key: string, value: unknown) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
 
   const storageKey = getCookieKey(key);
   const serialized = JSON.stringify(value);
@@ -71,7 +84,9 @@ export function writeSharedJson(key: string, value: unknown) {
 }
 
 export function readSharedString(key: string) {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined") {
+    return null;
+  }
 
   const storageKey = getCookieKey(key);
   return (
@@ -82,7 +97,9 @@ export function readSharedString(key: string) {
 }
 
 export function writeSharedString(key: string, value: string) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
 
   const storageKey = getCookieKey(key);
 

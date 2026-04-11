@@ -20,8 +20,8 @@
     .markdown-body {
         /* Base Text & Container */
         --md-primary: var(--primary, #513bb2);
-        --md-leading: 2.0; /* Increased line-height for better readability as requested */
-        --md-p-space: 1.5rem; /* Standardized paragraph spacing */
+        --md-leading: 1.65; /* Optimized from 2.0 to prevent "sunken" feeling and improve reading rhythm */
+        --md-p-space: 1.25rem; /* Standardized from 1.5rem for a tighter layout */
         --md-max-width: none;
         --md-bg: transparent; 
         --md-bg-soft: color-mix(in oklab, var(--background, white) 88%, var(--md-primary) 4%, var(--aurora, #7dd3fc) 2%);

@@ -109,13 +109,13 @@ export function ThemeToggle({ className }: { className?: string }) {
 	};
 
 	return (
-		<div
+		// biome-ignore lint/a11y/useSemanticElements: role="button" and tabIndex={0} provide accessibility for the wrapped interaction.
+<div
 			role="button"
 			tabIndex={0}
 			aria-label={`Switch to ${nextTheme} theme`}
 			// Why: Outer container must be a <div> because the internal Horizon library already 
 			// renders a <button>. Nesting buttons is invalid HTML and causes hydration errors.
-			// role="button" and tabIndex={0} provide accessibility for the wrapped interaction.
 			className={cn(
 				"relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition-[transform,background-color] duration-300 group/theme interactive active:scale-95 will-change-transform outline-none",
 				"focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",

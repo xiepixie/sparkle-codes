@@ -13,7 +13,7 @@ function InputOTP({
 	containerClassName?: string;
 }) {
 	return (
-		// @ts-ignore - React 19 types mismatch with input-otp
+		// @ts-expect-error - React 19 types mismatch with input-otp
 		<OTPInput
 			data-slot="input-otp"
 			containerClassName={cn(

@@ -46,9 +46,9 @@
 	"files": {
 		"includes": [
 			"**",
-			"!**/node_modules/**",
-			"!**/.next/**",
-			"!**/dist/**",
+			"!**/node_modules",
+			"!**/.next",
+			"!**/dist",
 			"!**/globals.css",
 			"!**/global.css",
 			"!**/theme.css",

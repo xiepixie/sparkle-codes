@@ -62,7 +62,9 @@ export function TiltWrapper({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
     const pointerQuery = window.matchMedia("(pointer: fine)");
     const hoverQuery = window.matchMedia("(hover: none)");
@@ -73,7 +75,9 @@ export function TiltWrapper({
       const reduceMotion = reducedMotionQuery.matches;
       setPrefersReducedMotion(reduceMotion);
       setIsInteractive(canHover && !reduceMotion);
-      if (!canHover || reduceMotion) setIsHovered(false);
+      if (!canHover || reduceMotion) {
+        setIsHovered(false);
+      }
     };
 
     // HIGH-PERFORMANCE ANIMATION LOOP
@@ -105,11 +109,15 @@ export function TiltWrapper({
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (reducedMotionQuery.matches || (window as any).__SPARKLE_THEME_TRANSITION__) return;
+      if (reducedMotionQuery.matches || (window as any).__SPARKLE_THEME_TRANSITION__) {
+        return;
+      }
 
       // OPTIMIZATION: Use cached rect to avoid Layout Thrashing
       const rect = state.current.rect || container.getBoundingClientRect();
-      if (!state.current.rect) state.current.rect = rect;
+      if (!state.current.rect) {
+        state.current.rect = rect;
+      }
 
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
@@ -166,8 +174,9 @@ export function TiltWrapper({
   const isEngaged = isHovered || isFocused;
 
   return (
-    <div 
+    <div
       ref={containerRef} 
+      data-cursor="explore"
       className={cn(
         "group relative isolate w-full interactive-card touch-manipulation focus-within:outline-none md:cursor-none",
         prefersReducedMotion ? "perspective-none" : "perspective-[1200px]",

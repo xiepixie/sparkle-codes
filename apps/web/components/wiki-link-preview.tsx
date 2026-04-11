@@ -1,7 +1,9 @@
-import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowRight, FileText, Loader2 } from "lucide-react";
 import DOMPurify from "dompurify";
+import { ArrowRight, FileText, Loader2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
+import { cn } from "@repo/ui";
 import { Badge } from "@repo/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { isSameWikiPage, normalizeSlug, parseWikiLink, slugifyHeader, slugifyPath } from "@repo/utils";
@@ -24,7 +26,6 @@ export interface PreviewData {
  */
 function extractFragmentFromDOM(container: HTMLElement, fragment: string): string | null {
   // 1. Prepare search targets based on Rust parser canonical patterns
-  const isBlock = fragment.startsWith("^");
   // Headings in Rust are h-[slugified-text]
   const headingId = `h-${slugifyHeader(fragment)}`;
   
@@ -40,7 +41,9 @@ function extractFragmentFromDOM(container: HTMLElement, fragment: string): strin
   for (const v of variants) {
     try {
       targetEl = container.querySelector(`[id="${v}"]`);
-      if (targetEl) break;
+      if (targetEl) {
+        break;
+      }
     } catch { /* ignore malformed selectors */ }
   }
 
@@ -152,6 +155,9 @@ export function WikiLinkPreviewManager({
   const [isHoveringCard, setIsHoveringCard] = useState(false);
   const [isCalculated, setIsCalculated] = useState(false);
   
+  // Mounted state for portal context
+  const [mounted, setMounted] = useState(false);
+  
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -168,6 +174,7 @@ export function WikiLinkPreviewManager({
   isHoveringCardRef.current = isHoveringCard;
 
   useEffect(() => {
+    setMounted(true);
     const container = containerRef.current;
     if (!container) {
       return;
@@ -214,11 +221,15 @@ export function WikiLinkPreviewManager({
         });
         setIsLoading(true);
         setPreviewData(null);
+        // Reset calculation state for each new link
         setIsCalculated(false);
 
-        // Initial naive positioning (will be fixed in useLayoutEffect)
+        // Capture anchor coordinates immediately to provide a stable reference
         const rect = link.getBoundingClientRect();
-        setCardPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
+        setCardPos({ 
+          top: rect.bottom + window.scrollY, 
+          left: rect.left + window.scrollX 
+        });
         setPlacement('bottom');
 
         try {
@@ -343,47 +354,71 @@ export function WikiLinkPreviewManager({
     };
   }, [containerRef, currentSlug, currentPostMeta]);
 
-  // Responsive boundary calculations (Phase 4)
+  // Industrial-grade coordinate calibration
   useLayoutEffect(() => {
      if (hoveredLink && cardRef.current && typeof window !== 'undefined') {
         const link = hoveredLink.element;
         const linkRect = link.getBoundingClientRect();
+        
+        // Use a persistent reference to the card DOM node to measure real dimensions
+        // Note: cardRef.current might be rendering 'loading' or 'content' states
         const cardRect = cardRef.current.getBoundingClientRect();
         
-        const GAP = 8;
+        // Industrial placement constants
+        const GAP = 12; // Slightly larger gap for airier feel
         const MARGIN = 16;
+        const VIEWPORT_WIDTH = window.innerWidth;
+        const VIEWPORT_HEIGHT = window.innerHeight;
         
-        let newLeft = linkRect.left + window.scrollX;
-        let newTop = linkRect.bottom + window.scrollY + GAP;
-        let newPlacement: 'top' | 'bottom' = 'bottom';
-
-        // Right boundary
-        if (newLeft + cardRect.width > window.innerWidth - MARGIN) {
-           newLeft = window.innerWidth - cardRect.width - MARGIN;
+        // 1. Calculate ideal horizontal position (align with link start)
+        let x = linkRect.left + window.scrollX;
+        
+        // 2. Adjust for right viewport overflow
+        if (x + cardRect.width > VIEWPORT_WIDTH - MARGIN) {
+           x = VIEWPORT_WIDTH - cardRect.width - MARGIN;
         }
         
-        // Left boundary
-        if (newLeft < MARGIN) {
-           newLeft = MARGIN;
+        // 3. Adjust for left viewport overflow
+        if (x < MARGIN) {
+           x = MARGIN;
         }
         
-        // Bottom boundary (+ scroll flip)
-        if (linkRect.bottom + GAP + cardRect.height > window.innerHeight) {
-           // Flip to top
-           newTop = linkRect.top + window.scrollY - GAP - cardRect.height;
+        // 4. Vertical Placement Strategy (Flipping)
+        // We prefer 'bottom' but flip to 'top' if space is insufficient.
+        // Once data is loaded (previewData is set), we stick to the decision to avoid jumping.
+        let y: number;
+        let newPlacement: 'top' | 'bottom';
+        
+        const spaceBelow = VIEWPORT_HEIGHT - linkRect.bottom;
+        const spaceAbove = linkRect.top;
+        
+        // Heuristic: If we are already calculated, don't flip unless strictly necessary
+        const shouldFlip = !isCalculated && spaceBelow < cardRect.height + GAP && spaceAbove > spaceBelow;
+        
+        if (shouldFlip) {
+           y = linkRect.top + window.scrollY - cardRect.height - GAP;
            newPlacement = 'top';
-           
-           // If it also overflows top, we just force it inside viewport
-           if (newTop - window.scrollY < MARGIN) {
-              newTop = window.scrollY + MARGIN;
-           }
+        } else {
+           y = linkRect.bottom + window.scrollY + GAP;
+           newPlacement = 'bottom';
         }
-        
-        setCardPos({ top: newTop, left: newLeft });
+
+        // 5. Vertical boundary safety (ensure it's not off-screen if it's too tall)
+        const topViewportBound = window.scrollY + MARGIN;
+        if (newPlacement === 'top' && y < topViewportBound) {
+           y = topViewportBound;
+        }
+
+        // Avoid sub-pixel rendering blur
+        setCardPos({ top: Math.round(y), left: Math.round(x) });
         setPlacement(newPlacement);
-        requestAnimationFrame(() => setIsCalculated(true));
+        
+        // Confirm calibration completion
+        // We use a double-frame wait to ensure height has settled
+        const frame = requestAnimationFrame(() => setIsCalculated(true));
+        return () => cancelAnimationFrame(frame);
      }
-  }, [hoveredLink, previewData, isLoading]);
+  }, [hoveredLink, previewData, isLoading, isCalculated]);
 
   const handleCardMouseEnter = () => {
     setIsHoveringCard(true);
@@ -407,18 +442,19 @@ export function WikiLinkPreviewManager({
      router.push(path);
   };
 
-  if (!hoveredLink) {
+  if (!hoveredLink || !mounted) {
     return null;
   }
 
-  return (
+  const content = (
     // biome-ignore lint/a11y/noStaticElementInteractions: Hover card wrapping element doesn't need focus
     <div 
       ref={cardRef}
-      className={`absolute z-[100] transition-all duration-300 ease-out will-change-transform
-        ${isCalculated ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95'}
-        ${placement === 'bottom' ? (isCalculated ? 'translate-y-0' : '-translate-y-2') : (isCalculated ? 'translate-y-0' : 'translate-y-2')}`}
-      style={{ top: cardPos.top, left: cardPos.left }}
+      className={cn(
+        "absolute z-[100] transition-[transform,opacity] duration-300 ease-out transform-gpu",
+        isCalculated ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+      )}
+      style={{ top: `${cardPos.top}px`, left: `${cardPos.left}px` }}
       onMouseEnter={handleCardMouseEnter}
       onMouseLeave={handleCardMouseLeave}
     >
@@ -463,7 +499,7 @@ export function WikiLinkPreviewManager({
                 </div>
                 <button 
                   type="button"
-                  className="text-primary/40 hover:text-primary transition-all cursor-pointer hover:scale-110 active:scale-95" 
+                  className="text-primary/40 hover:text-primary transition-[color,transform] cursor-pointer hover:scale-110 active:scale-95" 
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -504,7 +540,7 @@ export function WikiLinkPreviewManager({
                   hitKind="title"
                   className="group-hover:text-primary transition-colors" 
                 />
-                <span className="block h-[2px] w-0 bg-primary/40 transition-all duration-300 group-hover:w-full mt-1.5 rounded-full" />
+                <span className="block h-[2px] w-0 bg-primary/40 transition-[width] duration-300 group-hover:w-full mt-1.5 rounded-full" />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0">
@@ -559,7 +595,7 @@ export function WikiLinkPreviewManager({
               {previewData.tags && previewData.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-4 mt-2">
                   {previewData.tags.slice(0, 4).map((tag: string) => (
-                    <span key={tag} className="text-[10px] font-medium text-foreground/70 bg-secondary/50 border border-border/50 rounded px-2 py-0.5 transition-colors hover:text-primary hover:border-primary/30">#{tag}</span>
+                    <span key={tag} className="text-[10px] font-medium text-foreground/70 bg-secondary/50 border border-border/50 rounded px-2 py-0.5 transition-[color,border-color] hover:text-primary hover:border-primary/30">#{tag}</span>
                   ))}
                   {previewData.tags.length > 4 && (
                     <span className="text-[10px] font-medium text-muted-foreground/60 bg-transparent px-2 py-0.5">+{previewData.tags.length - 4}</span>
@@ -581,4 +617,6 @@ export function WikiLinkPreviewManager({
       </Card>
     </div>
   );
+
+  return createPortal(content, document.body);
 }

@@ -602,7 +602,7 @@ export function ReadingHeader({
 		<>
 			<style>{JUMP_HIGHLIGHT_STYLE}</style>
 
-			<div className="pointer-events-none fixed inset-x-0 top-3 z-[60] px-3 sm:px-4 md:top-5 md:px-6">
+			<div className="reading-header-container pointer-events-none fixed inset-x-0 top-3 z-[60] px-3 sm:px-4 md:top-5 md:px-6">
 				<motion.div
 					initial={{ y: -40, opacity: 0, scale: 0.98 }}
 					animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -610,7 +610,7 @@ export function ReadingHeader({
 				>
 					<div
 						className={cn(
-							"group relative flex h-12 w-full select-none items-center gap-1 rounded-[1.75rem] px-1.5 transition-all duration-500 md:h-14 md:gap-2 md:px-2",
+							"group relative flex h-12 w-full select-none items-center gap-1 rounded-[1.75rem] px-1.5 transition-[transform,opacity,border-color,box-shadow,background-color] duration-500 md:h-14 md:gap-2 md:px-2",
 							"bg-background/88 border border-border/60 backdrop-blur-3xl shadow-ambient ring-1 ring-border/50",
 							"hover:border-primary/40 hover:shadow-[0_8px_64px_rgba(var(--primary-rgb),0.2)]",
 						)}
@@ -625,9 +625,9 @@ export function ReadingHeader({
 							>
 								<Logo
 									withLabel={false}
-									className="transition-all duration-300 group-hover/logo:scale-110 group-hover/logo:rotate-[12deg] group-hover/logo:brightness-125"
+									className="transition-[transform,filter] duration-300 group-hover/logo:scale-110 group-hover/logo:rotate-[12deg] group-hover/logo:brightness-125"
 								/>
-								<span className="hidden bg-gradient-to-r from-foreground to-foreground/65 bg-clip-text text-base font-bold tracking-tight text-transparent transition-all duration-500 group-hover/logo:from-primary group-hover/logo:to-foreground sm:inline-block">
+								<span className="hidden bg-gradient-to-r from-foreground to-foreground/65 bg-clip-text text-base font-bold tracking-tight text-transparent transition-[color,background-image] duration-500 group-hover/logo:from-primary group-hover/logo:to-foreground sm:inline-block">
 									Sparkle
 								</span>
 							</Link>
@@ -660,7 +660,7 @@ export function ReadingHeader({
 										}}
 										aria-label="Open reading history"
 										className={cn(
-											"group/filename relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1 transition-all min-w-0 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+											"group/filename relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1 transition-[background-color,border-color,transform] min-w-0 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
 											"hover:bg-primary/[0.08]",
 										)}
 									>
@@ -729,7 +729,7 @@ export function ReadingHeader({
 								type="button"
 								onClick={openReadingSearch}
 								aria-label="Open reading search"
-								className="group/search flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary active:scale-90 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:h-11 md:w-11"
+								className="group/search flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform,opacity] hover:bg-primary/10 hover:text-primary active:scale-90 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:h-11 md:w-11"
 							>
 								<Search
 									size={15}
@@ -745,7 +745,7 @@ export function ReadingHeader({
 										type="button"
 										aria-label="Open reading menu"
 										className={cn(
-											"flex h-10 w-10 items-center justify-center rounded-full border border-border/50 bg-background/50 backdrop-blur-xl transition-all hover:bg-accent/60 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:h-11 md:w-11",
+											"flex h-10 w-10 items-center justify-center rounded-full border border-border/50 bg-background/50 backdrop-blur-xl transition-[background-color,border-color,opacity,transform] hover:bg-accent/60 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:h-11 md:w-11",
 											isMenuOpen && "opacity-0 pointer-events-none",
 										)}
 									>
@@ -803,7 +803,7 @@ export function ReadingHeader({
 														}
 													}}
 													className={cn(
-														"group relative flex items-center justify-between rounded-2xl px-4 py-3 text-lg font-semibold transition-all sm:text-xl",
+														"group relative flex items-center justify-between rounded-2xl px-4 py-3 text-lg font-semibold transition-[background-color,color,opacity,transform] sm:text-xl",
 														isActive
 															? "bg-primary/10 text-primary"
 															: "text-muted-foreground hover:bg-primary/5 hover:text-primary",

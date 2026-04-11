@@ -1,8 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, cn } from "@repo/ui";
 import { ArrowRight } from "lucide-react";
+import { cn, Dialog, DialogContent, DialogDescription, DialogTitle } from "@repo/ui";
 
 export function CommandSurface({
   open,
@@ -23,7 +23,7 @@ export function CommandSurface({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "overflow-hidden border border-border/40 bg-glass p-0 shadow-2xl ring-1 ring-white/10 backdrop-blur-2xl transition-all duration-300 dark:border-border/20 dark:ring-white/5",
+          "command-menu-container overflow-hidden border border-border/40 bg-glass p-0 shadow-2xl ring-1 ring-white/10 backdrop-blur-2xl transition-[background-color,border-color,transform,opacity,box-shadow] duration-300 dark:border-border/20 dark:ring-white/5",
           "before:absolute before:-inset-[100px] before:-z-10 before:bg-[radial-gradient(circle_at_center,var(--primary)_0%,transparent_70%)] before:opacity-10 dark:before:opacity-5",
           className,
         )}

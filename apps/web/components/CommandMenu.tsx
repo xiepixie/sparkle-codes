@@ -1,22 +1,24 @@
 "use client";
 
-import { 
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import {
   Clock,
   Compass,
-  FileText, 
+  FileText,
   Hash,
-  Loader2, 
-  Search, 
+  Loader2,
+  Search,
 } from "lucide-react";
-import { 
-  useDeferredValue, 
-  useEffect, 
-  useMemo, 
-  useRef, 
-  useState, 
-  useTransition 
-} from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@repo/ui";
+import { normalizeSlug } from "@repo/utils";
 import {
   CommandEmptyState,
   CommandModeRail,
@@ -25,8 +27,6 @@ import {
   CommandSurfaceFooter,
   CommandSurfaceHeader,
 } from "@/components/CommandSurface";
-import { readFilteredHistory, type ReadingHistoryEntry } from "@/lib/reading-history";
-import { normalizeSlug } from "@repo/utils";
 import {
   COMMAND_CENTER_EVENT,
   scrollToReadingSection,
@@ -34,8 +34,8 @@ import {
   type CommandCenterMode,
   type CommandCenterReadingContext,
 } from "@/lib/command-center";
+import { readFilteredHistory, type ReadingHistoryEntry } from "@/lib/reading-history";
 import { AccessibleMarkdownSnippet as SearchMatch } from "./markdown-snippet";
-import { usePathname, useRouter } from "next/navigation";
 
 type CommandMode = CommandCenterMode;
 
@@ -62,13 +62,13 @@ function normalizeSearchResults(data: unknown): SearchResultItem[] {
 
   // Pre-filter and map in one pass for performance
   return data.reduce<SearchResultItem[]>((acc, item, index) => {
-    if (!item || typeof item !== "object") return acc;
+    if (!item || typeof item !== "object") { return acc; }
 
     const candidate = item as Record<string, unknown>;
     const title = typeof candidate.title === "string" ? candidate.title : typeof candidate.name === "string" ? candidate.name : null;
     const url = typeof candidate.url === "string" ? candidate.url : typeof candidate.href === "string" ? candidate.href : null;
     
-    if (!title || !url) return acc;
+    if (!title || !url) { return acc; }
 
     acc.push({
       id: typeof candidate.id === "string" ? candidate.id : `${url}-${index}`,
@@ -320,7 +320,7 @@ export function CommandMenu() {
   }, [jumpQuery, readingContext, pathname]);
 
   const navigateToBlogPost = (url: string) => {
-    if (pendingUrl) return; 
+    if (pendingUrl) { return; } 
     
     const target = normalizeSlug(url);
     const current = normalizeSlug(pathname);
@@ -349,9 +349,9 @@ export function CommandMenu() {
         <CommandSurfaceHeader className="group">
           <div className="flex-shrink-0">
             {mode === "jump" ? (
-                <Compass className="h-5 w-5 text-primary/80 transition-all duration-300" />
+                <Compass className="h-5 w-5 text-primary transition-[transform,opacity] duration-200" />
             ) : (
-                <Search className={cn("h-5 w-5 text-muted-foreground transition-all duration-300", searchLoading && "opacity-0")} />
+                <Search className={cn("h-5 w-5 text-muted-foreground transition-[transform,color,opacity] duration-300", searchLoading && "opacity-0")} />
             )}
             {searchLoading && mode === "search" && (
                 <Loader2 className="absolute top-5 left-6 h-5 w-5 text-primary animate-spin" />
@@ -376,7 +376,7 @@ export function CommandMenu() {
           
           <div className="flex h-full shrink-0 items-center justify-center px-4">
             <div className={cn(
-              "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black tracking-widest transition-all duration-500",
+              "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black tracking-widest transition-[background-color,border-color,color,transform] duration-500",
               mode === "jump" 
                 ? "border-primary/20 bg-primary/10 text-primary" 
                 : "border-muted-foreground/20 bg-muted-foreground/10 text-muted-foreground"
@@ -387,7 +387,7 @@ export function CommandMenu() {
           
           {/* High-Fidelity Animated Search Loader */}
           <div className={cn(
-              "absolute bottom-0 left-0 right-0 h-[1.5px] transition-all duration-500",
+              "absolute bottom-0 left-0 right-0 h-[1.5px] transition-[transform,opacity] duration-500",
               searchLoading && mode === "search" ? "opacity-100 translate-y-0" : "opacity-0 translate-y-[1px]"
           )}>
             <div className={cn(
@@ -407,7 +407,7 @@ export function CommandMenu() {
                     disabled={!!pendingUrl}
                     onClick={() => navigateToBlogPost(result.url)}
                     className={cn(
-                      "block w-full rounded-2xl border border-border/40 bg-muted/15 p-4 text-left transition-all",
+                      "block w-full rounded-2xl border border-border/40 bg-muted/15 p-4 text-left transition-[background-color,border-color,transform,opacity]",
                       "hover:border-primary/30 hover:bg-primary/[0.06] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
                       pendingUrl === result.url ? "scale-[0.98] border-primary ring-1 ring-primary/20 bg-primary/[0.08]" : (pendingUrl ? "opacity-40 grayscale-[0.5] blur-[0.5px]" : "active:scale-[0.99]")
                     )}
@@ -460,174 +460,186 @@ export function CommandMenu() {
             readingContext ? (
               <>
                 {jumpSubMode === "history" ? (
-                  <>
-                    <div className="space-y-6">
-                      {filteredRecentReading.length > 0 && (
-                        <div className="space-y-3">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-                            Recent Reading
-                          </div>
-                          <div className="space-y-2">
-                            {filteredRecentReading.map((entry) => {
-                              const targetUrl = entry.sectionSlug 
-                                ? `/blog/${entry.slug}#${entry.sectionSlug}` 
-                                : `/blog/${entry.slug}`;
-                              
-                              return (
-                                <button
-                                  key={entry.slug}
-                                  type="button"
-                                  disabled={!!pendingUrl}
-                                  onClick={() => navigateToBlogPost(targetUrl)}
-                                  className={cn(
-                                    "group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-all",
-                                    "hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
-                                    pendingUrl === targetUrl ? "scale-[0.98] border-primary/40 bg-primary/10" : (pendingUrl ? "opacity-40 grayscale-[0.5] blur-[0.5px]" : "active:scale-[0.99]")
-                                  )}
-                                >
-                                  {pendingUrl === targetUrl ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                  ) : (
-                                    <Clock className="h-4 w-4 text-primary/80 transition-transform group-hover:rotate-6 dark:text-primary/70" />
-                                  )}
-                                  <div className="flex flex-col min-w-0">
-                                    <span className={cn(
-                                      "truncate text-sm font-medium transition-colors",
-                                      pendingUrl === targetUrl ? "text-primary font-semibold" : "text-foreground/85 group-hover:text-foreground"
-                                    )}>
-                                      {pendingUrl === targetUrl ? "Entering post..." : entry.title}
-                                    </span>
-                                    {entry.sectionTitle && (
-                                      <span className="truncate text-[11px] text-muted-foreground/60 flex items-center gap-1.5 overflow-hidden">
-                                        <Hash className="h-2.5 w-2.5 shrink-0" />
-                                        {entry.sectionTitle}
-                                      </span>
-                                    )}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
+                  <div className="space-y-6">
+                    {filteredRecentReading.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
+                          Recent Reading
                         </div>
-                      )}
+                        <div className="space-y-2">
+                          {filteredRecentReading.map((entry) => {
+                            const targetUrl = entry.sectionSlug
+                              ? `/blog/${entry.slug}#${entry.sectionSlug}`
+                              : `/blog/${entry.slug}`;
 
-                      {filteredReadingSections.length > 0 && (
-                        <div className="space-y-3">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-                            Sections
-                          </div>
-                          <div className="space-y-2">
-                            {filteredReadingSections.map((section) => (
+                            return (
                               <button
-                                key={section.id}
+                                key={entry.slug}
                                 type="button"
-                                onClick={() => {
-                                  setOpen(false);
-                                  scrollToReadingSection(section.id);
-                                }}
-                                className="group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-all hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5"
+                                disabled={!!pendingUrl}
+                                onClick={() => navigateToBlogPost(targetUrl)}
+                                className={cn(
+                                  "group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity]",
+                                  "hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
+                                  pendingUrl === targetUrl
+                                    ? "scale-[0.98] border-primary/40 bg-primary/10"
+                                    : pendingUrl
+                                      ? "opacity-40 grayscale-[0.5] blur-[0.5px]"
+                                      : "active:scale-[0.99]",
+                                )}
                               >
-                                <span className="font-mono text-[11px] font-bold text-primary/80 transition-transform group-hover:scale-125 dark:text-primary/70">
-                                  {"#".repeat(Math.max(1, section.level))}
-                                </span>
-                                <SearchMatch
-                                  className="min-w-0 truncate text-sm font-medium text-foreground/85 transition-colors group-hover:text-foreground"
-                                  text={section.renderedTitle}
-                                  fallback={section.title}
-                                  query={jumpQuery}
-                                />
+                                {pendingUrl === targetUrl ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                ) : (
+                                  <Clock className="h-4 w-4 text-primary/80 transition-transform group-hover:rotate-6 dark:text-primary/70" />
+                                )}
+                                <div className="flex flex-col min-w-0">
+                                  <span
+                                    className={cn(
+                                      "truncate text-sm font-medium transition-colors",
+                                      pendingUrl === targetUrl
+                                        ? "text-primary font-semibold"
+                                        : "text-foreground/85 group-hover:text-foreground",
+                                    )}
+                                  >
+                                    {pendingUrl === targetUrl ? "Entering post..." : entry.title}
+                                  </span>
+                                  {entry.sectionTitle && (
+                                    <span className="truncate text-[11px] text-muted-foreground/60 flex items-center gap-1.5 overflow-hidden">
+                                      <Hash className="h-2.5 w-2.5 shrink-0" />
+                                      {entry.sectionTitle}
+                                    </span>
+                                  )}
+                                </div>
                               </button>
-                            ))}
-                          </div>
+                            );
+                          })}
                         </div>
-                      )}
-                    </div>
-                  </>
+                      </div>
+                    )}
+
+                    {filteredReadingSections.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
+                          Sections
+                        </div>
+                        <div className="space-y-2">
+                          {filteredReadingSections.map((section) => (
+                            <button
+                              key={section.id}
+                              type="button"
+                              onClick={() => {
+                                setOpen(false);
+                                scrollToReadingSection(section.id);
+                              }}
+                              className="group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity] hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5"
+                            >
+                              <span className="font-mono text-[11px] font-bold text-primary/80 transition-transform group-hover:scale-125 dark:text-primary/70">
+                                {"#".repeat(Math.max(1, section.level))}
+                              </span>
+                              <SearchMatch
+                                className="min-w-0 truncate text-sm font-medium text-foreground/85 transition-colors group-hover:text-foreground"
+                                text={section.renderedTitle}
+                                fallback={section.title}
+                                query={jumpQuery}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <>
+                  <div className="space-y-6">
                     {/* Default order: Sections first */}
-                    <div className="space-y-6">
-                      {filteredReadingSections.length > 0 && (
-                        <div className="space-y-3">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-                            Sections
-                          </div>
-                          <div className="space-y-2">
-                            {filteredReadingSections.map((section) => (
-                              <button
-                                key={section.id}
-                                type="button"
-                                onClick={() => {
-                                  setOpen(false);
-                                  scrollToReadingSection(section.id);
-                                }}
-                                className="group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-all hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5"
-                              >
-                                <span className="font-mono text-[11px] font-bold text-primary/80 transition-transform group-hover:scale-125 dark:text-primary/70">
-                                  {"#".repeat(Math.max(1, section.level))}
-                                </span>
-                                <SearchMatch
-                                  className="min-w-0 truncate text-sm font-medium text-foreground/85 transition-colors group-hover:text-foreground"
-                                  text={section.renderedTitle}
-                                  fallback={section.title}
-                                  query={jumpQuery}
-                                />
-                              </button>
-                            ))}
-                          </div>
+                    {filteredReadingSections.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
+                          Sections
                         </div>
-                      )}
+                        <div className="space-y-2">
+                          {filteredReadingSections.map((section) => (
+                            <button
+                              key={section.id}
+                              type="button"
+                              onClick={() => {
+                                setOpen(false);
+                                scrollToReadingSection(section.id);
+                              }}
+                              className="group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity] hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5"
+                            >
+                              <span className="font-mono text-[11px] font-bold text-primary/80 transition-transform group-hover:scale-125 dark:text-primary/70">
+                                {"#".repeat(Math.max(1, section.level))}
+                              </span>
+                              <SearchMatch
+                                className="min-w-0 truncate text-sm font-medium text-foreground/85 transition-colors group-hover:text-foreground"
+                                text={section.renderedTitle}
+                                fallback={section.title}
+                                query={jumpQuery}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                      {filteredRecentReading.length > 0 && (
-                        <div className="space-y-3">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-                            Recent Reading
-                          </div>
-                          <div className="space-y-2">
-                            {filteredRecentReading.map((entry) => {
-                              const targetUrl = entry.sectionSlug 
-                                ? `/blog/${entry.slug}#${entry.sectionSlug}` 
-                                : `/blog/${entry.slug}`;
-                              
-                              return (
-                                <button
-                                  key={entry.slug}
-                                  type="button"
-                                  disabled={!!pendingUrl}
-                                  onClick={() => navigateToBlogPost(targetUrl)}
-                                  className={cn(
-                                    "group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-all",
-                                    "hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
-                                    pendingUrl === targetUrl ? "scale-[0.98] border-primary/40 bg-primary/10" : (pendingUrl ? "opacity-40 grayscale-[0.5] blur-[0.5px]" : "active:scale-[0.99]")
-                                  )}
-                                >
-                                  {pendingUrl === targetUrl ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                  ) : (
-                                    <Clock className="h-4 w-4 text-primary/80 transition-transform group-hover:rotate-6 dark:text-primary/70" />
-                                  )}
-                                  <div className="flex flex-col min-w-0">
-                                    <span className={cn(
-                                      "truncate text-sm font-medium transition-colors",
-                                      pendingUrl === targetUrl ? "text-primary font-semibold" : "text-foreground/85 group-hover:text-foreground"
-                                    )}>
-                                      {pendingUrl === targetUrl ? "Entering post..." : entry.title}
-                                    </span>
-                                    {entry.sectionTitle && (
-                                      <span className="truncate text-[11px] text-muted-foreground/60 flex items-center gap-1.5 overflow-hidden">
-                                        <Hash className="h-2.5 w-2.5 shrink-0" />
-                                        {entry.sectionTitle}
-                                      </span>
-                                    )}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
+                    {filteredRecentReading.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
+                          Recent Reading
                         </div>
-                      )}
-                    </div>
-                  </>
+                        <div className="space-y-2">
+                          {filteredRecentReading.map((entry) => {
+                            const targetUrl = entry.sectionSlug
+                              ? `/blog/${entry.slug}#${entry.sectionSlug}`
+                              : `/blog/${entry.slug}`;
+
+                            return (
+                              <button
+                                key={entry.slug}
+                                type="button"
+                                disabled={!!pendingUrl}
+                                onClick={() => navigateToBlogPost(targetUrl)}
+                                className={cn(
+                                  "group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity]",
+                                  "hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
+                                  pendingUrl === targetUrl
+                                    ? "scale-[0.98] border-primary/40 bg-primary/10"
+                                    : pendingUrl
+                                      ? "opacity-40 grayscale-[0.5] blur-[0.5px]"
+                                      : "active:scale-[0.99]",
+                                )}
+                              >
+                                {pendingUrl === targetUrl ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                ) : (
+                                  <Clock className="h-4 w-4 text-primary/80 transition-transform group-hover:rotate-6 dark:text-primary/70" />
+                                )}
+                                <div className="flex flex-col min-w-0">
+                                  <span
+                                    className={cn(
+                                      "truncate text-sm font-medium transition-colors",
+                                      pendingUrl === targetUrl
+                                        ? "text-primary font-semibold"
+                                        : "text-foreground/85 group-hover:text-foreground",
+                                    )}
+                                  >
+                                    {pendingUrl === targetUrl ? "Entering post..." : entry.title}
+                                  </span>
+                                  {entry.sectionTitle && (
+                                    <span className="truncate text-[11px] text-muted-foreground/60 flex items-center gap-1.5 overflow-hidden">
+                                      <Hash className="h-2.5 w-2.5 shrink-0" />
+                                      {entry.sectionTitle}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {filteredReadingSections.length === 0 && filteredRecentReading.length === 0 ? (
@@ -665,7 +677,7 @@ export function CommandMenu() {
                           disabled={!!pendingUrl}
                           onClick={() => navigateToBlogPost(targetUrl)}
                           className={cn(
-                            "group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-all",
+                            "group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity]",
                             "hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
                             pendingUrl === targetUrl ? "scale-[0.98] border-primary/40 bg-primary/10" : (pendingUrl ? "opacity-40 grayscale-[0.5] blur-[0.5px]" : "active:scale-[0.99]")
                           )}
@@ -707,7 +719,7 @@ export function CommandMenu() {
                         key={suggestion}
                         type="button"
                         onClick={() => handleSearchSuggestion(suggestion)}
-                        className="rounded-lg border border-border/30 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-all duration-300 hover:bg-accent hover:text-accent-foreground dark:border-border/10"
+                        className="rounded-lg border border-border/30 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-[background-color,border-color,color,transform] duration-300 hover:bg-accent hover:text-accent-foreground dark:border-border/10"
                       >
                         {suggestion}
                       </button>
@@ -728,7 +740,7 @@ export function CommandMenu() {
                 />
             </div>
             
-            <div className="flex items-center gap-2 rounded-full border border-border/10 bg-muted/20 px-3 py-1 text-[10px] font-bold text-muted-foreground/60 transition-all duration-300">
+            <div className="flex items-center gap-2 rounded-full border border-border/10 bg-muted/20 px-3 py-1 text-[10px] font-bold text-muted-foreground/60 transition-[background-color,border-color,color,opacity] duration-300">
                 {mode === "jump" ? (
                   <>
                     <FileText className="h-3 w-3" />

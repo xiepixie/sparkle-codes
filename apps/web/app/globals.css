@@ -54,6 +54,19 @@
 	.dark-only { display: none !important; }
 	.dark .light-only { display: none !important; }
 	.dark .dark-only { display: inline-block !important; }
+
+	/* INDUSTRIAL OVERLAY FIX: 
+	   Ensures that anchor tags used as card overlays are never collapsed 
+	   by generic relative/inline typography rules. */
+	.card-jump-overlay {
+		position: absolute !important;
+		inset: 0 !important;
+		display: block !important;
+		width: 100% !important;
+		height: 100% !important;
+		z-index: 20 !important;
+		opacity: 0;
+	}
 }
 
 
@@ -148,6 +161,12 @@
 	body {
 		isolation: isolate;
 		scrollbar-gutter: stable !important; /* Why: Prevents horizontal layout jumps when scrollbars appear/disappear during theme transitions */
+		
+		/* INDUSTRIAL OPTIMIZATION: Font Stability
+		   Why: Prevents "weight shift" flicker when switching明暗主题，尤其是在 LaTeX 这种细线条笔触较多的场景。 */
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		text-rendering: optimizeLegibility;
 	}
 
 	/* --- Shared Premium Entities handled in @repo/ui --- */
@@ -202,6 +221,17 @@
         /* Why: specifying discrete properties prevents 'transition: all' from animating layout properties (width, height) 
            which causes jank. We explicitly include 'opacity' now to prevent icons from flickering or disappearing. */
         transition-property: background-color, border-color, color, fill, stroke, opacity !important;
+    }
+
+    /* INDUSTRIAL OPTIMIZATION: Stable UI Layers during View Transitions
+       Why: Giving key UI elements their own transition names allows them to stay perfectly static 
+       and sharp while the root cross-fades or reveals via the nova-clip animation. */
+    .reading-header-container {
+        view-transition-name: reading-header;
+    }
+
+    .command-menu-container {
+        view-transition-name: command-menu;
     }
 
     .theme-toggle-nova {
@@ -485,10 +515,18 @@
     }
 }
 
-/* Math Interaction */
+/* Math Interaction & Stability */
 .math-block, .math-inline, .math-display {
     cursor: pointer;
     transition: opacity 0.2s ease;
+    
+    /* INDUSTRIAL OPTIMIZATION: Layout Isolation & Compositing
+       Why: Tells the browser that changes inside these blocks won't affect the external layout.
+       Using will-change instead of forced translateZ(0) to allow the browser to manage 
+       Compositing Layers more efficiently, avoiding GPU memory bloat on content-heavy pages. */
+    contain: layout style;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
 }
 
 .math-block:hover, .math-inline:hover {

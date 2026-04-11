@@ -336,10 +336,10 @@ function buildMathRenderedContent(
 	}
 
 	const sourceContainer = document.createElement("div");
-	sourceContainer.className = "latex-source code-fence-container";
+	sourceContainer.className = "latex-source code-fence-container !overflow-visible";
 
 	const header = document.createElement("div");
-	header.className = "code-fence-header group/latex-hdr";
+	header.className = "code-fence-header shadow-inset-sm !z-50";
 
 	const headerLeft = document.createElement("div");
 	headerLeft.className = "code-header-left";
@@ -349,30 +349,60 @@ function buildMathRenderedContent(
 	headerLeft.appendChild(dotsContent);
 
 	const headerRight = document.createElement("div");
-	headerRight.className = "code-header-right flex items-center gap-4";
+	headerRight.className = "code-header-right flex items-center gap-3";
 	const headerLabel = document.createElement("span");
 	headerLabel.className = "code-lang-text";
 	headerLabel.textContent = "LaTeX";
 	headerRight.appendChild(headerLabel);
 
-	const actionContainer = document.createElement("div");
-	actionContainer.className = "flex items-center gap-1 opacity-0 group-hover/latex-hdr:opacity-100 transition-all duration-300";
+	const copySettings = document.createElement("div");
+	copySettings.className = "flex items-center gap-1.5 ml-2 mr-1";
 
+	// 1. Selector (The "Settings" keys)
+	const selector = document.createElement("div");
+	selector.className = "flex items-center bg-muted/40 p-0.5 rounded-lg border border-border/10 focus-within:border-primary/20 transition-all";
+	
+	const options = [
+		{ label: "$$", value: "$$", title: "Format: $$ ... $$" },
+		{ label: "\\[ ... \\]", value: "\\[", title: "Format: \\[ ... \\]" },
+		{ label: "RAW", value: "raw", title: "Format: Raw LaTeX" }
+	];
+
+	options.forEach((opt, idx) => {
+		const btn = document.createElement("button");
+		btn.type = "button";
+		const isActive = idx === 0;
+		// Frameless Design: Only color and opacity change, no background boxes
+		btn.className = `math-copy-selector h-6 px-1.5 text-[10px] transition-all uppercase tracking-tighter active:scale-95 flex items-center justify-center min-w-[30px] border-b-2 ${
+			isActive 
+				? "text-primary border-primary font-black opacity-100" 
+				: "text-muted-foreground/30 border-transparent font-medium hover:text-muted-foreground/60"
+		}`;
+		btn.dataset.value = opt.value;
+		btn.title = opt.title;
+		btn.textContent = opt.label;
+		selector.appendChild(btn);
+	});
+
+	// 2. Action (The "Functional" key)
 	const copyBtn = document.createElement("button");
 	copyBtn.type = "button";
-	copyBtn.className = "code-copy-btn-math ml-2 flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-primary uppercase active:scale-95";
-	copyBtn.title = "Copy LaTeX";
+	copyBtn.className = "math-copy-btn h-7 px-3 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-lg transition-all border border-primary/20 hover:border-primary/40 active:scale-95 flex items-center justify-center";
+	copyBtn.dataset.wrap = "$$"; // Initial default
 	copyBtn.innerHTML = "<span>COPY</span>";
 
 	const closeBtn = document.createElement("button");
 	closeBtn.type = "button";
-	closeBtn.className = "code-close-btn flex items-center px-3 py-1 rounded-md hover:bg-white/10 text-[9px] font-black tracking-widest text-white/50 hover:text-white uppercase active:scale-95";
+	closeBtn.className = "code-close-btn ml-1 opacity-40 hover:opacity-100 transition-opacity";
 	closeBtn.title = "Close Source";
-	closeBtn.innerHTML = "<span>BACK</span>";
+	closeBtn.innerHTML = "<span>CLOSE</span>";
 
-	actionContainer.appendChild(copyBtn);
-	actionContainer.appendChild(closeBtn);
-	headerRight.appendChild(actionContainer);
+	// We attach the selector as a field to influence the copyBtn's behavior
+	copySettings.appendChild(selector);
+	copySettings.appendChild(copyBtn);
+	copySettings.appendChild(closeBtn);
+
+	headerRight.appendChild(copySettings);
 
 	header.appendChild(headerLeft);
 	header.appendChild(headerRight);
@@ -403,6 +433,7 @@ function hydrateMathAttributes(el: HTMLElement) {
 
 	el.setAttribute("tabindex", "0");
 	el.setAttribute("role", "button");
+	el.setAttribute("data-cursor", "explore");
 	el.setAttribute(
 		"aria-expanded",
 		el.classList.contains("source-mode") ? "true" : "false",
@@ -1098,27 +1129,53 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 				}
 
 				// Math Options & Inline Math Copy
-				const mathCopyElement = target.closest(
-					".math-copy-option, .code-copy-btn-math, .inline-copy-btn, .code-copy-btn[data-is-math]",
-				);
-				if (mathCopyElement) {
-					const mathEl = mathCopyElement.closest("[data-tex]") as HTMLElement;
+				// Math Format Selector (Setting Key)
+				const formatSelector = target.closest(".math-copy-selector") as HTMLElement;
+				if (formatSelector) {
+					const value = formatSelector.dataset.value;
+					const container = formatSelector.closest(".code-header-right");
+					const copyBtn = container?.querySelector(".math-copy-btn") as HTMLElement;
+					
+					if (value && copyBtn) {
+						// 1. Update State Visually (Frameless)
+						const allSelectors = container?.querySelectorAll(".math-copy-selector");
+						allSelectors?.forEach(s => {
+							s.classList.remove("text-primary", "border-primary", "font-black", "opacity-100");
+							s.classList.add("text-muted-foreground/30", "border-transparent", "font-medium");
+						});
+						formatSelector.classList.remove("text-muted-foreground/30", "border-transparent", "font-medium");
+						formatSelector.classList.add("text-primary", "border-primary", "font-black", "opacity-100");
+						
+						// 2. Update Functional Button Logic
+						copyBtn.dataset.wrap = value;
+						
+						// Tactile feedback
+						formatSelector.style.transform = "translateY(-1px)";
+						setTimeout(() => { formatSelector.style.transform = ""; }, 100);
+					}
+					return;
+				}
+
+				// Math Copy Action (Functional Key)
+				const mathCopyBtn = target.closest(".math-copy-btn") as HTMLElement;
+				if (mathCopyBtn) {
+					const mathEl = mathCopyBtn.closest("[data-tex]") as HTMLElement;
 					const tex = mathEl?.dataset.tex;
 					
 					if (tex) {
 						let finalTex = tex;
 						let label = "LaTeX";
-						const wrapType = mathCopyElement.getAttribute("data-wrap");
+						const wrapType = mathCopyBtn.dataset.wrap;
 						
 						if (wrapType === "$$") { finalTex = `$$\n${tex}\n$$`; label = "$$"; }
 						else if (wrapType === "\\[") { finalTex = `\\[\n${tex}\n\\]`; label = "\\["; }
-						else if (wrapType === "$") { finalTex = `$${tex}$`; label = "inline $"; }
+						else if (wrapType === "raw") { finalTex = tex; label = "RAW"; }
 						
 						copyToClipboard(finalTex).then(() => {
 							toast.success(`Copied as ${label}`);
 							
 							// Handle visual feedback
-							const container = mathCopyElement.closest(".code-fence-container, .group\\/code");
+							const container = mathCopyBtn.closest(".code-fence-container, .group\\/code");
 							if (container) {
 								container.classList.add("is-copied");
 								setTimeout(() => container.classList.remove("is-copied"), 2000);
@@ -1127,6 +1184,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 					}
 					return;
 				}
+
+				// Handle legacy options if any remain
+				target.closest(
+					".math-copy-option, .code-copy-btn-math, .inline-copy-btn, .code-copy-btn[data-is-math]",
+				);
 
 				// Standard Code Copy
 				const codeCopyBtn = target.closest(".code-copy-btn");
@@ -1217,6 +1279,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 					const target = e.target as HTMLElement;
 					const mathEl = target.closest("[data-tex]") as HTMLElement | null;
 					if (mathEl) {
+						// Prevent the default double-click selection of surrounding text
+						window.getSelection()?.removeAllRanges();
+						
 						const tex = mathEl.dataset.tex;
 						const isBlock = mathEl.classList.contains("math-block") || mathEl.tagName === "DIV";
 						

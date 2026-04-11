@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
 import { useTheme } from "next-themes";
-import { writeSharedString } from "../lib/shared-ui-state";
+import { useEffect } from "react";
+import { writeSharedString } from "@repo/utils";
 
 const THEME_STATE_KEY = "theme";
 
@@ -17,7 +17,9 @@ export function ThemeCookieSync() {
           ? resolvedTheme
           : null;
 
-    if (!nextTheme) return;
+    if (!nextTheme) {
+      return;
+    }
     writeSharedString(THEME_STATE_KEY, nextTheme);
   }, [resolvedTheme, theme]);
 

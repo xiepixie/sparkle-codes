@@ -2,7 +2,7 @@
   /* --- 1. Global Container & Text Selection --- */
   :scope {
     color: var(--md-foreground);
-    font-size: 1rem;
+    font-size: 1.125rem; /* Increased from 17px to 18px for maximum industrial readability */
     line-height: var(--md-leading);
     max-width: var(--md-max-width);
     margin: 0 auto;
@@ -146,7 +146,7 @@
   }
   :where(sub, sup) {
     font-size: 75%;
-    line-height: 0;
+    line-height: 1; /* Restored from 0 to prevent box collapse and text clipping */
     position: relative;
     vertical-align: baseline;
   }
@@ -154,7 +154,7 @@
     bottom: -0.25em;
   }
   :where(sup) {
-    top: -0.5em;
+    top: -0.45em; /* Adjusted from -0.5em for better visual balance with line-height 1 */
   }
 
   /* kbd */
@@ -331,7 +331,7 @@
 
   /* --- 7. Lists --- */
   :where(ul, ol) {
-    padding-left: 2rem;
+    padding-left: 1.75rem; /* Unified padding for consistent horizontal alignment */
   }
   :where(ul) {
     list-style: none;
@@ -342,10 +342,10 @@
   :where(ul) > li::before {
     content: "✦";
     position: absolute;
-    left: -1.25rem;
+    left: -1.2rem; /* Adjusted to match ordered list marker indent */
     color: var(--md-primary);
     font-size: 0.8em;
-    top: 0.2em;
+    top: 0.55em; /* Recalibrated for 18px line-height */
   }
   :where(ul ul) > li::before {
     content: "✧";
@@ -367,7 +367,7 @@
     margin-bottom: 0.5rem;
   }
   :where(li) > :where(p, blockquote, ul, ol, pre) {
-    margin-top: 0.5rem;
+    margin-top: 0; /* Completely removed to ensure perfect alignment with list markers */
   }
 
   /* --- 8. Footnotes --- */

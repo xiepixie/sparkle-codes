@@ -1,11 +1,20 @@
 "use client";
 
-import { getAppUrl } from "@repo/utils";
-import { Logo, Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription, cn, ThemeToggle } from "@repo/ui";
+import { useState } from "react";
 import { Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import {
+  cn,
+  Logo,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+  SheetTrigger,
+  ThemeToggle,
+} from "@repo/ui";
+import { getAppUrl } from "@repo/utils";
 
 const menuItems = [
   { label: "Home", href: "/" },
@@ -36,8 +45,8 @@ export function NavBar() {
     <nav aria-label="Primary" className="fixed left-0 right-0 top-0 z-[100] flex items-center justify-between p-3 sm:p-4 md:p-6 pointer-events-none">
       <div className="pointer-events-auto">
         <Link href="/" className="flex items-center gap-2 font-bold text-base sm:text-lg group/logo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg">
-          <Logo withLabel={false} className="transition-all duration-300 group-hover/logo:scale-110 group-hover/logo:rotate-[15deg] group-hover/logo:brightness-125" />
-          <span className="hidden sm:inline-block bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/60 group-hover/logo:from-primary group-hover/logo:to-foreground transition-all duration-500">Sparkle</span>
+          <Logo withLabel={false} className="transition-[transform,filter] duration-300 group-hover/logo:scale-110 group-hover/logo:rotate-[15deg] group-hover/logo:brightness-125" />
+          <span className="hidden sm:inline-block bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/60 group-hover/logo:from-primary group-hover/logo:to-foreground transition-[color,background-image] duration-500">Sparkle</span>
         </Link>
       </div>
 
@@ -58,7 +67,7 @@ export function NavBar() {
                   {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                   {...(!isExternal && isActive ? { "aria-current": "page" as const } : {})}
                   className={cn(
-                    "rounded-md py-1 text-sm font-medium transition-all hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    "rounded-md py-1 text-sm font-medium transition-[color,background-color,transform] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                     isActive ? "text-primary" : "text-muted-foreground"
                   )}
                 >
@@ -77,7 +86,7 @@ export function NavBar() {
              </div>
              <Sheet open={isOpen} onOpenChange={handleSheetOpenChange}>
                 <SheetTrigger asChild>
-                  <button type="button" aria-label="Open navigation menu" className={cn("rounded-full border border-border/50 bg-background/50 p-3 backdrop-blur-xl transition-all group/nav interactive hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background", isOpen && "opacity-0 pointer-events-none")}>
+                  <button type="button" aria-label="Open navigation menu" className={cn("rounded-full border border-border/50 bg-background/50 p-3 backdrop-blur-xl transition-[background-color,border-color,transform,opacity] group/nav interactive hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background", isOpen && "opacity-0 pointer-events-none")}>
                     <Menu className="w-5 h-5 text-muted-foreground group-hover/nav:text-primary transition-transform duration-300 group-hover/nav:scale-110" />
                   </button>
                 </SheetTrigger>
@@ -104,7 +113,7 @@ export function NavBar() {
                           style={{ transitionDelay: `${idx * 40}ms` }}
                           {...(!isExternal && pathname === item.href ? { "aria-current": "page" as const } : {})}
                           className={cn(
-                            "rounded-md text-lg font-medium transition-all hover:translate-x-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                            "rounded-md text-lg font-medium transition-[color,transform] hover:translate-x-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                             pathname === item.href ? "text-primary translate-x-2" : "text-muted-foreground"
                           )}
                         >
@@ -152,7 +161,7 @@ export function NavBar() {
                     }}
                     {...(!isExternal && pathname === item.href ? { "aria-current": "page" as const } : {})}
                     className={cn(
-                      "rounded-2xl px-2 py-2 text-lg font-semibold transition-all hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:text-xl",
+                      "rounded-2xl px-2 py-2 text-lg font-semibold transition-[color,background-color,transform] hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:text-xl",
                       pathname === item.href ? "text-primary" : "text-muted-foreground"
                     )}
                   >

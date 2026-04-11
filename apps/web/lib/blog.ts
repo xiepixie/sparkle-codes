@@ -301,18 +301,18 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 								  <div class="code-header-right flex items-center gap-3">
 									<span class="code-lang-text">LaTeX</span>
 									
-									<div class="relative group/copy-menu flex items-center">
-										<button type="button" class="code-copy-btn" data-is-math="true" data-wrap="$$" title="Copy with $$ wrapping">
+									<div class="flex items-center gap-1.5 ml-2 mr-1">
+										<div class="flex items-center p-0.5">
+											<button type="button" class="math-copy-selector h-6 px-1.5 text-[10px] transition-[color,border-color,opacity,transform] uppercase tracking-tighter active:scale-95 flex items-center justify-center min-w-[30px] border-b-2 text-primary border-primary font-black opacity-100" data-value="$$" title="Format: $$ ... $$">$$</button>
+											<button type="button" class="math-copy-selector h-6 px-1.5 text-[10px] transition-[color,border-color,opacity,transform] uppercase tracking-tighter active:scale-95 flex items-center justify-center min-w-[30px] border-b-2 text-muted-foreground/30 border-transparent font-medium hover:text-muted-foreground/60" data-value="\\[" title="Format: \\[ ... \\]">\\[ ... \\]</button>
+											<button type="button" class="math-copy-selector h-6 px-1.5 text-[10px] transition-[color,border-color,opacity,transform] uppercase tracking-tighter active:scale-95 flex items-center justify-center min-w-[30px] border-b-2 text-muted-foreground/30 border-transparent font-medium hover:text-muted-foreground/60" data-value="raw" title="Format: Raw LaTeX">RAW</button>
+										</div>
+										<button type="button" class="math-copy-btn h-7 px-3 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-lg transition-[background-color,border-color,transform] border border-primary/20 hover:border-primary/40 active:scale-95 flex items-center justify-center" data-wrap="$$">
 											<span>COPY</span>
 										</button>
-										<div class="absolute right-0 top-[110%] opacity-0 invisible group-hover/copy-menu:opacity-100 group-hover/copy-menu:visible transition-all duration-200 z-50 rounded-lg p-1 min-w-[120px] shadow-xl border border-white/10 flex flex-col" style="background: var(--md-code-header-bg);">
-											<button type="button" class="math-copy-option flex items-center px-3 py-2 text-xs text-[var(--md-muted)] hover:text-white hover:bg-white/10 rounded transition-colors w-full tracking-widest font-mono" data-wrap="$$"><span>$$ ... $$</span></button>
-											<button type="button" class="math-copy-option flex items-center px-3 py-2 text-xs text-[var(--md-muted)] hover:text-white hover:bg-white/10 rounded transition-colors w-full tracking-widest font-mono" data-wrap="\\["><span>\\[ ... \\]</span></button>
-											<button type="button" class="math-copy-option flex items-center px-3 py-2 text-xs text-[var(--md-muted)] hover:text-white hover:bg-white/10 rounded transition-colors w-full font-bold" data-wrap="raw"><span>Raw LaTeX</span></button>
-										</div>
 									</div>
 
-									<button type="button" class="code-close-btn" title="Close Source">
+									<button type="button" class="code-close-btn ml-1 opacity-40 group-hover/code:opacity-100 transition-opacity" title="Close Source">
 									  <span>CLOSE</span>
 									</button>
 								  </div>
@@ -359,9 +359,10 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 
 	// 4. Premium Hashtags
 	// Why: Standard text hashtags are transformed into interactive, themed capsules.
+	// We remove the '#' prefix from the raw text as the Tag component/structure provides its own decoration.
 	const hashtagRegex = /<span class="premium-tag md-hashtag">#([^<]*)<\/span>/g;
 	processed = processed.replace(hashtagRegex, (_match, tag) => {
-		return `<span class="premium-tag inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary/5 border border-primary/20 text-[10px] font-bold text-primary/80 uppercase tracking-widest hover:bg-primary/10 transition-colors cursor-default my-1 mr-2">${tag}</span>`;
+		return `<span class="premium-tag group/tag inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary/80 transition-[background-color,border-color,box-shadow,color,transform] backdrop-blur-sm hover:border-primary/40 hover:bg-primary/10 hover:shadow-glow-xs cursor-default my-1 mr-2"><span class="mr-1 font-mono text-primary/40 transition-colors group-hover/tag:text-primary/60">#</span><span class="relative">${tag}</span></span>`;
 	});
 
 	// 5. Wiki Image Embeds
@@ -407,7 +408,7 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 			return `
       <span class="wiki-embed" data-src="${src}" data-alt="${label}" data-rendered="${src}">
         <div class="wiki-image-wrapper group relative my-10 flex flex-col items-center">
-          <div class="wiki-image-container relative transition-all duration-700 group-hover:scale-[1.01] z-0 overflow-hidden rounded-xl" style="${widthStyle}">
+          <div class="wiki-image-container relative transition-[transform,opacity] duration-700 group-hover:scale-[1.01] z-0 overflow-hidden rounded-xl" style="${widthStyle}">
             <img 
               src="${primaryUrl}" 
               alt="${displayAlt || src}" 
@@ -679,7 +680,7 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
 		 * 显示日期优先级逻辑
 		 */
 		date: (doc.publishedAt || doc.updatedAt || doc.createdAt).toISOString(),
-		tags: metadata.tags || [],
+		tags: (metadata.tags || []).sort((a: string, b: string) => a.localeCompare(b)),
 		authorName: metadata.authorName || "xpx",
 		readingTime: metadata.readingTime || calculatedReadingTime,
 		path: doc.slug,
@@ -726,7 +727,7 @@ function mapDocumentToSummary(doc: any): BlogPostSummary {
 		 * 优先使用 publishedAt 以尊重用户指定的发布/创作日期。
 		 */
 		date: (doc.publishedAt || doc.updatedAt || doc.createdAt).toISOString(),
-		tags: metadata.tags || [],
+		tags: (metadata.tags || []).sort((a: string, b: string) => a.localeCompare(b)),
 		authorName: metadata.authorName || "xpx",
 		readingTime: metadata.readingTime || calculatedReadingTime,
 		path: doc.slug,

@@ -62,8 +62,18 @@ export function placeConstellation(
 /**
  * Strategy to resolve slots for primary and secondary constellations.
  * If a seed is provided, it use a weighted random approach to select slots.
+ *
+ * 决策型注释：
+ * - 为什么要特殊干预？因为自然排列可能导致星座重叠或无法形成神话对抗的张力。
+ * - 保护了什么约束？强制宿敌/母子对处于空间中的特定方位对以符合神话逻辑。
+ * - 改坏会怎样？会导致彩蛋出现时的视觉效果大幅降级。
+ * - 删除条件？若不再需要特定星座彩蛋位置绑定即可移除。
  */
-export function resolveSlots(primary: string | null, secondary: string | null, seed?: number) {
+export function resolveSlots(
+  primary: string | null,
+  secondary: string | null,
+  seed?: number
+): { primarySlot: LayoutSlotId | null; secondarySlot: LayoutSlotId | null } {
   if (!primary) {
     return { primarySlot: null, secondarySlot: null };
   }
@@ -96,25 +106,54 @@ export function resolveSlots(primary: string | null, secondary: string | null, s
 
   let sIdx: number;
   if (seed !== undefined) {
-    // Pick an offset that is not 0 (must be different slot)
+    // 空间对垒算法 (Opposition Logic): 
+    // 尝试寻找与主星座距离最远的槽位，以维持视觉平衡。
+    // 计算逻辑：取主槽位在数组中的对角偏移 [p+3] 并通过种子进行微调偏移 [±1]。
     const s2 = Math.abs(Math.cos(seed * 789.012));
-    const offset = 1 + Math.floor(s2 * (availableSlots.length - 1));
-    sIdx = (pIdx + offset) % availableSlots.length;
+    const diagonalOffset = 3;
+    const jitter = Math.round(s2 * 2) - 1; // -1, 0, 1
+    sIdx = (pIdx + diagonalOffset + jitter + availableSlots.length) % availableSlots.length;
   } else {
-    // Fallback pick secondary slot: must be different from primary 
     sIdx = (pIdx + 3) % availableSlots.length;
   }
   
   const secondarySlot = availableSlots[sIdx];
 
-  // Special rule for Scorpio + BigDipper (Easter Egg)
-  if (
-    (primary === "Scorpio" && secondary === "BigDipper") ||
-    (primary === "BigDipper" && secondary === "Scorpio")
-  ) {
+  // ===============================
+  // 特殊排列规则 (Special Layout Rules)
+  // ===============================
+  const isMatch = (a: string, b: string) => 
+    (primary === a && secondary === b) || (primary === b && secondary === a);
+
+  // 1. 宿敌对决: 猎户与天蝎
+  if (isMatch("Scorpio", "Orion")) {
     return {
-      primarySlot: "bottomRight" as const,
-      secondarySlot: "topLeft" as const,
+      primarySlot: primary === "Scorpio" ? "bottomRight" : "topLeft",
+      secondarySlot: secondary === "Scorpio" ? "bottomRight" : "topLeft",
+    };
+  }
+
+  // 2. 英雄救美: 英仙与仙女
+  if (isMatch("Andromeda", "Perseus")) {
+    return {
+      primarySlot: primary === "Andromeda" ? "topRight" : "midRight",
+      secondarySlot: secondary === "Andromeda" ? "topRight" : "midRight",
+    };
+  }
+
+  // 3. 母子寻星: 大熊(北斗)与小熊
+  if (isMatch("BigDipper", "UrsaMinor")) {
+    return {
+      primarySlot: primary === "BigDipper" ? "topLeft" : "topRight",
+      secondarySlot: secondary === "BigDipper" ? "topLeft" : "topRight",
+    };
+  }
+
+  // 4. 母女天罚: 仙后与仙女
+  if (isMatch("Andromeda", "Cassiopeia")) {
+    return {
+      primarySlot: primary === "Andromeda" ? "topRight" : "topLeft",
+      secondarySlot: secondary === "Andromeda" ? "topRight" : "topLeft",
     };
   }
 

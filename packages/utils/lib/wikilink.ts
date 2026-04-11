@@ -174,16 +174,20 @@ export function normalizeSlug(raw?: string): string {
  * isSameWikiPage - Standard identity check for Wiki navigation.
  */
 export function isSameWikiPage(target: string, currentSlug: string): boolean {
-  if (!target) return true;
+  if (!target) {
+    return true;
+  }
   
   const linkInfo = parseWikiLink(target);
-  if (!linkInfo.path) return true;
+  if (!linkInfo.path) {
+    return true;
+  }
   
   const targetSlug = slugifyPath(linkInfo.path);
   const currentNormalized = normalizeSlug(currentSlug);
   
   return targetSlug === currentNormalized || 
-         currentNormalized.endsWith("-" + targetSlug);
+         currentNormalized.endsWith(`-${targetSlug}`);
 }
 
 /**

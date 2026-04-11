@@ -77,7 +77,15 @@ pub fn render_publishable_markdown(content: &str, links: &[LinkInstance]) -> Str
 pub fn resolve_placeholders_in_html(html: &str, links: &[LinkInstance]) -> String {
     let mut final_html = html.to_string();
 
+    // 🛡️ [Architecture] Deduplication to prevent attribute doubling
+    // We group by target to ensure we only run the regex replacement ONCE for each unique target string.
+    use std::collections::HashMap;
+    let mut unique_links = HashMap::new();
     for link in links {
+        unique_links.entry(&link.target).or_insert(link);
+    }
+
+    for link in unique_links.values() {
         let target_escaped = regex::escape(&link.target);
 
         // Case 1: Attachment URL available (Cloud Storage)
@@ -121,23 +129,34 @@ pub fn resolve_placeholders_in_html(html: &str, links: &[LinkInstance]) -> Strin
         // Case 2: Internal Document Link
         else if let Some(resolved) = &link.resolved {
             if let Some(slug) = &resolved.target_slug {
+                let doc_id = resolved.target_id.as_deref().unwrap_or("");
                 let area = resolved.target_area.as_deref().unwrap_or("OTHER");
                 let base_path = match area {
                     "WORK" => "/blog",
                     "LEARN" => "/docs",
                     _ => "/notes",
                 };
-                
-                let full_href = format!("{}/{}", base_path, slug);
-                
-                // We match any element with data-target and href="#"
-                let re_str = format!(r##"(?i)data-target="{}"([^>]*)href="#"##, target_escaped);
+
+                // We match any element with data-target and capture the intermediate attributes and current href
+                let re_str = format!(r##"(?i)data-target="{}"([^>]*)href="([^"]*)""##, target_escaped);
                 if let Ok(re) = Regex::new(&re_str) {
                     final_html = re.replace_all(&final_html, |caps: &regex::Captures| {
                         let attrs_between = &caps[1];
+                        let original_href = &caps[2];
+
+                        // Extract fragment from the original HTML attribute (already slugified by parser)
+                        let fragment = if let Some(idx) = original_href.find('#') {
+                            &original_href[idx..]
+                        } else {
+                            ""
+                        };
+
+                        let full_href = format!("{}/{}{}", base_path, slug, fragment);
+                        
+                        // Inject data-document-id and update href
                         format!(
-                            "data-target=\"{}\"{}href=\"{}\"", 
-                            &link.target, attrs_between, &full_href
+                            "data-target=\"{}\" data-document-id=\"{}\"{}href=\"{}\"",
+                            &link.target, doc_id, attrs_between, full_href
                         )
                     }).to_string();
                 }

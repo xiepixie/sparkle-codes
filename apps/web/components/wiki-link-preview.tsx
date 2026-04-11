@@ -1,22 +1,26 @@
-import DOMPurify from "dompurify";
-import { ArrowRight, FileText, Loader2 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import { cn } from "@repo/ui";
 import { Badge } from "@repo/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
-import { isSameWikiPage, normalizeSlug, parseWikiLink, slugifyHeader, slugifyPath } from "@repo/utils";
+import { isSameWikiPage, normalizeSlug, parseWikiLink, slugifyPath } from "@repo/utils";
+import DOMPurify from "dompurify";
+import { ArrowRight, FileText, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { getPostPreview } from "../app/actions/preview";
 import { MarkdownSnippet } from "./markdown-snippet";
 
+
 export interface PreviewData {
   title?: string;
+  slug?: string;
   description?: string;
   area?: string;
   status?: string;
   tags?: string[];
   htmlContent?: string;
+  isFragment?: boolean;
+  fragmentType?: 'heading' | 'block';
 }
 
 /**
@@ -25,37 +29,16 @@ export interface PreviewData {
  * Returns an HTML snippet of the heading + following content (up to the next heading of same/higher level).
  */
 function extractFragmentFromDOM(container: HTMLElement, fragment: string): string | null {
-  // 1. Prepare search targets based on Rust parser canonical patterns
-  // Headings in Rust are h-[slugified-text]
-  const headingId = `h-${slugifyHeader(fragment)}`;
-  
-  // Robust strategy: Try common variations of the fragment
-  const variants = [
-    fragment,                      // 1. Exact (e.g. ^block, heading-id)
-    CSS.escape(fragment),          // 2. Escaped (for ^)
-    fragment.startsWith('^') ? fragment.slice(1) : `^${fragment}`, // 3. Toggle caret
-    headingId,                     // 4. Heading prefix (e.g. h-preview-context)
-  ];
-
-  let targetEl: HTMLElement | null = null;
-  for (const v of variants) {
+  // 🛡️ [Architecture] Fragment is now a direct DOM ID pre-slugified by Rust backend
+  const decodedFragment = (() => {
     try {
-      targetEl = container.querySelector(`[id="${v}"]`);
-      if (targetEl) {
-        break;
-      }
-    } catch { /* ignore malformed selectors */ }
-  }
+      return decodeURIComponent(fragment.startsWith("#") ? fragment.slice(1) : fragment);
+    } catch {
+      return fragment.startsWith("#") ? fragment.slice(1) : fragment;
+    }
+  })();
 
-  // Backup Strategy: Broad search in anchors (Most reliable fallback)
-  if (!targetEl) {
-    const cleanId = fragment.startsWith('^') ? fragment.slice(1) : fragment;
-    targetEl = Array.from(container.querySelectorAll('.block-ref-anchor, h1, h2, h3, h4, h5, h6'))
-      .find(el => {
-        const id = el.id || '';
-        return id === fragment || id === `^${cleanId}` || id === cleanId || id === `h-${fragment}`;
-      }) as HTMLElement | null;
-  }
+  const targetEl = container.querySelector(`[id="${CSS.escape(decodedFragment)}"]`) as HTMLElement | null;
 
   if (!targetEl) {
     return null;
@@ -138,11 +121,13 @@ function extractFragmentFromDOM(container: HTMLElement, fragment: string): strin
 export function WikiLinkPreviewManager({ 
   containerRef, 
   currentSlug,
-  currentPostMeta
+  currentPostMeta,
+  onNavigate
 }: { 
   containerRef: React.RefObject<HTMLElement | null>;
   currentSlug?: string;
   currentPostMeta?: PreviewData;
+  onNavigate?: (targetUrl: string, href?: string) => void;
 }) {
   const [hoveredLink, setHoveredLink] = useState<{ element: HTMLElement; slug: string; href: string | null } | null>(null);
   const [previewData, setPreviewData] = useState<PreviewData | 'error' | null>(null);
@@ -201,23 +186,27 @@ export function WikiLinkPreviewManager({
       }
 
       timeoutRef.current = setTimeout(async () => {
-        // 1. 使用统一协议解析链接原文 (Layer 1: Resolution)
-        const linkInfo = parseWikiLink(slug || "");
+        const documentId = link.dataset.documentId;
+        const href = link.getAttribute('href') || slug;
+        
+        // 1. 使用协议层统一解析 (Layer 1: Resolution)
+        const linkInfo = parseWikiLink(href);
+        const fragment = linkInfo.fragment || "";
         
         // 2. 将解析后的路径转换为 Target Slug (Layer 2: Slugify)
-        // Normalize the path first to strip /blog/ prefix or origin if it's a full URL
         const normalizedPath = linkInfo.path ? normalizeSlug(linkInfo.path) : "";
         const targetDocId = slugifyPath(normalizedPath) || currentSlug || "";
         
-        // 3. 构造完整 ID (带 fragment 用于比对)
-        const finalTargetSlug = linkInfo.fragment 
-          ? `${targetDocId}#${linkInfo.fragment}`
-          : targetDocId;
+        // 3. 构造 Cache Key (优先使用 documentId 实现 O(1) 匹配)
+        // 格式: UUID[#fragment] 或 slug[#fragment]
+        const cacheKey = documentId 
+          ? `${documentId}${fragment ? `#${fragment}` : ""}`
+          : (fragment ? `${targetDocId}#${fragment}` : targetDocId);
 
         setHoveredLink({ 
           element: link as HTMLElement, 
-          slug: finalTargetSlug,
-          href: link.getAttribute('href')
+          slug: cacheKey,
+          href
         });
         setIsLoading(true);
         setPreviewData(null);
@@ -247,28 +236,32 @@ export function WikiLinkPreviewManager({
                 setPreviewData({ 
                   ...currentPostMeta,
                   title: currentPostMeta?.title || "Current Document",
+                  slug: currentSlug || currentPostMeta?.slug,
                   htmlContent: fragmentHtml 
                 });
                 setIsLoading(false);
                 return;
               }
             }
-            setPreviewData(currentPostMeta || { title: "Current Document", description: "You are already reading this document." });
+            setPreviewData({
+              ...(currentPostMeta || { title: "Current Document", description: "You are already reading this document." }),
+              slug: currentSlug || currentPostMeta?.slug
+            });
             setIsLoading(false);
             return;
           }
 
           // Cache check (Phase 2)
-          const cached = cacheRef.current.get(finalTargetSlug);
+          const cached = cacheRef.current.get(cacheKey);
           if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             setPreviewData(cached.data);
             setIsLoading(false);
             return;
           }
 
-          const data = await getPostPreview(finalTargetSlug);
+          const data = await getPostPreview(href, documentId);
           if (data) {
-             cacheRef.current.set(finalTargetSlug, { data, timestamp: Date.now() });
+             cacheRef.current.set(cacheKey, { data, timestamp: Date.now() });
           }
           setPreviewData(data || 'error');
         } catch (error) {
@@ -435,11 +428,45 @@ export function WikiLinkPreviewManager({
     }, 300);
   };
 
-  const handleNavigate = (path: string) => {
+  const handleNavigate = (targetUrl: string, href?: string) => {
      setHoveredLink(null);
      setIsLoading(false);
      setPreviewData(null);
-     router.push(path);
+     if (onNavigate) {
+       onNavigate(targetUrl, href);
+     } else if (href) {
+       router.push(href);
+     }
+  };
+
+  const resolveTargetUrl = (): string => {
+    // DO NOT trust hoveredLink.href's pathname blindly, as Rust cannot yet pre-resolve hierarchical slugs.
+    // Instead, ALWAYS prefer the database-validated canonical slug.
+    const target = hoveredLink?.slug || "";
+    const decodedTarget = decodeURIComponent(target);
+    const linkInfo = parseWikiLink(decodedTarget);
+    const hasValidPreview = previewData && typeof previewData !== 'string';
+    const canonicalSlug = hasValidPreview ? previewData.slug : null;
+
+    // The core resolution: Database Truth > Heuristic > Current Post
+    const mainSlug = canonicalSlug || slugifyPath(normalizeSlug(linkInfo.path)) || currentSlug;
+    
+    let fragment = linkInfo.fragment || "";
+    if (fragment) {
+      // NOTE: We only strip block prefixes to match the raw HTML structure rendered by Rust.
+      // We don't blindly format headings unless we strictly need to, to respect what Rust outputs in the DOM.
+      const isBlock = fragment.startsWith('^') || linkInfo.isBlock;
+      if (isBlock) {
+        const cleanFragment = fragment.startsWith('^') ? fragment.slice(1) : fragment;
+        fragment = `#${cleanFragment}`;
+      } else {
+        // Leave heading anchors largely alone depending on the Rust output's raw fragment
+        // If Rust generates "#2. 标题", we must maintain it for the document.getElementById to match.
+        fragment = `#${fragment}`;
+      }
+    }
+    
+    return `/blog/${encodeURIComponent(mainSlug || "")}${fragment}`;
   };
 
   if (!hoveredLink || !mounted) {
@@ -499,48 +526,37 @@ export function WikiLinkPreviewManager({
                 </div>
                 <button 
                   type="button"
-                  className="text-primary/40 hover:text-primary transition-[color,transform] cursor-pointer hover:scale-110 active:scale-95" 
+                  className="text-primary/40 hover:text-primary transition-[color,transform] cursor-pointer hover:scale-110 active:scale-95 group/open-btn"
+                  data-cursor="action"
+                  data-magnet="true"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    // Priority: If the link has an authoritative href, use it exactly
-                    if (hoveredLink.href && !hoveredLink.href.startsWith('#')) {
-                      handleNavigate(hoveredLink.href);
-                      return;
-                    }
-                    const linkInfo = parseWikiLink(decodeURIComponent(hoveredLink.slug));
-                    const targetSlug = slugifyPath(linkInfo.path) || currentSlug;
-                    const destination = `/blog/${encodeURIComponent(targetSlug || "")}${linkInfo.fragment ? `#${linkInfo.fragment}` : ""}`;
-                    handleNavigate(destination);
+                    handleNavigate(hoveredLink?.slug || "", resolveTargetUrl() || undefined);
                   }}
                   aria-label="Open document"
                 >
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-5 h-5 transition-transform group-hover/open-btn:translate-x-0.5" />
                 </button>
               </div>
 
               <CardTitle 
-                className="text-2xl font-black leading-tight text-foreground transition-colors hover:text-primary cursor-pointer mt-1 mb-2 group inline-block tracking-tight" 
-                onClick={(e) => { 
+                className="text-2xl font-black leading-tight text-foreground transition-colors hover:text-primary mt-1 mb-2 group inline-block tracking-tight cursor-pointer" 
+                data-cursor="navigate"
+                onClick={(e) => {
                    e.preventDefault();
                    e.stopPropagation();
-                   // Priority: Use authoritative href
-                   if (hoveredLink.href && !hoveredLink.href.startsWith('#')) {
-                     handleNavigate(hoveredLink.href);
-                     return;
-                   }
-                   const linkInfo = parseWikiLink(decodeURIComponent(hoveredLink.slug));
-                   const targetSlug = slugifyPath(linkInfo.path) || currentSlug;
-                   const destination = `/blog/${encodeURIComponent(targetSlug || "")}${linkInfo.fragment ? `#${linkInfo.fragment}` : ""}`;
-                   handleNavigate(destination);
+                   handleNavigate(hoveredLink?.slug || "", resolveTargetUrl() || undefined);
                 }}
               >
-                <MarkdownSnippet 
-                  content={previewData.title || ""} 
-                  hitKind="title"
-                  className="group-hover:text-primary transition-colors" 
-                />
-                <span className="block h-[2px] w-0 bg-primary/40 transition-[width] duration-300 group-hover:w-full mt-1.5 rounded-full" />
+                <div className="flex flex-col drop-shadow-sm">
+                  <MarkdownSnippet 
+                    content={previewData.title || ""} 
+                    hitKind="title"
+                    className="group-hover:text-primary transition-colors" 
+                  />
+                  <span className="block h-[2px] w-0 bg-primary/40 transition-[width] duration-300 group-hover:w-full mt-1.5 rounded-full" />
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0">
@@ -562,14 +578,13 @@ export function WikiLinkPreviewManager({
                       
                       // If it's a wiki link in the preview, handle it properly with unified protocol
                       if (isWikiLink) {
-                         const target = decodeURIComponent(link.dataset.target || link.getAttribute('href') || "");
-                         const linkInfo = parseWikiLink(target);
-                         const targetSlug = slugifyPath(linkInfo.path);
-                         targetHref = `/blog/${encodeURIComponent(targetSlug)}${linkInfo.fragment ? `#${linkInfo.fragment}` : ""}`;
+                         // We extract the pure fragment and dataset and let the canonical logic handle it
+                         targetHref = resolveTargetUrl(); // Re-use the card's strict resolution logic for embedded links
                       }
                       
                       if (targetHref) {
-                        handleNavigate(targetHref);
+                        const directSlug = decodeURIComponent(link.dataset.target || targetHref);
+                        handleNavigate(directSlug, targetHref);
                       }
                     }
                   }
@@ -595,7 +610,14 @@ export function WikiLinkPreviewManager({
               {previewData.tags && previewData.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-4 mt-2">
                   {previewData.tags.slice(0, 4).map((tag: string) => (
-                    <span key={tag} className="text-[10px] font-medium text-foreground/70 bg-secondary/50 border border-border/50 rounded px-2 py-0.5 transition-[color,border-color] hover:text-primary hover:border-primary/30">#{tag}</span>
+                    <span 
+                      key={tag} 
+                      className="text-[10px] font-medium text-foreground/70 bg-secondary/50 border border-border/50 rounded px-2 py-0.5 transition-[color,border-color] hover:text-primary hover:border-primary/30 cursor-pointer"
+                      data-cursor="tag"
+                      data-magnet="true"
+                    >
+                      #{tag}
+                    </span>
                   ))}
                   {previewData.tags.length > 4 && (
                     <span className="text-[10px] font-medium text-muted-foreground/60 bg-transparent px-2 py-0.5">+{previewData.tags.length - 4}</span>

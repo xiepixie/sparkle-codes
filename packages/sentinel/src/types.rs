@@ -74,6 +74,7 @@ pub struct FileContext {
 
 #[derive(Debug, Clone)]
 pub struct DocumentMetadata {
+    pub id: String,
     pub title: String,
     pub slug: String,
     pub area: VaultArea,
@@ -87,6 +88,16 @@ pub struct DocumentMetadata {
     pub aliases: Vec<String>,
     pub tags: Vec<String>,
     pub is_published: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct MetadataExcerpt {
+    pub id: String,
+    pub vault_path: String,
+    pub slug: String,
+    pub title: String,
+    pub aliases: Vec<String>,
+    pub area: VaultArea,
 }
 
 #[derive(Debug, Clone, Default)]

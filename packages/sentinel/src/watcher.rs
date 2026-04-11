@@ -47,6 +47,7 @@ pub async fn run(engine: Arc<SyncEngine>) {
         let mut paths_to_delete = std::collections::HashSet::new();
 
         for event in events {
+            tracing::debug!("🔍 [Watcher] Raw event: {:?} (Paths: {:?})", event.event.kind, event.event.paths);
             let is_remove = event.event.kind.is_remove();
             for path in event.event.paths {
                 if is_remove {
@@ -64,12 +65,14 @@ pub async fn run(engine: Arc<SyncEngine>) {
             if let Ok(rel) = path.strip_prefix(&vault_root) {
                 let vault_path = rel.to_string_lossy().to_string();
                 let engine = Arc::clone(&engine);
+                let permit = engine.semaphore.clone().acquire_owned().await.unwrap();
                 set.spawn(async move {
                     engine.delete_file(&vault_path).await;
+                    drop(permit);
                 });
             }
         }
-
+ 
         // Process vault syncs
         for path in vault_paths_to_sync {
             if path.extension().and_then(|s| s.to_str()) == Some("md") {
@@ -77,20 +80,24 @@ pub async fn run(engine: Arc<SyncEngine>) {
                     let vault_path = rel.to_string_lossy().to_string();
                     let engine = Arc::clone(&engine);
                     if path.exists() {
+                        let permit = engine.semaphore.clone().acquire_owned().await.unwrap();
                         set.spawn(async move {
                             engine.sync_file(&vault_path, &path).await;
+                            drop(permit);
                         });
                     }
                 }
             }
         }
-
+ 
         // Process attachment syncs
         for path in attachment_paths_to_sync {
             if path.exists() && crate::sync::is_attachment_target(path.to_str().unwrap_or("")) {
                 let engine = Arc::clone(&engine);
+                let permit = engine.semaphore.clone().acquire_owned().await.unwrap();
                 set.spawn(async move {
                     engine.sync_attachment(&path).await;
+                    drop(permit);
                 });
             }
         }

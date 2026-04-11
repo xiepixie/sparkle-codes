@@ -242,26 +242,65 @@ export async function getPostBySlugQuery(slug: string) {
 }
 
 /**
- * Retrieve a specific section or block from a post.
+ * Find a single post by its UUID.
+ * 🚀 High Performance: Direct primary key lookup.
+ */
+export async function getPostByIdQuery(id: string) {
+  if (!id) {
+    return null;
+  }
+  const results = await db
+    .select({
+      id: documents.id,
+      slug: documents.slug,
+      title: documents.title,
+      description: documents.description,
+      banner: documents.banner,
+      content: documents.content,
+      metadata: documents.metadata,
+      createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
+      publishedAt: documents.publishedAt,
+      isPublished: documents.isPublished,
+      area: documents.area,
+      html: documents.html,
+    })
+    .from(documents)
+    .where(eq(documents.id, id))
+    .limit(1);
+
+  return results[0] || null;
+}
+
+/**
+ * Retrieve a specific section or block from a post for previews.
+ * 🛡️ [Architecture] Handles both slugified heading IDs (h-) and block anchors (^).
  */
 export async function getPostFragmentPreviewQuery(documentId: string, fragment: string) {
-  if (fragment.startsWith('^')) {
+  // 1. Identify and normalize block references (stripping/adding ^ as needed)
+  const isBlock = fragment.startsWith('^') ||  // Source contains ^
+                  (!fragment.startsWith('h-') && fragment.length === 8); // Heuristic for block IDs in href
+  
+  if (isBlock) {
+    const cleanBlockId = fragment.startsWith('^') ? fragment : `^${fragment}`;
     const block = await db.query.documentBlocks.findFirst({
       where: (blocks, { eq, and }) => and(
         eq(blocks.documentId, documentId),
-        eq(blocks.blockId, fragment)
+        eq(blocks.blockId, cleanBlockId)
       )
     });
     return block ? { html: block.html, type: "block" } : null;
   }
 
-  // Obsidian often doesn't store exact ID matching for heading in link, but we'll try exact match first
+  // 2. Identify Heading references (h- prefix or literal fallback)
   const section = await db.query.documentSections.findFirst({
     where: (sections, { eq, and, or, ilike }) => and(
       eq(sections.documentId, documentId),
       or(
         eq(sections.headingId, fragment),
-        ilike(sections.headingText, fragment)
+        ilike(sections.headingText, fragment),
+        // Fallback for cases where headingId might have been stored without the h- prefix (legacy)
+        eq(sections.headingId, fragment.replace(/^h-/, ''))
       )
     )
   });

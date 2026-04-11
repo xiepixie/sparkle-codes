@@ -49,7 +49,7 @@ pub async fn upsert_document(
         RETURNING id
         "#
     )
-    .bind(cuid2::create_id())
+    .bind(&meta.id)
     .bind(&meta.title)
     .bind(&meta.slug)
     .bind(&ctx.vault_path)
@@ -90,4 +90,17 @@ pub async fn list_all_vault_paths(pool: &Pool<Postgres>) -> Result<Vec<String>, 
         .await?;
     
     Ok(rows.into_iter().map(|r| r.get("vaultPath")).collect())
+}
+
+pub async fn get_ids_by_vault_paths(pool: &Pool<Postgres>, paths: &[String]) -> Result<std::collections::HashMap<String, String>, sqlx::Error> {
+    if paths.is_empty() { return Ok(std::collections::HashMap::new()); }
+    
+    let rows = sqlx::query(
+        r#"SELECT id, "vaultPath" FROM documents WHERE "vaultPath" = ANY($1)"#
+    )
+    .bind(paths)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| (r.get("vaultPath"), r.get("id"))).collect())
 }

@@ -1,100 +1,136 @@
 use sqlx::{Pool, Postgres, Row};
-use crate::types::{ResolvedLink, LinkInstance};
+use crate::types::LinkInstance;
 
 
 /// Batch resolves multiple link targets in a single DB query.
 pub async fn resolve_targets_batch(
     pool: &Pool<Postgres>,
-    targets: &[String]
-) -> std::collections::HashMap<String, Option<ResolvedLink>> {
+    targets: &[String],
+    local_index: Option<&std::collections::HashMap<String, crate::types::MetadataExcerpt>>
+) -> std::collections::HashMap<String, Option<crate::types::ResolvedLink>> {
     let mut result_map = std::collections::HashMap::new();
     if targets.is_empty() { return result_map; }
     
-    // Normalize targets for search (slugify-style)
-    let normalized_targets: Vec<String> = targets.iter().map(|t| t.trim_start_matches('/').to_lowercase()).collect();
-    let filenames: Vec<String> = normalized_targets.iter().map(|t| {
+    // Clean targets (trim only, preserve case)
+    let cleaned_targets: Vec<String> = targets.iter().map(|t| t.trim().trim_start_matches('/').to_string()).collect();
+    
+    // Exact filenames used for title/alias and basename lookups
+    let filenames: Vec<String> = cleaned_targets.iter().map(|t| {
         if let Some(idx) = t.rfind('/') { &t[idx+1..] } else { t }
     }).map(|s| s.to_string()).collect();
 
+    // Prepare search patterns for physical file matching (Priority 1)
+    let mut vault_path_patterns = Vec::new();
+    for f in &filenames {
+        if f.contains('.') {
+            vault_path_patterns.push(format!("%{}", f));
+        } else {
+            vault_path_patterns.push(format!("%{}.md", f));
+            vault_path_patterns.push(format!("%{}.mdx", f));
+        }
+    }
+
     // Query for all matching documents at once.
-    // We check for slug matches, title matches, or alias matches.
     let rows = sqlx::query(
-        r#"SELECT id, slug, title, area::text, aliases FROM documents 
-           WHERE "slug" = ANY($1) 
-           OR "title" = ANY($2)
-           OR "aliases" ??| $2"#
+        r#"SELECT id, slug, title, area::text, aliases, "vaultPath" FROM documents d
+            WHERE 
+                d.title = ANY($1)
+                OR d.slug = ANY($1)
+                OR d.aliases @> ANY(SELECT jsonb_build_array(x) FROM unnest($1) t(x))
+                OR EXISTS (
+                    SELECT 1 FROM unnest($1) t 
+                    WHERE d."vaultPath" ILIKE '%' || t || '.md'
+                    OR d."vaultPath" ILIKE '%' || t || '.mdx'
+                )"#
     )
-    .bind(&normalized_targets)
     .bind(&filenames)
     .fetch_all(pool)
     .await;
 
     if let Ok(rows) = rows {
-        // Build a list of all candidate documents
         let candidates: Vec<_> = rows.into_iter().map(|row| {
             let id: String = row.get("id");
             let slug: String = row.get("slug");
             let area: String = row.get("area");
             let title: String = row.get("title");
+            let vault_path: String = row.get("vaultPath");
             let aliases: serde_json::Value = row.get("aliases");
             let alias_list: Vec<String> = aliases.as_array()
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
                 .unwrap_or_default();
             
-            (id, slug, area, title, alias_list)
+            (id, slug, area, title, alias_list, vault_path)
         }).collect();
+        
+        tracing::info!("✅ [LinkResolver] Found {} candidate DB rows for targets: {:?}", candidates.len(), targets);
 
         for (idx, target) in targets.iter().enumerate() {
-            let norm = &normalized_targets[idx];
+            let _cleaned = &cleaned_targets[idx];
             let fname = &filenames[idx];
             
-            let mut best_match: Option<(i32, ResolvedLink)> = None;
+            let mut best_match: Option<(i32, crate::types::ResolvedLink)> = None;
 
-            for (id, slug, area, title, aliases) in &candidates {
-                let slug_lower = slug.to_lowercase();
-                let title_lower = title.to_lowercase();
-                
-                // Priority 1: Exact slug match
-                if norm == &slug_lower {
-                    best_match = Some((1, ResolvedLink {
-                        target_id: Some(id.clone()),
-                        target_slug: Some(slug.clone()),
-                        target_area: Some(area.clone()),
-                    }));
-                    break; // Highest priority found
+            for (id, slug, area, _title, _aliases, vault_path) in &candidates {
+                let mut vault_basename = vault_path.split('/').last().unwrap_or("");
+                if let Some(stripped) = vault_basename.strip_suffix(".md") {
+                    vault_basename = stripped;
+                } else if let Some(stripped) = vault_basename.strip_suffix(".mdx") {
+                    vault_basename = stripped;
                 }
                 
-                // Priority 2: Title match
-                if fname == &title_lower {
-                    if best_match.as_ref().map_or(true, |(p, _)| *p > 2) {
-                        best_match = Some((2, ResolvedLink {
-                            target_id: Some(id.clone()),
-                            target_slug: Some(slug.clone()),
-                            target_area: Some(area.clone()),
-                        }));
-                    }
+                // --- Priority 1: Filename Match (Case Sensitive) ---
+                if vault_basename == *fname {
+                    best_match = Some((1, crate::types::ResolvedLink { target_id: Some(id.clone()), target_slug: Some(slug.clone()), target_area: Some(area.clone()) }));
+                    break; 
                 }
                 
-                // Priority 3: Alias match
-                if aliases.iter().any(|a| a.to_lowercase() == *fname) {
-                    if best_match.as_ref().map_or(true, |(p, _)| *p > 3) {
-                        best_match = Some((3, ResolvedLink {
-                            target_id: Some(id.clone()),
-                            target_slug: Some(slug.clone()),
-                            target_area: Some(area.clone()),
-                        }));
+                // Note: Priority 2-4 (Title/Alias/Slug) are handled by the coarse DB query, 
+                // but for simplicity we rely on DB being the source of truth if a row exists.
+                if best_match.is_none() {
+                     best_match = Some((4, crate::types::ResolvedLink { target_id: Some(id.clone()), target_slug: Some(slug.clone()), target_area: Some(area.clone()) }));
+                }
+            }
+
+            // --- FINAL FALLBACK: Memory Map (Metadata Index) ---
+            if best_match.is_none() {
+                if let Some(idx_map) = local_index {
+                    // Try to find the excerpt by VaultPath match or Filename/Title/Alias
+                    for excerpt in idx_map.values() {
+                        let mut vault_basename = excerpt.vault_path.split('/').last().unwrap_or("");
+                        if let Some(stripped) = vault_basename.strip_suffix(".md") {
+                            vault_basename = stripped;
+                        }
+
+                        // 🔍 Sophisticated Memory Resolution (Case Insensitive)
+                        if vault_basename.to_lowercase() == fname.to_lowercase() || 
+                           excerpt.title.to_lowercase() == fname.to_lowercase() || 
+                           excerpt.aliases.iter().any(|a| a.to_lowercase() == fname.to_lowercase()) {
+                             best_match = Some((5, crate::types::ResolvedLink { 
+                                 target_id: Some(excerpt.id.clone()), 
+                                 target_slug: Some(excerpt.slug.clone()), 
+                                 target_area: Some(excerpt.area.as_db_str().to_string()) 
+                             }));
+                             tracing::info!("🔭 [LinkResolver] Resolved via MEMORY: '{}' -> {}", target, excerpt.slug);
+                             break;
+                        }
                     }
                 }
             }
 
-            
             if let Some((_, resolved)) = best_match {
                 result_map.insert(target.clone(), Some(resolved));
+            } else {
+                result_map.insert(target.clone(), None);
+                tracing::warn!("⚠️ [LinkResolver] No match found for target '{}'", target);
             }
+        }
+    } else if let Err(e) = rows {
+        tracing::error!("❌ [LinkResolver] Database query failed for targets {:?}: {}", targets, e);
+        for target in targets {
+            result_map.insert(target.clone(), None);
         }
     }
 
-    
     // Ensure all requested targets have an entry (defaulting to None)
     for target in targets {
         result_map.entry(target.clone()).or_insert(None);

@@ -10,12 +10,14 @@ import {
 	Workflow,
 } from "lucide-react";
 import Link from "next/link";
+
+import { TiltWrapper } from "@repo/ui";
+import { getAppUrl } from "@repo/utils";
+
 import { BlogWarmup } from "@/components/Blog/BlogWarmup";
 import { Copyright } from "@/components/Layout/Copyright";
 import { GithubActivity } from "@/components/SiteWidgets";
 import { warm } from "@/lib/blog";
-import { TiltWrapper } from "@repo/ui";
-import { getAppUrl } from "@repo/utils";
 
 const focusAreas = [
   {

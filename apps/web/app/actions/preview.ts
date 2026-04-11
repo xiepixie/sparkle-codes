@@ -1,28 +1,35 @@
 "use server";
 
-import { getCachedPreviewPost, getCachedFragmentPreview } from "../../lib/preview-cache";
-import { parseWikiLink, slugifyPath } from "@repo/utils";
+import { normalizeSlug, parseWikiLink, slugifyPath } from "@repo/utils";
+import { getCachedFragmentPreview, getCachedPreviewPost, getCachedPreviewPostById } from "../../lib/preview-cache";
 
-export async function getPostPreview(slug: string) {
+export async function getPostPreview(slug: string, id?: string) {
   try {
-    // 1. 使用协议层统一解析 (Layer 1: Resolution)
-    // 注意：这里的 slug 可能是原始引用，也可能是已经处理过的 slug
+    // Extract fragment info from the original slug/href
     const linkInfo = parseWikiLink(slug);
-    const mainPath = linkInfo.path;
     const fragment = linkInfo.fragment || "";
-    
-    // 2. 转换规范路径为 Web Slug (Layer 2: Slugify)
-    const normalizedSlug = slugifyPath(mainPath);
 
-    // 3. 尝试匹配文档
-    // 优先尝试完整的 normalizedSlug（对应文件夹+文件名的层级 Slug）
-    // 其次尝试纯文件名 Slug（Obsidian 习惯的短链匹配）
-    let post = await getCachedPreviewPost(normalizedSlug);
+    // Initialize post variable
+    let post = null;
+
+    // 1. Prioritize direct ID lookup if provided (from data-document-id)
+    if (id) {
+      post = await getCachedPreviewPostById(id);
+    }
     
-    if (!post && linkInfo.basename) {
-      const fileNameSlug = slugifyPath(linkInfo.basename);
-      if (fileNameSlug !== normalizedSlug) {
-        post = await getCachedPreviewPost(fileNameSlug);
+    // 2. Fallback to slug-based resolution if ID lookup fails or is missing
+    if (!post) {
+      const mainPath = linkInfo.path;
+      // Use normalizeSlug to handle /blog/ /docs/ etc. prefixes correctly
+      const normalizedSlug = normalizeSlug(mainPath);
+
+      post = await getCachedPreviewPost(normalizedSlug);
+      
+      if (!post && linkInfo.basename) {
+        const fileNameSlug = slugifyPath(linkInfo.basename);
+        if (fileNameSlug !== normalizedSlug) {
+          post = await getCachedPreviewPost(fileNameSlug);
+        }
       }
     }
     
@@ -34,11 +41,14 @@ export async function getPostPreview(slug: string) {
     let htmlContent = "";
     let isFragment = false;
 
+    let fragmentType: 'heading' | 'block' | undefined;
+
     if (fragment) {
       const fragmentData = await getCachedFragmentPreview(post.id, fragment);
       if (fragmentData) {
         htmlContent = fragmentData.html;
         isFragment = true;
+        fragmentType = fragmentData.type as 'heading' | 'block';
         
         // Use section title as a subheading or update description for context
         if (fragmentData.type === "heading" && fragmentData.title) {
@@ -50,8 +60,7 @@ export async function getPostPreview(slug: string) {
     }
     
     if (!description && post.content && !isFragment) {
-      // Smart cleanup for preview snippet:
-      // Strip frontmatter, headers, links, and compact white space
+      // ... (existing cleanup logic)
       description = post.content
         .replace(/^---[\s\S]*?---/, '') // Strip frontmatter
         .replace(/#+\s+/g, '')          // Strip header symbols
@@ -69,12 +78,14 @@ export async function getPostPreview(slug: string) {
     
     return {
       title: post.title,
+      slug: post.slug,
       description: description || "No context available.",
       area: post.area,
       status: post.isPublished ? 'published' : 'draft',
       tags: Array.isArray(post.metadata?.tags) ? post.metadata.tags : [],
       htmlContent: htmlContent || undefined,
-      isFragment
+      isFragment,
+      fragmentType
     };
   } catch (error) {
     console.error("Failed to fetch post preview:", error);

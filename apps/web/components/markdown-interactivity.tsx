@@ -4,7 +4,6 @@ import {
 	isSameWikiPage,
 	normalizeSlug,
 	parseWikiLink,
-	slugifyPath,
 } from "@repo/utils";
 import { MarkdownRenderer } from "@v2/markdown-parser";
 import Image from "next/image";
@@ -91,13 +90,15 @@ function resolveClientWikiNavigation(
 	const linkInfo = parseWikiLink(effectiveDestination);
 	const fragment = linkInfo.fragment || "";
 
+	// Standard slug-based check
+	const isSamePage = isSameWikiPage(targetUrl, normalizeSlug(currentSlug || ""));
+	
+	const decodedFragment = fragment ? (fragment.startsWith("#") ? fragment.slice(1) : fragment) : "";
+	
 	return {
-		isSamePage: isSameWikiPage(targetUrl, normalizeSlug(currentSlug || "")),
-		fragment,
-		destinationHref:
-			href && !href.startsWith("#")
-				? href
-				: `/blog/${encodeURIComponent(slugifyPath(linkInfo.path))}${fragment ? `#${fragment}` : ""}`,
+		isSamePage,
+		fragment: decodedFragment,
+		destinationHref: href,
 	};
 }
 
@@ -106,25 +107,25 @@ function scrollToFragment(fragment: string) {
 		return;
 	}
 
-	const cleanedFragment = fragment.startsWith("#")
-		? fragment.slice(1)
-		: fragment;
-	const targetElement =
-		document.getElementById(cleanedFragment) ||
-		document.getElementById(
-			cleanedFragment.startsWith("^") ? cleanedFragment : `^${cleanedFragment}`,
-		) ||
-		document.querySelector(
-			`[data-block-id="${CSS.escape(cleanedFragment)}"]`,
-		) ||
-		document.querySelector(`[id$="${CSS.escape(cleanedFragment)}"]`);
+	// 🛡️ [Architecture] Fragment in href is now a direct DOM ID pre-slugified by Rust backend
+	const decoded = (() => {
+		const target = fragment.startsWith("#") ? fragment.slice(1) : fragment;
+		try {
+			return decodeURIComponent(target);
+		} catch {
+			return target;
+		}
+	})();
+
+	const targetElement = document.getElementById(decoded);
 
 	if (!targetElement) {
+		console.warn(`[Scroll] Target not found for fragment: "${decoded}"`);
 		return;
 	}
 
 	targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
-	window.history.pushState(null, "", `#${cleanedFragment}`);
+	window.history.pushState(null, "", `#${encodeURIComponent(decoded)}`);
 }
 
 /**
@@ -153,7 +154,7 @@ export function MarkdownInteractivity({
 			const navigation = resolveClientWikiNavigation(
 				targetUrl,
 				href,
-				currentSlug,
+				currentSlug
 			);
 
 			if (navigation.isSamePage) {
@@ -262,6 +263,7 @@ export function MarkdownInteractivity({
 				containerRef={containerRef}
 				currentSlug={currentSlug}
 				currentPostMeta={currentPostMeta}
+				onNavigate={handleWikiLinkClick}
 			/>
 		</>
 	);

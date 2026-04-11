@@ -112,12 +112,11 @@ pub fn process_inline_entities(html: &str) -> InlineProcessResult {
                                     out.push_str("\" ");
                                 }
                             } else {
+                                let link_type = if parts.fragment.is_empty() { "article" } else if parts.fragment.starts_with('^') { "block" } else { "heading" };
                                 out.push_str("data-target=\"");
                                 out.push_str(&escaped_full);
-                                out.push_str("\" data-page=\"");
-                                out.push_str(&escaped_page);
-                                out.push_str("\" data-fragment=\"");
-                                out.push_str(&escaped_frag);
+                                out.push_str("\" data-link-type=\"");
+                                out.push_str(link_type);
                                 out.push_str("\" ");
                             }
                             out.push_str(">");
@@ -126,14 +125,13 @@ pub fn process_inline_entities(html: &str) -> InlineProcessResult {
                             has_wiki_links = true;
                             let final_href = build_wikilink_href(parts.page, parts.fragment);
 
+                            let link_type = if parts.fragment.is_empty() { "article" } else if parts.fragment.starts_with('^') { "block" } else { "heading" };
                             out.push_str("<a class=\"");
                             out.push_str(CLASS_INTERNAL_LINK);
                             out.push_str("\" data-target=\"");
                             out.push_str(&escaped_full);
-                            out.push_str("\" data-page=\"");
-                            out.push_str(&escaped_page);
-                            out.push_str("\" data-fragment=\"");
-                            out.push_str(&escaped_frag);
+                            out.push_str("\" data-link-type=\"");
+                            out.push_str(link_type);
                             out.push_str("\" href=\"");
                             out.push_str(&escape_html_attr(&final_href));
                             out.push_str("\">");

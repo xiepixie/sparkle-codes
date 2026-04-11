@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 use sqlx::{Pool, Postgres};
 use tokio::fs;
+use tokio::io::AsyncReadExt;
 use sha2::Digest;
 use chrono::{DateTime, Utc, NaiveDate, NaiveDateTime};
 use tracing::{info, error, debug, warn};
@@ -14,6 +15,7 @@ use tokio::task::JoinSet;
 use reqwest::Client as HttpClient;
 use url::Url;
 use std::sync::atomic::{AtomicBool, Ordering};
+use unicode_normalization::UnicodeNormalization;
 
 use crate::config::SyncConfig;
 use crate::types::{FileContext, SyncAction, DocumentMetadata, LinkInstance, SectionMetadata, BlockMetadata, VaultArea};
@@ -27,6 +29,9 @@ pub struct SyncEngine {
     pub r2_client: Arc<crate::utils::r2::R2Client>,
     pub http_client: HttpClient,
     pub work_area_updated: AtomicBool,
+    /// Maps vault path to pre-scanned metadata (slug, title, aliases).
+    /// Used for resolving links accurately during sync.
+    pub metadata_index: Arc<tokio::sync::RwLock<std::collections::HashMap<String, crate::types::MetadataExcerpt>>>,
 }
 
 impl SyncEngine {
@@ -50,6 +55,7 @@ impl SyncEngine {
                 .build()
                 .unwrap_or_else(|_| HttpClient::new()),
             work_area_updated: AtomicBool::new(false),
+            metadata_index: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
         }
     }
 
@@ -57,65 +63,67 @@ impl SyncEngine {
     pub async fn initial_sync(self: Arc<Self>) {
         info!("🚀 [Lifecycle] Starting full vault synchronization...");
 
-        let vault_root = &self.config.vault_root;
+        let vault_root = self.config.vault_root.clone();
         if !vault_root.exists() {
             warn!("⚠️ Vault root does not exist: {}", vault_root.display());
             return;
         }
 
-        let mut count = 0;
-        let mut set = JoinSet::new();
-        let mut found_paths = HashSet::new();
-
-        for entry in WalkDir::new(vault_root).into_iter().filter_map(|e| e.ok()) {
+        // --- Pass 1: Crawl file paths ---
+        let mut file_contexts = Vec::new();
+        for entry in WalkDir::new(&vault_root).into_iter().filter_map(|e| e.ok()) {
             let p = entry.path();
-            if p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("md") {
-                if let Ok(rel) = p.strip_prefix(vault_root) {
+            let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
+            if p.is_file() && (ext == "md" || ext == "mdx") {
+                if let Ok(rel) = p.strip_prefix(&vault_root) {
                     let vault_path = rel.to_string_lossy().to_string();
-                    if found_paths.insert(vault_path.clone()) {
-                        let engine = Arc::clone(&self);
-                        let abs_path = p.to_path_buf();
-
-                        set.spawn(async move {
-                            engine.sync_file(&vault_path, &abs_path).await;
+                    let area = path::detect_area(&vault_path);
+                    if self.config.should_ingest_to_db(&area) {
+                        file_contexts.push(FileContext {
+                            vault_path,
+                            full_path: p.to_path_buf(),
+                            content_hash: String::new(),
+                            last_modified: DateTime::<Utc>::from(p.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH)),
                         });
-                        count += 1;
                     }
                 }
             }
         }
-        info!("✅ Queued {} files from vault", count);
-        
-        // --- Attachment Sync ---
-        let attachment_root = &self.config.attachment_root;
-        if attachment_root.exists() {
-            info!("📷 [Lifecycle] Starting attachment synchronization: {}", attachment_root.display());
-            let mut asset_count = 0;
-            for entry in WalkDir::new(attachment_root).into_iter().filter_map(|e| e.ok()) {
-                let p = entry.path();
-                if p.is_file() && is_attachment_target(p.to_str().unwrap_or("")) {
-                    let engine = Arc::clone(&self);
-                    let abs_path = p.to_path_buf();
-                    set.spawn(async move {
-                        engine.sync_attachment(&abs_path).await;
-                    });
-                    asset_count += 1;
-                }
-            }
-            info!("✅ Queued {} attachments from extras", asset_count);
-        } else {
-            warn!("⚠️ Attachment root not found: {}", attachment_root.display());
+
+        // --- Pass 2: High-Speed Metadata Pre-scan (T1 Indexing) ---
+        let meta_index = self.pre_scan_metadata(&file_contexts).await;
+        {
+            let mut global_index = self.metadata_index.write().await;
+            *global_index = meta_index;
         }
 
-        info!("⏳ Waiting for all tasks to finish...");
+        // --- Pass 3: Parallel Full Sync (T2 Enrichment) ---
+        let mut count = 0;
+        let mut set = JoinSet::new();
+        let mut found_paths = HashSet::new();
+        
+        for ctx in file_contexts {
+            if found_paths.insert(ctx.vault_path.clone()) {
+                let engine = Arc::clone(&self);
+                set.spawn(async move {
+                    let _permit = engine.semaphore.acquire().await.ok();
+                    if let Err(e) = engine.execute_pipeline(&ctx.vault_path, &ctx.full_path).await {
+                        error!("❌ Sync failed for {}: {}", ctx.vault_path, e);
+                    }
+                });
+                count += 1;
+            }
+        }
+
         while let Some(res) = set.join_next().await {
             if let Err(e) = res {
-                warn!("⚠️ Task panicked during sync: {}", e);
+                error!("❌ JoinSet error: {}", e);
             }
         }
 
-        // --- Cleanup Orphans ---
-        info!("🔍 Checking for orphaned records in database...");
+        info!("✅ [Lifecycle] Full sync processing finished: {} files.", count);
+
+        // --- Pass 4: Orphan Cleanup ---
         match documents::list_all_vault_paths(&self.pool).await {
             Ok(db_paths) => {
                 let mut deleted_count = 0;
@@ -127,14 +135,102 @@ impl SyncEngine {
                     }
                 }
                 if deleted_count > 0 {
-                    info!("✅ Cleaned up {} orphaned records.", deleted_count);
+                    info!("✅ [Cleanup] Removed {} orphaned records.", deleted_count);
                 }
             }
-            Err(e) => warn!("⚠️ Failed to fetch vault paths for cleanup: {}", e),
+            Err(e) => warn!("⚠️ [Cleanup] Failed to fetch vault paths: {}", e),
         }
 
-        info!("✨ Initial sync completed successfully.");
+        info!("✨ [Lifecycle] Initial sync completed successfully.");
         self.trigger_revalidation().await;
+    }
+
+    async fn pre_scan_metadata(&self, files: &[FileContext]) -> std::collections::HashMap<String, crate::types::MetadataExcerpt> {
+        let mut index = std::collections::HashMap::new();
+        let mut set = JoinSet::new();
+        
+        info!("🔭 [Index] Starting metadata pre-scan for {} files...", files.len());
+
+        // 1. Batch fetch existing IDs to minimize DB roundtrips
+        let all_paths: Vec<String> = files.iter().map(|f| f.vault_path.clone()).collect();
+        let existing_ids = documents::get_ids_by_vault_paths(&self.pool, &all_paths)
+            .await
+            .unwrap_or_default();
+
+        for file in files {
+            let vault_path = file.vault_path.clone();
+            let abs_path = file.full_path.clone();
+            let area = path::detect_area(&vault_path);
+            let semaphore = Arc::clone(&self.semaphore);
+            
+            // Determine ID: use existing from DB or pre-allocate a new one
+            let id = existing_ids.get(&vault_path)
+                .cloned()
+                .unwrap_or_else(|| cuid());
+
+            set.spawn(async move {
+                let _permit = semaphore.acquire().await.ok();
+                
+                // Read 2KB chunk for frontmatter analysis
+                match fs::File::open(&abs_path).await {
+                    Ok(mut f) => {
+                        let mut buffer = vec![0u8; 2048];
+                        let bytes_read = f.read(&mut buffer).await.unwrap_or(0);
+                        let content = String::from_utf8_lossy(&buffer[..bytes_read]);
+                        
+                        let fm = frontmatter::parse_frontmatter(&content);
+                        let slug = fm.fields.get("slug")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| path::slugify_publish_path(&vault_path));
+                            
+                        let title = fm.fields.get("title")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| vault_path.split('/').last().unwrap_or(&vault_path).replace(".md", ""));
+                            
+                        let aliases = fm.fields.get("aliases")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                            .unwrap_or_default();
+
+                        Some((vault_path, crate::types::MetadataExcerpt {
+                            id,
+                            vault_path: abs_path.to_string_lossy().to_string(),
+                            slug,
+                            title,
+                            aliases,
+                            area,
+                        }))
+                    }
+                    Err(_) => None
+                }
+            });
+        }
+
+        while let Some(res) = set.join_next().await {
+            if let Ok(Some((vault_path, excerpt))) = res {
+                // 🛡️ [Three-Tier Memory Indexing]
+                // 1. Full Vault Path (Canonical)
+                index.insert(vault_path.to_lowercase(), excerpt.clone());
+                
+                // 2. Basename (Obsidian Native)
+                let name = vault_path.split('/').last().unwrap_or(&vault_path).replace(".md", "").replace(".mdx", "");
+                index.insert(name.nfc().collect::<String>().to_lowercase(), excerpt.clone());
+                
+                // 3. Slug (Logical)
+                index.insert(excerpt.slug.to_lowercase(), excerpt.clone());
+                
+                // 4. Title (Display)
+                index.insert(excerpt.title.to_lowercase(), excerpt.clone());
+                
+                // 5. Aliases
+                for alias in &excerpt.aliases {
+                    index.insert(alias.to_lowercase(), excerpt.clone());
+                }
+            }
+        }
+        index
     }
 
     /// Entry point for syncing a single file.
@@ -197,8 +293,17 @@ impl SyncEngine {
         }
 
         info!("🔄 Syncing: {} [Area: {:?}]", vault_path, area);
+        
+        // --- 1. Identify Identity ---
+        // Fetch ID from the pre-scan index. If missing (unlikely if pre-scan ran), fallback to a fresh CUID.
+        let id = {
+            let index = self.metadata_index.read().await;
+            index.get(&vault_path.to_lowercase())
+                .map(|e| e.id.clone())
+                .unwrap_or_else(|| cuid())
+        };
 
-        // 1. Read and Context
+        // 2. Read and Context
         let (content, ctx) = match self.read_context(vault_path, abs_path).await {
             Ok(res) => res,
             Err(e) => {
@@ -207,8 +312,8 @@ impl SyncEngine {
             }
         };
 
-        // 2. Extract Metadata
-        let (clean_body, mut meta) = match self.extract_metadata(&ctx, &content) {
+        // 3. Extract Metadata
+        let (clean_body, mut meta) = match self.extract_metadata(id, &ctx, &content) {
             Ok(res) => res,
             Err(e) => {
                 warn!("❌ Failed to parse metadata for {}: {}", vault_path, e);
@@ -327,7 +432,7 @@ impl SyncEngine {
         Ok((content, ctx))
     }
 
-    fn extract_metadata(&self, ctx: &FileContext, content: &str) -> anyhow::Result<(String, DocumentMetadata)> {
+    fn extract_metadata(&self, id: String, ctx: &FileContext, content: &str) -> anyhow::Result<(String, DocumentMetadata)> {
         let fm = frontmatter::parse_frontmatter(content);
         
         // Diagnostic: list discovered keys
@@ -367,6 +472,7 @@ impl SyncEngine {
             .unwrap_or(ctx.last_modified);
 
         let mut meta = DocumentMetadata {
+            id,
             title: fm.fields.get("title")
                 .and_then(|v| v.as_str())
                 .unwrap_or_else(|| ctx.vault_path.split('/').last().unwrap_or("Untitled").trim_end_matches(".md"))
@@ -456,34 +562,35 @@ impl SyncEngine {
         meta.tags.sort(); // Ensure stable order
 
         // 1. Resolve Links (Batch lookup)
-        let unique_targets: Vec<String> = result.links.iter()
-            .map(|l| l.raw_target.clone())
+        let unique_pages: Vec<String> = result.links.iter()
+            .map(|l| l.page.clone())
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect();
 
-        let resolved_map = links::resolve_targets_batch(&self.pool, &unique_targets).await;
+        let meta_index = self.metadata_index.read().await;
+        let resolved_map = links::resolve_targets_batch(&self.pool, &unique_pages, Some(&meta_index)).await;
 
         let mut resolved_instances = Vec::with_capacity(result.links.len());
         for (idx, link) in result.links.into_iter().enumerate() {
             let kind = if link.is_embed { "EMBED" } else { "WIKI" };
-            let target = link.raw_target.clone();
-            let resolved = resolved_map.get(&target).cloned().flatten();
+            let target = link.raw_target.clone(); // Keep raw_target for HTML replacement matching
+            let resolved = resolved_map.get(&link.page).cloned().flatten();
 
             let mut attachment_url = None;
 
             // Attachment resolution logic
-            if kind == "EMBED" && is_attachment_target(&target) {
-                if let Some(path) = self.find_attachment(&target) {
+            if kind == "EMBED" && is_attachment_target(&link.page) {
+                if let Some(path) = self.find_attachment(&link.page) {
                     match self.r2_client.upload_attachment(&path).await {
                         Ok(url) => {
-                            info!("☁️ Uploaded attachment: {} -> {}", target, url);
+                            info!("☁️ Uploaded attachment: {} -> {}", link.page, url);
                             attachment_url = Some(url);
                         }
-                        Err(e) => warn!("⚠️ Failed to upload attachment {}: {}", target, e),
+                        Err(e) => warn!("⚠️ Failed to upload attachment {}: {}", link.page, e),
                     }
                 } else {
-                    debug!("🔍 Attachment not found: {}", target);
+                    debug!("🔍 Attachment not found: {}", link.page);
                 }
             }
 

@@ -52,3 +52,4 @@ markdown-parser = { path = "../markdown-parser" }
 # HTTP client for webhooks
 reqwest = { version = "0.12", features = ["json"] }
 url = "2"
+unicode-normalization = "0.1.25"

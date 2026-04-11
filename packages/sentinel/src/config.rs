@@ -63,7 +63,7 @@ impl SyncConfig {
         let pool_size = env::var("SENTINEL_POOL_SIZE")
             .ok()
             .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(10);
+            .unwrap_or(20);
 
         let ingest_inbox_to_db = env::var("SENTINEL_INGEST_INBOX_TO_DB")
             .ok()

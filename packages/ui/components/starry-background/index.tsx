@@ -1,7 +1,7 @@
 "use client";
 
-import { useTheme } from "next-themes";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useTheme } from "next-themes";
 import {
   CONSTELLATIONS,
   LAYOUT_SLOTS,

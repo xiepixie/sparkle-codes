@@ -39,16 +39,36 @@ pub fn build_wikilink_href(page: &str, fragment: &str) -> String {
     let base = if slug.is_empty() {
         String::new()
     } else {
-        format!("/blog/{}", slug)
+        match path_to_area(page) {
+            "WORK" => format!("/blog/{}", slug),
+            "LEARN" => format!("/docs/{}", slug),
+            _ => format!("/blog/{}", slug),
+        }
     };
-
-    let fragment = fragment.strip_prefix('^').unwrap_or(fragment);
 
     if fragment.is_empty() {
         base
-    } else if base.is_empty() {
-        format!("#{}", fragment)
+    } else if fragment.starts_with('^') {
+        // Block anchor: Obsidian uses ^id, but DOM ID is just the id
+        let block_id = &fragment[1..];
+        if base.is_empty() {
+            format!("#{}", block_id)
+        } else {
+            format!("{}#{}", base, block_id)
+        }
     } else {
-        format!("{}#{}", base, fragment)
+        // Heading: slug-ify to match inject_heading_ids output (h-slug)
+        let heading_id = format!("h-{}", slugify_publish_path(fragment));
+        if base.is_empty() {
+            format!("#{}", heading_id)
+        } else {
+            format!("{}#{}", base, heading_id)
+        }
     }
+}
+
+fn path_to_area(path: &str) -> &'static str {
+    if path.starts_with("Work/") || path.starts_with("work/") { "WORK" }
+    else if path.starts_with("Learn/") || path.starts_with("learn/") { "LEARN" }
+    else { "OTHER" }
 }

@@ -8,9 +8,10 @@ fn test_wikilinks_and_embeds() {
     assert!(res.has_wiki_embeds);
     assert!(res.html.contains("wiki-link"));
     assert!(res.html.contains("wiki-embed"));
-    assert!(res.html.contains("data-page=\"Page\""));
+    assert!(res.html.contains("data-link-type=\"article\""));
     assert!(res.html.contains("Label"));
-    assert!(res.html.contains("data-fragment=\"^id\""));
+    assert!(res.html.contains("data-link-type=\"block\""));
+    assert!(res.html.contains("href=\"/blog/page#id\""));
     assert!(res.html.contains("data-embed-kind=\"note\""));
     assert!(res.html.contains("data-embed-kind=\"image\""));
 }
@@ -74,4 +75,13 @@ fn test_chinese_hashtags() {
     assert!(res.html.contains("premium-tag"));
     assert!(res.html.contains("#数学"));
     assert!(res.html.contains("#markdown/obsidian"));
+}
+
+#[test]
+fn test_wikilink_heading_slugification() {
+    let input = "[[#2. 三级 标题]]";
+    let res = parse_content_native(input).unwrap();
+    // Should generate href=\"#h-2-三级-标题\"
+    assert!(res.html.contains("href=\"#h-2-三级-标题\""));
+    assert!(res.html.contains("data-link-type=\"heading\""));
 }

@@ -38,7 +38,8 @@ export function HighlightedText({ html, className }: HighlightedTextProps) {
 					const [, tagName, attributes, content] = tagMatch;
 
 					// Helper to extract class or other attributes if needed
-					const props: any = { key: index };
+					const props: any = {};
+					const elementKey = index;
 
 					if (attributes.includes('class="')) {
 						props.className = attributes.match(/class="([^"]*)"/)?.[1];
@@ -67,23 +68,23 @@ export function HighlightedText({ html, className }: HighlightedTextProps) {
 
 					switch (tagName) {
 						case "mark":
-							return <mark {...props}>{children}</mark>;
+							return <mark key={elementKey} {...props}>{children}</mark>;
 						case "strong":
-							return <strong {...props}>{children}</strong>;
+							return <strong key={elementKey} {...props}>{children}</strong>;
 						case "em":
-							return <em {...props}>{children}</em>;
+							return <em key={elementKey} {...props}>{children}</em>;
 						case "del":
-							return <del {...props}>{children}</del>;
+							return <del key={elementKey} {...props}>{children}</del>;
 						case "a":
-							return <a {...props}>{children}</a>;
+							return <a key={elementKey} {...props}>{children}</a>;
 						case "h3":
-							return <h3 {...props}>{children}</h3>;
+							return <h3 key={elementKey} {...props}>{children}</h3>;
 						case "code":
-							return <code {...props}>{children}</code>;
+							return <code key={elementKey} {...props}>{children}</code>;
 						case "span":
-							return <span {...props}>{children}</span>;
+							return <span key={elementKey} {...props}>{children}</span>;
 						default:
-							return segment;
+							return <span key={elementKey}>{segment}</span>;
 					}
 				}
 			}

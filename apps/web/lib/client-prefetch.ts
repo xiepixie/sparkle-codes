@@ -93,6 +93,9 @@ export async function prefetchBlogFeed(params: {
  * Access the underlying cache for hydration in components.
  */
 export function getPrefetchedFeed(key: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
   const cached = feedCache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.result;

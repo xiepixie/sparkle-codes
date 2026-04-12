@@ -105,7 +105,7 @@ export default function TiltExperimentPage() {
             DUAL_MATERIAL_V2
           </div>
         </div>
-        <div>STAR-ENGINE // FINAL_OPTICS_REVIEW // 2026</div>
+        <div>{ "STAR-ENGINE // FINAL_OPTICS_REVIEW // 2026" }</div>
       </footer>
     </div>
   );

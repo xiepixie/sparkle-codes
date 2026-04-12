@@ -1,15 +1,15 @@
-use sqlx::{Pool, Postgres};
+use sqlx::QueryBuilder;
 use crate::types::{SectionMetadata, BlockMetadata};
 
 pub async fn upsert_sections(
-    pool: &Pool<Postgres>,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     doc_id: &str,
     sections: &[SectionMetadata],
 ) -> Result<(), sqlx::Error> {
     // Clear old sections (FK will cascade to blocks)
     sqlx::query(r#"DELETE FROM document_sections WHERE "documentId" = $1"#)
         .bind(doc_id)
-        .execute(pool)
+        .execute(&mut **tx)
         .await?;
 
     if sections.is_empty() { return Ok(()); }
@@ -30,12 +30,12 @@ pub async fn upsert_sections(
          .push_bind(sec.is_first);
     });
 
-    builder.build().execute(pool).await?;
+    builder.build().execute(&mut **tx).await?;
     Ok(())
 }
 
 pub async fn upsert_blocks(
-    pool: &Pool<Postgres>,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     doc_id: &str,
     blocks: &[BlockMetadata],
 ) -> Result<(), sqlx::Error> {
@@ -55,6 +55,6 @@ pub async fn upsert_blocks(
          .push_bind(&block.text_content);
     });
 
-    builder.build().execute(pool).await?;
+    builder.build().execute(&mut **tx).await?;
     Ok(())
 }

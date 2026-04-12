@@ -1,19 +1,22 @@
-import { streamText } from 'ai';
-import { google } from '@ai-sdk/google'; // Assuming google is used based on your profile
+import { askQuestion } from "@repo/ai";
 
-
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  try {
+    const { messages } = await req.json();
+    console.log("📨 [API] POST /api/chat received request");
 
-  // In a real scenario, we would use prompt engineering and RAG context retrieval here.
-  // We're stubbing this with a basic stream response for demonstration.
-  
-  const result = streamText({
-    model: google('gemini-1.5-flash'), // or your preferred model
-    messages,
-    system: "You are the sparkle-codes AI assistant. You help users navigate the technical blog and provide engineering insights. Keep responses concise and insightful.",
-  });
+    // askQuestion now returns a Response object directly
+    return await askQuestion(messages);
 
-  return result.toTextStreamResponse();
+  } catch (error: any) {
+    console.error("❌ [API] Critical Chat API Crash:", error);
+    return new Response(JSON.stringify({ 
+      error: error.message || "Critical internal server error"
+    }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }

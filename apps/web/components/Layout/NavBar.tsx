@@ -44,7 +44,7 @@ export function NavBar() {
   return (
     <nav aria-label="Primary" className="fixed left-0 right-0 top-0 z-[100] flex items-center justify-between p-3 sm:p-4 md:p-6 pointer-events-none">
       <div className="pointer-events-auto">
-        <Link href="/" className="flex items-center gap-2 font-bold text-base sm:text-lg group/logo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg">
+        <Link href="/" className="no-dash flex items-center gap-2 font-bold text-base sm:text-lg group/logo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-lg">
           <Logo withLabel={false} className="transition-[transform,filter] duration-300 group-hover/logo:scale-110 group-hover/logo:rotate-[15deg] group-hover/logo:brightness-125" />
           <span className="hidden sm:inline-block bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/60 group-hover/logo:from-primary group-hover/logo:to-foreground transition-[color,background-image] duration-500">Sparkle</span>
         </Link>
@@ -67,7 +67,7 @@ export function NavBar() {
                   {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                   {...(!isExternal && isActive ? { "aria-current": "page" as const } : {})}
                   className={cn(
-                    "rounded-md py-1 text-sm font-medium transition-[color,background-color,transform] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    "no-dash rounded-md py-1 text-sm font-medium transition-[color,background-color,transform] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                     isActive ? "text-primary" : "text-muted-foreground"
                   )}
                 >
@@ -113,7 +113,7 @@ export function NavBar() {
                           style={{ transitionDelay: `${idx * 40}ms` }}
                           {...(!isExternal && pathname === item.href ? { "aria-current": "page" as const } : {})}
                           className={cn(
-                            "rounded-md text-lg font-medium transition-[color,transform] hover:translate-x-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                            "no-dash rounded-md text-lg font-medium transition-[color,transform] hover:translate-x-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                             pathname === item.href ? "text-primary translate-x-2" : "text-muted-foreground"
                           )}
                         >
@@ -161,7 +161,7 @@ export function NavBar() {
                     }}
                     {...(!isExternal && pathname === item.href ? { "aria-current": "page" as const } : {})}
                     className={cn(
-                      "rounded-2xl px-2 py-2 text-lg font-semibold transition-[color,background-color,transform] hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:text-xl",
+                      "no-dash rounded-2xl px-2 py-2 text-lg font-semibold transition-[color,background-color,transform] hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:text-xl",
                       pathname === item.href ? "text-primary" : "text-muted-foreground"
                     )}
                   >

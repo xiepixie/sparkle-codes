@@ -142,6 +142,18 @@ pub struct BlockMetadata {
     pub index: i32,
 }
 
+#[derive(Debug, Clone)]
+pub struct ChunkMetadata {
+    pub id: String,
+    pub index: i32,
+    pub heading_path: Option<String>,
+    pub heading_id: Option<String>,
+    pub chunk_text: String,
+    pub embedding: Vec<f32>,
+    pub token_count: i32,
+    pub has_code: bool,
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SyncAction {
     Skip,

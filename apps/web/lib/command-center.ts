@@ -1,6 +1,6 @@
 import type { ReadingHistoryEntry } from "./reading-history";
 
-export type CommandCenterMode = "search" | "jump";
+export type CommandCenterMode = "search" | "jump" | "ask";
 
 export interface CommandCenterSection {
   id: string;

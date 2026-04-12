@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn, Dialog, DialogContent, DialogDescription, DialogTitle } from "@repo/ui";
 
 export function CommandSurface({
@@ -23,8 +23,8 @@ export function CommandSurface({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "command-menu-container overflow-hidden border border-border/40 bg-glass p-0 shadow-2xl ring-1 ring-white/10 backdrop-blur-2xl transition-[background-color,border-color,transform,opacity,box-shadow] duration-300 dark:border-border/20 dark:ring-white/5",
-          "before:absolute before:-inset-[100px] before:-z-10 before:bg-[radial-gradient(circle_at_center,var(--primary)_0%,transparent_70%)] before:opacity-10 dark:before:opacity-5",
+          "command-menu-container overflow-hidden border border-border/40 bg-glass/80 p-0 shadow-2xl ring-1 ring-white/10 backdrop-blur-3xl transition-[background-color,border-color,transform,opacity,box-shadow] duration-500 dark:border-border/20 dark:ring-white/5",
+          "before:absolute before:-inset-[100px] before:-z-10 before:bg-[radial-gradient(circle_at_center,var(--primary)_0%,transparent_70%)] before:opacity-15 dark:before:opacity-10",
           className,
         )}
       >
@@ -43,7 +43,7 @@ export function CommandSurfaceHeader({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={cn("relative flex items-center gap-4 px-6 py-5 border-b border-border/20 dark:border-transparent", className)}>{children}</div>;
+  return <div className={cn("relative flex items-center gap-4 px-6 py-4.5 border-b border-border/10 dark:border-white/5", className)}>{children}</div>;
 }
 
 export function CommandSurfaceBody({
@@ -53,7 +53,7 @@ export function CommandSurfaceBody({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={cn("max-h-[420px] overflow-y-auto px-6 py-4", className)}>{children}</div>;
+  return <div className={cn("relative", className)}>{children}</div>;
 }
 
 export function CommandSurfaceFooter({
@@ -66,7 +66,7 @@ export function CommandSurfaceFooter({
   return (
     <div
       className={cn(
-        "flex items-center justify-between border-t border-border/30 bg-muted/40 px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors dark:border-border/10 dark:bg-nebula/40",
+        "flex h-14 items-center justify-between border-t border-border/10 bg-muted/20 px-6 py-2 transition-colors dark:border-white/5 dark:bg-black/10",
         className,
       )}
     >

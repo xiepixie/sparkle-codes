@@ -56,6 +56,21 @@ pub struct SyncConfig {
 
     /// Secret token for Next.js cache revalidation.
     pub revalidate_secret: Option<String>,
+
+    /// [AI] Local Ollama Base URL
+    pub local_ai_base_url: String,
+
+    /// [AI] Embedding Model Name
+    pub embedding_model: String,
+
+    /// [AI] Reranker Model Name
+    pub reranker_model: String,
+
+    /// [AI] Embedding Strategy (local | http)
+    pub embedding_strategy: String,
+
+    /// [AI] MLX Model Snapshot Path (for local strategy)
+    pub mlx_model_path: String,
 }
 
 impl SyncConfig {
@@ -113,6 +128,16 @@ impl SyncConfig {
             ingest_other_to_db,
             revalidate_url,
             revalidate_secret,
+            local_ai_base_url: env::var("LOCAL_AI_BASE_URL")
+                .unwrap_or_else(|_| "http://localhost:11964".to_string()),
+            embedding_model: env::var("EMBEDDING_MODEL")
+                .unwrap_or_else(|_| "Qwen3-Embedding-4B".to_string()),
+            reranker_model: env::var("RERANKER_MODEL")
+                .unwrap_or_else(|_| "Qwen3-Reranker-4B".to_string()),
+            embedding_strategy: env::var("EMBEDDING_STRATEGY")
+                .unwrap_or_else(|_| "http".to_string()),
+            mlx_model_path: env::var("MLX_MODEL_PATH")
+                .unwrap_or_default(),
         }
     }
 

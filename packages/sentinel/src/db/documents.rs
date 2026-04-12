@@ -18,14 +18,13 @@ pub async fn get_document_sync_info(pool: &Pool<Postgres>, vault_path: &str) -> 
 }
 
 pub async fn upsert_document(
-    pool: &Pool<Postgres>,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ctx: &FileContext,
     meta: &DocumentMetadata,
     clean_body: &str,
     html_content: &str,
 ) -> Result<String, sqlx::Error> {
     let now = Utc::now();
-    let mut tx = pool.begin().await?;
 
     // 🛡️ [Move Conflict Resolution]
     // If we are inserting a "new" vault path, but its slug already exists in the same area:
@@ -37,7 +36,7 @@ pub async fn upsert_document(
     .bind(&meta.slug)
     .bind(meta.area.as_db_str())
     .bind(&ctx.vault_path)
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
 
     let row = sqlx::query(
@@ -82,10 +81,8 @@ pub async fn upsert_document(
     .bind(meta.date)
     .bind(now)
     .bind(meta.is_published)
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await?;
-
-    tx.commit().await?;
 
     Ok(row.get("id"))
 }

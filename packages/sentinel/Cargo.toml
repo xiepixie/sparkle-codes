@@ -10,12 +10,13 @@ path = "src/main.rs"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "fs", "time", "sync", "net", "process"] }
+clap = { version = "4", features = ["derive"] }
 regex = "1"
 
 # File system watcher
-notify = "6.1"
-notify-debouncer-full = "0.3"
+notify = "8"
+notify-debouncer-full = "0.7"
 walkdir = "2.4"
 
 # Database
@@ -34,7 +35,6 @@ once_cell = "1.19"
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
 
 # AWS / R2
 aws-config = { version = "1.5", features = ["behavior-version-latest"] }
@@ -45,15 +45,16 @@ aws-credential-types = "1.2"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 dotenvy = "0.15"
-sysinfo = "0.30"
+sysinfo = "0.33"
 markdown-parser = { path = "../markdown-parser" }
 
-# HTTP client for webhooks and embedding API
-reqwest = { version = "0.12", features = ["json"] }
+# HTTP client for webhooks (Optimized)
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "json"] }
 url = "2"
 unicode-normalization = "0.1.25"
 
-# RAG: Chunking and Tokenization
-text-splitter = { version = "0.13", features = ["markdown"] }
-tiktoken-rs = "0.5"
+# RAG & Chunking
+text-splitter = { version = "0.20", features = ["markdown", "tiktoken-rs"] }
+tiktoken-rs = "0.6"

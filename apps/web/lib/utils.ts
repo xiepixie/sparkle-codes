@@ -18,9 +18,9 @@ export function slugify(text: string): string {
  * Extract text content from React children for slugification
  */
 export function extractText(children: ReactNode): string {
-  if (typeof children === "string") return children;
-  if (typeof children === "number") return children.toString();
-  if (Array.isArray(children)) return children.map(extractText).join("");
+  if (typeof children === "string") { return children; }
+  if (typeof children === "number") { return children.toString(); }
+  if (Array.isArray(children)) { return children.map(extractText).join(""); }
   
   if (React.isValidElement(children)) {
     const element = children as ReactElement<{ children?: ReactNode }>;

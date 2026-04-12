@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "packages/sentinel",
+    "packages/markdown-parser",
+]
+resolver = "2"
+
+[profile.release]
+lto = true
+opt-level = "s"
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0

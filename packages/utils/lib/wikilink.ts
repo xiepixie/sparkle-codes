@@ -120,8 +120,8 @@ export function slugifyPath(input: string): string {
     }
 
     // 镜像 Rust: c.is_alphanumeric()
-    // 注意：JS 的正则 [\w] 不包含中文字符，我们需要包含中文字符。
-    if (/[a-zA-Z0-9\u4e00-\u9fa5]/.test(ch)) {
+    // 💡 [Symmetry Rule] Using Unicode property escapes (\p{L}, \p{N}) to match Rust's is_alphanumeric()
+    if (/[\p{L}\p{N}]/u.test(ch)) {
       out += ch.toLowerCase();
       lastWasDash = false;
     } else if (ch === "-") {

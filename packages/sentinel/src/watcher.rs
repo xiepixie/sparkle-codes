@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use notify::{Watcher, RecursiveMode};
-use notify_debouncer_full::{new_debouncer, DebouncedEvent};
+use notify::{RecursiveMode, EventKind};
+use notify_debouncer_full::new_debouncer;
 use tracing::info;
 use crate::sync::SyncEngine;
 
@@ -16,7 +16,7 @@ pub async fn run(engine: Arc<SyncEngine>) {
     let mut debouncer = new_debouncer(
         std::time::Duration::from_millis(500),
         None,
-        move |result: Result<Vec<DebouncedEvent>, _>| {
+        move |result| {
             if let Ok(events) = result {
                 for event in events {
                     let _ = tx.blocking_send(event);
@@ -25,9 +25,9 @@ pub async fn run(engine: Arc<SyncEngine>) {
         }
     ).unwrap();
 
-    debouncer.watcher().watch(&vault_root, RecursiveMode::Recursive).unwrap();
+    debouncer.watch(&vault_root, RecursiveMode::Recursive).unwrap();
     if attachment_root.exists() {
-        debouncer.watcher().watch(&attachment_root, RecursiveMode::Recursive).unwrap();
+        debouncer.watch(&attachment_root, RecursiveMode::Recursive).unwrap();
         info!("Watching vault and attachments: {} | {}", vault_root.display(), attachment_root.display());
     } else {
         info!("Watching vault: {}", vault_root.display());
@@ -40,6 +40,8 @@ pub async fn run(engine: Arc<SyncEngine>) {
         while let Ok(next) = rx.try_recv() {
             events.push(next);
         }
+        
+        info!("🔔 Received {} file system events. Processing batch...", events.len());
 
         let mut set = tokio::task::JoinSet::new();
         let mut vault_paths_to_sync = std::collections::HashSet::new();
@@ -48,7 +50,7 @@ pub async fn run(engine: Arc<SyncEngine>) {
 
         for event in events {
             tracing::debug!("🔍 [Watcher] Raw event: {:?} (Paths: {:?})", event.event.kind, event.event.paths);
-            let is_remove = event.event.kind.is_remove();
+            let is_remove = matches!(event.event.kind, EventKind::Remove(_));
             for path in event.event.paths {
                 if is_remove {
                     paths_to_delete.insert(path);
@@ -111,5 +113,6 @@ pub async fn run(engine: Arc<SyncEngine>) {
 
         // 🚀 Batch Revalidation: Trigger once after the entire event wave is processed
         engine.trigger_revalidation().await;
+        info!("✅ Batch processing finished.");
     }
 }

@@ -218,11 +218,17 @@ body.custom-cursor-active[data-cursor-strategy="suppress"] * {
 body.custom-cursor-active a, 
 body.custom-cursor-active button,
 body.custom-cursor-active [role="button"],
-body.custom-cursor-active .interactive-card,
+body.custom-cursor-active .interactive-card {
+    cursor: none !important;
+}
+
+/* 4. Restore Native Cursor for Inputs & Editors 
+   Why: Critical for seeing the I-Beam insertion point and supporting native selection.
+*/
 body.custom-cursor-active textarea,
 body.custom-cursor-active input,
 body.custom-cursor-active [contenteditable] {
-    cursor: none !important;
+    cursor: text !important;
 }
 
 .cursor-ring.is-snapped.kind-action .cursor-brackets,
@@ -263,19 +269,19 @@ body.custom-cursor-active [contenteditable] {
 /* ============================================================
    EXTERNAL CONTENT INTERACTION (Link Dashed Effect)
    ============================================================ */
-.custom-cursor-active a:hover,
-.custom-cursor-active .premium-link:hover {
+.custom-cursor-active a:not(.no-dash):hover,
+.custom-cursor-active .premium-link:not(.no-dash):hover {
     text-decoration: none !important;
 }
 
-.custom-cursor-active a:not(sup *),
-.custom-cursor-active .premium-link {
+.custom-cursor-active a:not(sup *, .no-dash),
+.custom-cursor-active .premium-link:not(.no-dash) {
     position: relative;
     transition: color 0.2s ease;
 }
 
-.custom-cursor-active a:not(sup *, .card-jump-overlay)::after,
-.custom-cursor-active .premium-link::after {
+.custom-cursor-active a:not(sup *, .card-jump-overlay, .no-dash)::after,
+.custom-cursor-active .premium-link:not(.no-dash)::after {
     content: "";
     position: absolute;
     bottom: -1px;
@@ -289,8 +295,8 @@ body.custom-cursor-active [contenteditable] {
     opacity: 0;
 }
 
-.custom-cursor-active a:not(sup *):hover::after,
-.custom-cursor-active .premium-link:hover::after {
+.custom-cursor-active a:not(sup *, .no-dash):hover::after,
+.custom-cursor-active .premium-link:not(.no-dash):hover::after {
     width: 100%;
     opacity: 0.8;
     animation: slide-dashed 1s linear infinite;

@@ -19,7 +19,7 @@ import {
 	useTransform,
 } from "framer-motion";
 import katex from "katex";
-import { FileText, Folder, Hash, Loader2, Menu, Search } from "lucide-react";
+import { FileText, Folder, Hash, Loader2, Menu, Search, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -598,6 +598,23 @@ export function ReadingHeader({
 		});
 	};
 
+	const openReadingAsk = () => {
+		openCommandCenter({
+			mode: "ask",
+			reading: {
+				title: displayTitle,
+				slug,
+				sections: segments.map((segment) => ({
+					id: segment.id,
+					title: segment.title,
+					renderedTitle: segment.renderedTitle,
+					level: segment.level,
+				})),
+				recentPosts,
+			},
+		});
+	};
+
 	return (
 		<>
 			<style>{JUMP_HIGHLIGHT_STYLE}</style>
@@ -619,7 +636,7 @@ export function ReadingHeader({
 							<Link
 								href="/"
 								className={cn(
-									"group/logo flex shrink-0 items-center gap-2 rounded-full px-2 py-1.5 transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+									"no-dash group/logo flex shrink-0 items-center gap-2 rounded-full px-2 py-1.5 transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
 									isLongDisplayTitle && "xl:hidden",
 								)}
 							>
@@ -727,6 +744,18 @@ export function ReadingHeader({
 						<div className="flex shrink-0 items-center gap-1 border-l border-border/20 pl-1 sm:gap-1.5 sm:pl-2">
 							<button
 								type="button"
+								onClick={openReadingAsk}
+								aria-label="Ask AI about this article"
+								className="group/ask flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform,opacity] hover:bg-primary/10 hover:text-primary active:scale-90 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:h-11 md:w-11"
+							>
+								<Sparkles
+									size={15}
+									className="transition-transform group-hover/ask:scale-110"
+								/>
+							</button>
+
+							<button
+								type="button"
 								onClick={openReadingSearch}
 								aria-label="Open reading search"
 								className="group/search flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform,opacity] hover:bg-primary/10 hover:text-primary active:scale-90 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:h-11 md:w-11"
@@ -803,7 +832,7 @@ export function ReadingHeader({
 														}
 													}}
 													className={cn(
-														"group relative flex items-center justify-between rounded-2xl px-4 py-3 text-lg font-semibold transition-[background-color,color,opacity,transform] sm:text-xl",
+														"no-dash group relative flex items-center justify-between rounded-2xl px-4 py-3 text-lg font-semibold transition-[background-color,color,opacity,transform] sm:text-xl",
 														isActive
 															? "bg-primary/10 text-primary"
 															: "text-muted-foreground hover:bg-primary/5 hover:text-primary",

@@ -5,9 +5,13 @@
   "main": "./index.ts",
   "types": "./index.ts",
   "dependencies": {
-    "ai": "^6.0.143",
+    "@ai-sdk/deepseek": "^2.0.29",
     "@ai-sdk/google": "^1.1.18",
-    "zod": "^3.23.0"
+    "@ai-sdk/openai": "^3.0.52",
+    "@repo/database": "workspace:*",
+    "ai": "^6.0.143",
+    "ollama-ai-provider": "latest",
+    "zod": "^3.23.8"
   },
   "scripts": {
     "clean": "rm -rf .turbo .cache dist"

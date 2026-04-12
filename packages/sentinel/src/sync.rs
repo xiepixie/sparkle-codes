@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::config::SyncConfig;
-use crate::types::{FileContext, SyncAction, DocumentMetadata, LinkInstance, SectionMetadata, BlockMetadata, VaultArea};
+use crate::types::{FileContext, SyncAction, DocumentMetadata, LinkInstance, SectionMetadata, BlockMetadata, VaultArea, ChunkMetadata};
 use crate::utils::{path, frontmatter, mdx};
 use crate::db::{documents, links, sections};
 
@@ -32,23 +32,26 @@ pub struct SyncEngine {
     /// Maps vault path to pre-scanned metadata (slug, title, aliases).
     /// Used for resolving links accurately during sync.
     pub metadata_index: Arc<tokio::sync::RwLock<std::collections::HashMap<String, crate::types::MetadataExcerpt>>>,
+    pub rag_chunker: Arc<crate::rag::chunker::Chunker>,
+    pub embed_client: Arc<crate::rag::embed::EmbedClient>,
+    pub rag_semaphore: Arc<Semaphore>,
 }
 
 impl SyncEngine {
     pub fn new(pool: Pool<Postgres>, config: SyncConfig) -> Self {
-        let pool_size = config.pool_size;
+        let config_arc = Arc::new(config);
         let r2_client = crate::utils::r2::R2Client::new(
-            &config.r2_account_id,
-            &config.r2_access_key_id,
-            &config.r2_secret_access_key,
-            &config.r2_bucket_name,
-            &config.r2_public_domain,
+            &config_arc.r2_account_id,
+            &config_arc.r2_access_key_id,
+            &config_arc.r2_secret_access_key,
+            &config_arc.r2_bucket_name,
+            &config_arc.r2_public_domain,
         );
 
         Self {
             pool,
-            config: Arc::new(config),
-            semaphore: Arc::new(Semaphore::new(pool_size as usize)),
+            config: config_arc.clone(),
+            semaphore: Arc::new(Semaphore::new(config_arc.pool_size as usize)),
             r2_client: Arc::new(r2_client),
             http_client: HttpClient::builder()
                 .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Sentinel/1.0")
@@ -56,6 +59,9 @@ impl SyncEngine {
                 .unwrap_or_else(|_| HttpClient::new()),
             work_area_updated: AtomicBool::new(false),
             metadata_index: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+            rag_chunker: Arc::new(crate::rag::chunker::Chunker::new()),
+            embed_client: Arc::new(crate::rag::embed::EmbedClient::new(&config_arc)),
+            rag_semaphore: Arc::new(Semaphore::new(4)), // Hardcoded 4-way concurrency for Ollama
         }
     }
 
@@ -89,15 +95,20 @@ impl SyncEngine {
                 }
             }
         }
+        
+        info!("📂 Discovered {} markdown files in vault.", file_contexts.len());
 
         // --- Pass 2: High-Speed Metadata Pre-scan (T1 Indexing) ---
         let meta_index = self.pre_scan_metadata(&file_contexts).await;
         {
             let mut global_index = self.metadata_index.write().await;
+            let index_count = meta_index.len();
             *global_index = meta_index;
+            info!("🧠 [Index] Metadata index built with {} keys.", index_count);
         }
 
         // --- Pass 3: Parallel Full Sync (T2 Enrichment) ---
+        let start_time = std::time::Instant::now();
         let mut count = 0;
         let mut set = JoinSet::new();
         let mut found_paths = HashSet::new();
@@ -115,13 +126,20 @@ impl SyncEngine {
             }
         }
 
+        let mut processed = 0;
         while let Some(res) = set.join_next().await {
+            processed += 1;
+            if processed % 20 == 0 || processed == count {
+                let percent = (processed as f32 / count as f32) * 100.0;
+                info!("⏳ Progress: {:>3.0}% | {}/{} files synced", percent, processed, count);
+            }
             if let Err(e) = res {
                 error!("❌ JoinSet error: {}", e);
             }
         }
 
-        info!("✅ [Lifecycle] Full sync processing finished: {} files.", count);
+        let elapsed = start_time.elapsed();
+        info!("✅ [Lifecycle] Full sync finished in {:?}: {} files synced.", elapsed, count);
 
         // --- Pass 4: Orphan Cleanup ---
         match documents::list_all_vault_paths(&self.pool).await {
@@ -294,7 +312,7 @@ impl SyncEngine {
             return Ok(());
         }
 
-        info!("🔄 Syncing: {} [Area: {:?}]", vault_path, area);
+        // info!("🔄 Syncing: {} [Area: {:?}]", vault_path, area);
         
         // --- 1. Identify Identity ---
         // Fetch ID from the pre-scan index. If missing (unlikely if pre-scan ran), fallback to a fresh CUID.
@@ -337,7 +355,7 @@ impl SyncEngine {
             return Ok(());
         }
 
-        info!("🔄 Syncing: {} [Action: {:?}]", vault_path, action);
+        debug!("🔄 Processing: {} [{:?}]", vault_path, action);
 
         // 4. Parse & Resolve (Heavy lifting)
         let (html, links, sections, blocks) = match self.parse_and_resolve_document(&ctx, &clean_body, &mut meta).await {
@@ -348,20 +366,33 @@ impl SyncEngine {
             }
         };
 
-        // 5. Database Persistence
-        info!("💾 Persisting: {} (Updated: {})", meta.slug, meta.updated_at);
-        if let Err(e) = self.persist_sync(&ctx, &meta, &clean_body, &html, &links, &sections, &blocks).await {
+        // 5. RAG Processing (WORK area only)
+        let mut chunks = Vec::new();
+        if area == VaultArea::Work {
+            debug!("🧠 Preparing RAG chunks for: {}", meta.slug);
+            match self.process_rag_embedding(&meta, &sections).await {
+                Ok(c) => chunks = c,
+                Err(e) => {
+                    error!("❌ RAG embedding failed for {}: {}. Tip: Ensure the model '{}' supports embeddings and Ollama version is up to date.", 
+                        vault_path, e, self.config.embedding_model);
+                }
+            }
+        }
+
+        // 6. Database Persistence (Transactional)
+        debug!("💾 Persisting: {} (Area: {})", meta.slug, meta.area.as_db_str());
+        if let Err(e) = self.persist_sync(&ctx, &meta, &clean_body, &html, &links, &sections, &blocks, &chunks).await {
             error!("❌ Database persistence failed for {}: {}", vault_path, e);
             return Ok(());
         }
 
-        // 6. Output Generation
+        // 7. Output Generation
         if self.config.should_emit_mdx(&area) {
             let mdx_source = crate::utils::transform::render_publishable_markdown(&clean_body, &links);
             if let Err(e) = self.publish_outputs(&ctx, &meta, &mdx_source).await {
                 warn!("❌ Failed to publish outputs for {}: {}", vault_path, e);
             } else {
-                info!("✅ Finished: {} -> {}/{}", vault_path, meta.area.as_db_str(), meta.slug);
+                debug!("✅ Published: {}", vault_path);
             }
         }
         
@@ -527,24 +558,24 @@ impl SyncEngine {
                 // (like a Resource note) would be flagged as "missing" by the plan,
                 // but then skipped by the output generator.
                 if !self.config.should_emit_mdx(&meta.area) || !meta.is_published {
-                    info!("⏩ [Plan] Skipped {} (Hash match: {})", slug, &db_hash[..8]);
+                    debug!("⏩ [Plan] Skipped {} (Hash match: {})", slug, &db_hash[..8]);
                     return Ok(SyncAction::Skip);
                 }
                 
                 let dest = path::get_dest_path_for_vault(&self.config, &ctx.vault_path, &meta.slug);
                 if dest.exists() {
-                    info!("⏩ [Plan] Skipped {} (MDX exists & Hash match)", slug);
+                    debug!("⏩ [Plan] Skipped {} (MDX exists & Hash match)", slug);
                     return Ok(SyncAction::Skip);
                 }
-                info!("🔄 [Plan] Regenerating {} (MDX file missing, but required for published content)", slug);
+                debug!("🔄 [Plan] Regenerating {} (MDX file missing, but required for published content)", slug);
             } else if db_hash == ctx.content_hash {
-                info!("🔄 [Plan] Re-syncing {} (Parser version mismatch: {} -> {})", slug, db_ver, meta.parser_version);
+                debug!("🔄 [Plan] Re-syncing {} (Parser version mismatch: {} -> {})", slug, db_ver, meta.parser_version);
             } else {
-                info!("🔄 [Plan] Update needed for {}: Hash {} -> {}", slug, &db_hash[..8], &ctx.content_hash[..8]);
+                debug!("🔄 [Plan] Update needed for {}: Hash {} -> {}", slug, &db_hash[..8], &ctx.content_hash[..8]);
             }
             Ok(SyncAction::Update)
         } else {
-            info!("🆕 [Plan] Create new document: {}", ctx.vault_path);
+            debug!("🆕 [Plan] Create new document: {}", ctx.vault_path);
             Ok(SyncAction::Create)
         }
     }
@@ -662,17 +693,26 @@ impl SyncEngine {
         link_instances: &[LinkInstance],
         sections: &[SectionMetadata],
         blocks: &[BlockMetadata],
+        chunks: &[ChunkMetadata],
     ) -> anyhow::Result<()> {
         // 🎯 [Optimization] Mark for revalidation if this is a blog post (WORK area)
         if meta.area == VaultArea::Work {
             self.work_area_updated.store(true, Ordering::SeqCst);
         }
 
-        let doc_id = documents::upsert_document(&self.pool, ctx, meta, body, html_content).await?;
+        let mut tx = self.pool.begin().await?;
 
-        links::persist_links(&self.pool, &doc_id, link_instances).await?;
-        sections::upsert_sections(&self.pool, &doc_id, sections).await?;
-        sections::upsert_blocks(&self.pool, &doc_id, blocks).await?;
+        let doc_id = documents::upsert_document(&mut tx, ctx, meta, body, html_content).await?;
+
+        links::persist_links(&mut tx, &doc_id, link_instances, &meta.slug).await?;
+        sections::upsert_sections(&mut tx, &doc_id, sections).await?;
+        sections::upsert_blocks(&mut tx, &doc_id, blocks).await?;
+        
+        // Always try to update chunks. 
+        // If 'chunks' is empty (e.g. non-WORK area), this clears old data.
+        crate::db::chunks::upsert_chunks(&mut tx, &doc_id, chunks).await?;
+
+        tx.commit().await?;
 
         Ok(())
     }
@@ -715,6 +755,65 @@ impl SyncEngine {
         }
 
         None
+    }
+
+    /// Process specialized RAG embedding: chunking and vectorization.
+    async fn process_rag_embedding(&self, meta: &DocumentMetadata, sections: &[SectionMetadata]) -> anyhow::Result<Vec<ChunkMetadata>> {
+        // 1. Generate structural chunks from sections
+        let mut all_chunks = Vec::new();
+        for section in sections {
+            let chunks = self.rag_chunker.chunk_section(&meta.title, section);
+            all_chunks.extend(chunks);
+        }
+
+        if all_chunks.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // 2. Parallel Embedding Phase
+        let client = Arc::clone(&self.embed_client);
+        let semaphore = Arc::clone(&self.rag_semaphore);
+        let mut set = JoinSet::new();
+        let batch_size = 16;
+        
+        debug!("🧠 [RAG] Vectorizing {} chunks for {}", all_chunks.len(), meta.slug);
+
+        for (batch_idx, batch) in all_chunks.chunks(batch_size).enumerate() {
+            let inputs: Vec<String> = batch.iter().map(|c| c.chunk_text.clone()).collect();
+            let sem = Arc::clone(&semaphore);
+            let c = Arc::clone(&client);
+            
+            set.spawn(async move {
+                let _permit = sem.acquire().await.ok();
+                c.embed_batch(inputs).await.map(|embeddings| (batch_idx, embeddings))
+            });
+        }
+
+        let mut results = Vec::new();
+        while let Some(res) = set.join_next().await {
+            match res {
+                Ok(Ok((idx, embeddings))) => results.push((idx, embeddings)),
+                Ok(Err(e)) => return Err(anyhow::anyhow!("Embedding batch failed: {}", e)),
+                Err(e) => return Err(anyhow::anyhow!("JoinSet error during embedding: {}", e)),
+            }
+        }
+
+        // Reassemble embeddings in original order
+        results.sort_by_key(|r| r.0);
+        let mut final_embeddings = Vec::new();
+        for (_, batch_embeddings) in results {
+            final_embeddings.extend(batch_embeddings);
+        }
+
+        if final_embeddings.len() != all_chunks.len() {
+            return Err(anyhow::anyhow!("Mismatch: chunks={} vs embeddings={}", all_chunks.len(), final_embeddings.len()));
+        }
+
+        for (i, embedding) in final_embeddings.into_iter().enumerate() {
+            all_chunks[i].embedding = embedding;
+        }
+
+        Ok(all_chunks)
     }
 }
 

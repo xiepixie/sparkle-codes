@@ -62,7 +62,7 @@ pub async fn resolve_targets_batch(
             (id, slug, area, title, alias_list, vault_path)
         }).collect();
         
-        tracing::info!("✅ [LinkResolver] Found {} candidate DB rows for targets: {:?}", candidates.len(), targets);
+        tracing::debug!("✅ [LinkResolver] Found {} candidate DB rows for targets: {:?}", candidates.len(), targets);
 
         for (idx, target) in targets.iter().enumerate() {
             let _cleaned = &cleaned_targets[idx];
@@ -110,7 +110,7 @@ pub async fn resolve_targets_batch(
                                  target_slug: Some(excerpt.slug.clone()), 
                                  target_area: Some(excerpt.area.as_db_str().to_string()) 
                              }));
-                             tracing::info!("🔭 [LinkResolver] Resolved via MEMORY: '{}' -> {}", target, excerpt.slug);
+                             tracing::debug!("🔭 [LinkResolver] Resolved via MEMORY: '{}' -> {}", target, excerpt.slug);
                              break;
                         }
                     }
@@ -121,7 +121,7 @@ pub async fn resolve_targets_batch(
                 result_map.insert(target.clone(), Some(resolved));
             } else {
                 result_map.insert(target.clone(), None);
-                tracing::warn!("⚠️ [LinkResolver] No match found for target '{}'", target);
+                tracing::debug!("⚠️ [LinkResolver] No match found for target '{}'", target);
             }
         }
     } else if let Err(e) = rows {
@@ -140,14 +140,15 @@ pub async fn resolve_targets_batch(
 }
 
 pub async fn persist_links(
-    pool: &Pool<Postgres>,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     doc_id: &str,
     links: &[LinkInstance],
+    doc_label: &str,
 ) -> Result<(), sqlx::Error> {
     // Clear old links for this document
     sqlx::query(r#"DELETE FROM document_links WHERE "fromId" = $1"#)
         .bind(doc_id)
-        .execute(pool)
+        .execute(&mut **tx)
         .await?;
 
     if links.is_empty() { return Ok(()); }
@@ -182,14 +183,75 @@ pub async fn persist_links(
          .push_bind(is_resolved)
          .push_bind(link.kind.to_lowercase());
         
-        // Complex expression for TargetType enum
-        // We use format! since target_type is a trusted internal enum string ("BLOCK" | "HEADING" | "ARTICLE")
         b.push(format!("'{}'::\"TargetType\"", target_type))
          .push_bind(idx as i32)
          .push_bind(link.anchor.as_ref())
          .push_bind(link.attachment_url.as_ref());
     });
 
-    builder.build().execute(pool).await?;
-    Ok(())
+    // Create a savepoint before attempting the potentially failing batch insert.
+    // This allows us to rollback the specific error state without aborting the entire document transaction.
+    sqlx::query("SAVEPOINT links_insert_sp").execute(&mut **tx).await?;
+
+    let result = builder.build().execute(&mut **tx).await;
+    
+    match result {
+        Ok(_) => {
+            // Release savepoint on success to free resources
+            sqlx::query("RELEASE SAVEPOINT links_insert_sp").execute(&mut **tx).await?;
+            Ok(())
+        },
+        Err(e) => {
+            // 🛡️ [Race Condition Resilience]
+            if let Some(db_err) = e.as_database_error() {
+                if db_err.code().map(|c| c == "23503").unwrap_or(false) {
+                    tracing::debug!("🛡️ Foreign key violation for links in document {}. Falling back to deferred resolution...", doc_label);
+                    
+                    // ⚠️ CRITICAL: We must rollback to the savepoint to clear the aborted transaction state
+                    sqlx::query("ROLLBACK TO SAVEPOINT links_insert_sp").execute(&mut **tx).await?;
+
+                    // Re-try without resolved IDs
+                    let mut fallback_builder = sqlx::QueryBuilder::new(
+                        r#"INSERT INTO document_links (
+                            "id", "fromId", "rawTarget", "normalizedTarget", "resolvedDocumentId",
+                            "anchor", "displayText", "isResolved", "type", "targetType", 
+                            "sourceOrder", "targetFragmentRaw", "attachmentUrl"
+                        ) "#
+                    );
+                    
+                    fallback_builder.push_values(links.iter().enumerate(), |mut b, (idx, link)| {
+                        let target_type = if let Some(a) = &link.anchor {
+                            if a.starts_with('^') { "BLOCK" } else { "HEADING" }
+                        } else {
+                            "ARTICLE"
+                        };
+                        let normalized = link.resolved.as_ref()
+                            .and_then(|r| r.target_slug.clone())
+                            .unwrap_or_else(|| crate::utils::path::slugify_publish_path(&link.target));
+
+                        b.push_bind(cuid2::create_id())
+                         .push_bind(doc_id)
+                         .push_bind(&link.target)
+                         .push_bind(normalized)
+                         .push_bind(None::<&str>) // 🎯 Fallback: skip direct DB reference
+                         .push_bind(link.anchor.as_ref())
+                         .push_bind(link.alias.as_ref())
+                         .push_bind(false) // Not fully resolved anymore
+                         .push_bind(link.kind.to_lowercase());
+                        
+                        b.push(format!("'{}'::\"TargetType\"", target_type))
+                         .push_bind(idx as i32)
+                         .push_bind(link.anchor.as_ref())
+                         .push_bind(link.attachment_url.as_ref());
+                    });
+                    
+                    return fallback_builder.build().execute(&mut **tx).await.map(|_| ());
+                }
+            }
+            // If it's another error, rollback to savepoint anyway just to be safe, though 
+            // the transaction is likely doomed.
+            let _ = sqlx::query("ROLLBACK TO SAVEPOINT links_insert_sp").execute(&mut **tx).await;
+            Err(e)
+        }
+    }
 }

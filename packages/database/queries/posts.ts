@@ -1,4 +1,6 @@
-import { and, desc, documents, documentSections, eq, or, sql, db } from "../index";
+import { and, desc, eq, or, sql } from "drizzle-orm";
+import { db } from "../client";
+import { documents, documentSections } from "../schema/knowledge";
 
 /**
  * Common Post Filter - Work Area & Published

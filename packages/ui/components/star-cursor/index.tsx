@@ -24,7 +24,9 @@ export type CursorStrategy =
 
 export const getStrategy = (kind: CursorKind): CursorStrategy => {
 	switch (kind) {
-		case "navigate": return "frame-soft";
+		// 取消 navigate (链接) 的框选策略，因为跨行链接的 getBoundingClientRect 会包含大片空白
+		// 统一使用 free 策略，配合底部的虚线流动动画提供反馈
+		case "navigate": return "free";
 		case "action": return "frame-tight";
 		case "explore": return "frame-soft";
 		case "text": return "free";
@@ -403,13 +405,17 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				const isLink = semanticTarget.tagName === "A" || 
 							 semanticTarget.classList.contains("premium-link") || 
 							 semanticTarget.classList.contains("wiki-link");
+				
+				// Identify large UI-level routing blocks (e.g. NavBar elements, Drawer entries)
+				// These shouldn't act like inline text links; they behave physically like buttons.
+				const isStructuralLink = isLink && semanticTarget.classList.contains("no-dash");
 
 				if (target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
 					// Inside display zones, we only lock onto true actions.
 					if (semanticTarget !== target.closest('.math-block, .math-display, .math-inline')) {
-						result = isLink ? "navigate" : "action";
+						result = (isLink && !isStructuralLink) ? "navigate" : "action";
 					} else {
-						result = isLink ? "navigate" : "none";
+						result = (isLink && !isStructuralLink) ? "navigate" : "none";
 					}
 				}
 				else if (target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence')) {
@@ -421,17 +427,19 @@ export function StarCursor({ pathname }: StarCursorProps) {
 					if (semanticTarget.classList.contains('interactive-card')) {
 						result = "explore";
 					} else {
-						result = isLink ? "navigate" : "action";
+						result = (isLink && !isStructuralLink) ? "navigate" : "action";
 					}
 				}
 			}
-			// Background Zone Definitions (Priority 1: Rendered Zones)
-			if (target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
+			
+			// Protocol 3: Background Zone Definitions (Priority 1: Rendered Zones)
+			// Only apply internal zone logic if we haven't already identified a specific action/link target.
+			if (result === "none" && target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
 				// In display zones, we prefer 'explore' (vibrant pointer-ring)
 				result = "explore";
 			}
 			// Priority 2: Text/Source Zones
-			else if (target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence')) {
+			else if (result === "none" && target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence')) {
 				result = "text";
 			}
 

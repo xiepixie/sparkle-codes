@@ -262,25 +262,27 @@ impl SyncEngine {
         }
     }
 
-    /// Deletes a file from the database and cleans up MDX output.
+    /// Deletes a document from the database and cleans up its generated MDX output.
+    /// Note: This does NOT touch the source file in the Obsidian vault.
     pub async fn delete_file(&self, vault_path: &str) {
         let _permit = self.semaphore.acquire().await.ok();
-        info!("🗑️ Deleting file: {}", vault_path);
+        debug!("🗑️ Deleting database record for: {}", vault_path);
 
         match documents::delete_document(&self.pool, vault_path).await {
             Ok(Some((slug, _db_area))) => {
-                info!("✅ Deleted document: {} ({})", slug, vault_path);
+                info!("✅ Removed database entry: {} (path: {})", slug, vault_path);
                 // Clean up generated MDX if this area emits it
                 let area = path::detect_area(vault_path);
                 if self.config.should_emit_mdx(&area) {
                     let dest = path::get_dest_path_for_vault(&self.config, vault_path, &slug);
                     if dest.exists() {
+                        debug!("🗑️ Removing generated output: {:?}", dest);
                         let _ = tokio::fs::remove_file(dest).await;
                     }
                 }
             },
             Ok(None) => debug!("Attempted to delete non-existent document: {}", vault_path),
-            Err(e) => error!("❌ Failed to delete document {}: {}", vault_path, e),
+            Err(e) => error!("❌ Failed to delete record {}: {}", vault_path, e),
         }
     }
 

@@ -331,7 +331,8 @@
 
   /* --- 7. Lists --- */
   :where(ul, ol) {
-    padding-left: 1.75rem; /* Unified padding for consistent horizontal alignment */
+    padding-left: 2.25rem; /* Refined padding for balanced density and marker safety */
+    margin-left: 0.25rem;  /* Retained safety buffer for narrow containers */
   }
   :where(ul) {
     list-style: none;
@@ -342,10 +343,20 @@
   :where(ul) > li::before {
     content: "✦";
     position: absolute;
-    left: -1.2rem; /* Adjusted to match ordered list marker indent */
+    left: -1.5rem; /* Re-tightened for 2.25rem padding */
     color: var(--md-primary);
-    font-size: 0.8em;
-    top: 0.55em; /* Recalibrated for 18px line-height */
+    font-size: 0.85em;
+    
+    /* VISUAL ALIGNMENT FIX: 
+       Mathematical centering (top: 0) often feels "too high" for Hanzi/CJK characters 
+       which have a heavier visual baseline. We retain the height-matched flex container 
+       but add a 0.1em downward shift to achieve a "true" visual center alignment. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.65em; /* Matches the text's line-height */
+    top: 0.11em;    /* Micro-adjustment to snap the star to the Hanzi visual centerline */
+    line-height: 1;
   }
   :where(ul ul) > li::before {
     content: "✧";

@@ -143,8 +143,8 @@ function clamp(value: number, min: number, max: number) {
 function getSceneVisibilityProfile(timeSlot: SelectedScene["timeSlot"]) {
   const cfg = TIME_SLOT_CONFIG[timeSlot];
   
-  // Drastically amplify the ambient stars so it looks lush and rich
-  const nightCount = Math.floor(cfg.ambientCount * 1.6);
+  // Amplify the ambient stars, scaled down slightly (~20% reduction from 1.6 to 1.28) to avoid overcrowding
+  const nightCount = Math.floor(cfg.ambientCount * 1.28);
   
   return {
     ambientCount: nightCount,
@@ -232,10 +232,10 @@ function createAmbientStar(
   while (attempts < 15) {
     const dx = xRel - 0.5;
     const dy = yRel - 0.5;
-    const distToCenter = Math.sqrt(dx * dx + dy * dy);
-    
-    // 1. 避开中心点区域 (UI 保护)
-    if (distToCenter < 0.18) {
+    // 1. 避开主内容垂直区域 (UI 保护)
+    // 保护视口中心的垂直带状区域 (50% 宽度)，确保文字阅读不受干扰
+    const distFromCenterX = Math.abs(xRel - 0.5);
+    if (distFromCenterX < 0.25 && rng() > 0.08) {
       xRel = rng();
       yRel = rng();
       attempts++;
@@ -259,19 +259,24 @@ function createAmbientStar(
     break;
   }
 
-  const depth = rng() > 0.65 ? 1 : 0;
+  // 提升深度分层机制以增强空间感
+  const depthRoll = rng();
+  const depth = depthRoll > 0.85 ? 2 : (depthRoll > 0.45 ? 1 : 0);
   
-  // ALWAYS use high-quality Dark specifications for the persistent structural cache
+  // 优化星星大小分配：引入细腻的背景质感星(更小)与极少见的明亮大星
   const size = depth === 0
-    ? 0.85 + rng() * 1.25 // Increased base size for better visibility
-    : 1.35 + rng() * 2.2;
+    ? 0.6 + rng() * 0.8 // 背景细微星星
+    : depth === 1
+      ? 1.0 + rng() * 1.4 // 中景亮星
+      : 1.6 + rng() * 1.8; // 前景罕见大星
 
   const paletteRoll = rng();
-  const colorRole = paletteRoll > 0.78 ? 0 : paletteRoll > 0.52 ? 1 : 2;
+  // 微调色调分配，降低蓝紫占比，提升白星和纯净质感
+  const colorRole = paletteRoll > 0.85 ? 0 : paletteRoll > 0.65 ? 1 : 2;
   const color = colorRole === 0 ? colors.primary : colorRole === 1 ? colors.secondary : colors.white;
 
-  const ceiling = clamp(ambientOpacityMax + (depth === 1 ? 0.15 : 0.05), 0.3, 0.95);
-  const floor = clamp(ceiling * 0.45, 0.2, 0.4);
+  const ceiling = clamp(ambientOpacityMax + (depth >= 1 ? 0.25 : 0.05), 0.3, 0.95);
+  const floor = clamp(ceiling * 0.35, 0.15, 0.35); // 调低暗星的亮度下限，提高对比度
   const baseOpacity = floor + rng() * Math.max(0.01, ceiling - floor);
 
   return {
@@ -285,7 +290,8 @@ function createAmbientStar(
     color,
     depth,
     drift: 0, // Static mode remains to prevent global sliding distraction
-    twinkleSpeed: 0.0008 + rng() * (depth === 1 ? 0.002 : 0.0014),
+    // 提升闪烁的通透感和不一致性
+    twinkleSpeed: 0.0006 + rng() * (depth >= 1 ? 0.0025 : 0.0012),
     twinkleOffset: rng() * Math.PI * 2,
     excitement: 0,
     isHero: false,

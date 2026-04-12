@@ -25,6 +25,21 @@ pub async fn upsert_document(
     html_content: &str,
 ) -> Result<String, sqlx::Error> {
     let now = Utc::now();
+    let mut tx = pool.begin().await?;
+
+    // 🛡️ [Move Conflict Resolution]
+    // If we are inserting a "new" vault path, but its slug already exists in the same area:
+    // This is likely a file move/rename. We must clear the old record to prevent a 
+    // "document_slug_area_uidx" unique constraint violation.
+    sqlx::query(
+        r#"DELETE FROM documents WHERE "slug" = $1 AND "area" = CAST($2 AS "Area") AND "vaultPath" != $3"#
+    )
+    .bind(&meta.slug)
+    .bind(meta.area.as_db_str())
+    .bind(&ctx.vault_path)
+    .execute(&mut *tx)
+    .await?;
+
     let row = sqlx::query(
         r#"
         INSERT INTO documents (
@@ -67,8 +82,10 @@ pub async fn upsert_document(
     .bind(meta.date)
     .bind(now)
     .bind(meta.is_published)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     Ok(row.get("id"))
 }

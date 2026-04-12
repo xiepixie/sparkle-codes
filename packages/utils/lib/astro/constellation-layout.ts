@@ -91,8 +91,22 @@ export function resolveSlots(
   
   if (seed !== undefined) {
     // Generate a secondary stable seed from the first one
-    const s1 = Math.abs(Math.sin(seed * 1234.567));
-    pIdx = Math.floor(s1 * availableSlots.length);
+    // Extract actual slotSeed to prevent slow-drifting sin() values
+    const actualSeed = seed * 2147483647; 
+    const pseudo = Math.abs(Math.sin(actualSeed * 12.9898 + 78.233)) * 43758.5453;
+    const s1 = pseudo - Math.floor(pseudo);
+    // Decrease the probability of picking mid slots (visually intrusive)
+    // weights for [topRight, topLeft, midRight, midLeft, bottomRight, bottomLeft]
+    const weights = [1.5, 1.5, 0.4, 0.4, 1.5, 1.5];
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    let r = s1 * totalWeight;
+    pIdx = 0;
+    while (pIdx < weights.length) {
+      r -= weights[pIdx];
+      if (r <= 0) break;
+      pIdx++;
+    }
+    if (pIdx >= availableSlots.length) pIdx = availableSlots.length - 1;
   } else {
     // Deterministic fallback based on names
     pIdx = Math.abs(primary.length) % availableSlots.length;
@@ -109,9 +123,11 @@ export function resolveSlots(
     // 空间对垒算法 (Opposition Logic): 
     // 尝试寻找与主星座距离最远的槽位，以维持视觉平衡。
     // 计算逻辑：取主槽位在数组中的对角偏移 [p+3] 并通过种子进行微调偏移 [±1]。
-    const s2 = Math.abs(Math.cos(seed * 789.012));
+    const actualSeed = seed * 2147483647;
+    const pseudo = Math.abs(Math.cos(actualSeed * 4.1415 + 1.234)) * 32154.5453;
+    const s2 = pseudo - Math.floor(pseudo);
     const diagonalOffset = 3;
-    const jitter = Math.round(s2 * 2) - 1; // -1, 0, 1
+    const jitter = Math.floor(s2 * 3) - 1; // -1, 0, 1
     sIdx = (pIdx + diagonalOffset + jitter + availableSlots.length) % availableSlots.length;
   } else {
     sIdx = (pIdx + 3) % availableSlots.length;

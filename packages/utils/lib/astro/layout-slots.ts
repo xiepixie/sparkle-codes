@@ -15,10 +15,10 @@ export interface LayoutSlot {
 }
 
 export const LAYOUT_SLOTS: Record<LayoutSlotId, LayoutSlot> = {
-  topLeft:     { id: "topLeft",     anchorX: 0.22, anchorY: 0.22, width: 0.22, height: 0.20 },
-  topRight:    { id: "topRight",    anchorX: 0.78, anchorY: 0.22, width: 0.22, height: 0.20 },
-  midLeft:     { id: "midLeft",     anchorX: 0.18, anchorY: 0.50, width: 0.22, height: 0.20 },
-  midRight:    { id: "midRight",    anchorX: 0.82, anchorY: 0.50, width: 0.22, height: 0.20 },
-  bottomLeft:  { id: "bottomLeft",  anchorX: 0.22, anchorY: 0.78, width: 0.22, height: 0.20 },
-  bottomRight: { id: "bottomRight", anchorX: 0.78, anchorY: 0.78, width: 0.22, height: 0.20 },
+  topLeft:     { id: "topLeft",     anchorX: 0.20, anchorY: 0.20, width: 0.22, height: 0.20 },
+  topRight:    { id: "topRight",    anchorX: 0.80, anchorY: 0.20, width: 0.22, height: 0.20 },
+  midLeft:     { id: "midLeft",     anchorX: 0.08, anchorY: 0.50, width: 0.22, height: 0.20 },
+  midRight:    { id: "midRight",    anchorX: 0.92, anchorY: 0.50, width: 0.22, height: 0.20 },
+  bottomLeft:  { id: "bottomLeft",  anchorX: 0.20, anchorY: 0.80, width: 0.22, height: 0.20 },
+  bottomRight: { id: "bottomRight", anchorX: 0.80, anchorY: 0.80, width: 0.22, height: 0.20 },
 };

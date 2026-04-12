@@ -37,6 +37,15 @@ const halfvec = customType<{ data: number[]; config: { dimensions: number } }>({
 	},
 });
 
+/**
+ * Postgres TSVECTOR Type
+ */
+const tsvector = customType<{ data: string }>({
+	dataType() {
+		return "tsvector";
+	},
+});
+
 // PARA Areas
 export const areaEnum = pgEnum("Area", ["WORK", "LEARN", "OTHER"]);
 export const sourceTypeEnum = pgEnum("SourceType", ["OBSIDIAN", "MDX", "IMPORTED"]);
@@ -228,6 +237,7 @@ export const documentChunks = pgTable(
 		startOffset: integer("startOffset"),
 		endOffset: integer("endOffset"),
 		headingPath: text("headingPath"),
+		headingId: text("headingId"),
 
 		chunkText: text("chunkText").notNull(),
 
@@ -238,6 +248,11 @@ export const documentChunks = pgTable(
 		// ⚠️ HIGH-FIDELITY VECTOR DATA
 		// Supporting Qwen3-Embedding-4B (Option B: 2560 dimensions with half-precision)
 		embedding: halfvec("embedding", { dimensions: 2560 }),
+
+		// --- SEARCH OPTIMIZATION (FTS) ---
+		searchVector: tsvector("searchVector"),
+		tokenCount: integer("tokenCount"),
+		hasCode: boolean("hasCode").default(false).notNull(),
 	},
 	(table) => [
 		index("chunk_doc_idx").on(table.documentId),
@@ -247,6 +262,8 @@ export const documentChunks = pgTable(
 			"hnsw",
 			sql`${table.embedding} halfvec_cosine_ops`,
 		),
+		// GIN Index for Full-Text Search
+		index("chunk_search_vector_idx").using("gin", table.searchVector),
 	],
 );
 

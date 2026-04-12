@@ -49,7 +49,11 @@ dotenvy = "0.15"
 sysinfo = "0.30"
 markdown-parser = { path = "../markdown-parser" }
 
-# HTTP client for webhooks
+# HTTP client for webhooks and embedding API
 reqwest = { version = "0.12", features = ["json"] }
 url = "2"
 unicode-normalization = "0.1.25"
+
+# RAG: Chunking and Tokenization
+text-splitter = { version = "0.13", features = ["markdown"] }
+tiktoken-rs = "0.5"

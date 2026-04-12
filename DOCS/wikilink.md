@@ -1,104 +1,123 @@
-# Wiki-Link 架构与处理逻辑协议 (v2.0)
+# Wiki-Link 深度技术规范与实现指南 (v2.0)
 
-> [!IMPORTANT]
-> 本文档定义了 Obsidian Wiki-Link `[[Link]]` 到 Web 端 HTML 渲染的完整链路协议。所有 Agent 在修改相关逻辑时必须严格遵守本协议，确保 Rust 后端与 TypeScript 前端的高度对称。
+> [!NOTE]
+> 本文档旨在提供 Wiki-Link 处理链路的完整技术视图，涵盖从 Obsidian 源文件扫描到 Web 端高保真预览的所有细节。开发者应能通过本文档完整复现整个渲染逻辑。
 
 ---
 
-## 1. 核心模型定义
+## 1. 处理链路全景图 (Data Flow)
 
-| 术语 | 定义 | 来源 | 用途 |
+整个处理流程分为三个核心阶段，旨在将 Obsidian 的非确定性链接转化为 Web 端的确定性资产。
+
+```mermaid
+graph TD
+    A[Obsidian Source: [[Target#Fragment|Alias]]] --> B[Pass 1: Sentinel Crawl]
+    B --> C[Pass 2: Metadata Pre-scan & ID Allocation]
+    C --> D[Pass 3: Parallel Parsing & Resolution]
+    D --> E[HTML Transformation & Injection]
+    E --> F[Next.js Server: Pre-rendering]
+    F --> G[Client: O(1) Interactivity & Preview]
+```
+
+---
+
+## 2. 阶段一：身份预分配 (Identity Pre-allocation)
+
+为了在单次同步中生成包含 UUID 的 HTML，Sentinel 在扫描阶段执行以下逻辑：
+
+### 2.1 内存索引构建 (`pre_scan_metadata`)
+1.  **文件爬取**：线性遍历仓库中所有 `.md` 文件。
+2.  **身份锚定**：
+    *   执行批量 SQL：`SELECT id, "vaultPath" FROM documents WHERE "vaultPath" = ANY(paths)`。
+    *   **老文档**：从数据库获取并保留其原始 UUID。
+    *   **新文档**：在内存中立即生成 `cuid2` 作为预分配 ID。
+3.  **多键合并方案**：
+    为了支持 Wiki-Link 的模糊匹配，内存索引 (`metadata_index`) 必须存储同一文档的多个 Key 映射到同一个 `MetadataExcerpt`：
+    *   `vaultPath` (全路径，NFC 归一化)
+    *   `basename` (文件名)
+    *   `slug` (来自 Frontmatter 或路径计算)
+    *   `title` (展示标题)
+    *   `aliases` (别名数组)
+
+---
+
+## 3. 阶段二：解析与转换逻辑 (Resolution & Transformation)
+
+在 `execute_pipeline` 阶段，Sentinel 将原始 Markdown 转换为高度语义化的 HTML。
+
+### 3.1 锚点生成算法 (Anchor Standard)
+为了确保 href 链接与目标 DOM ID 的绝对对称，遵循以下规则：
+
+| 类型 | 处理前 (Obsidian) | 处理后 (HTML ID & Href) | 逻辑说明 |
 | :--- | :--- | :--- | :--- |
-| **Raw Target** | 原始输入字符串 (如 `A/B#Heading`) | Obsidian `[[...]]` | 解析起点 |
-| **Vault Path** | 相对库根目录的路径 (如 `Work/Project A.md`) | 文件系统 | 数据库主键，链接解析目标 |
-| **Slug** | URL 友好的 kebab-case 路径 (如 `work-project-a`) | `slugifyPath(Vault Path)` | 路由、API 查询 |
-| **Fragment** | 锚点信息 (如 `#h-标题` 或 `#^block-id`) | Rust Parser 生成 | DOM 定位、平滑滚动 |
-| **Document ID** | 文档的 UUID | 数据库 `posts.id` | 高性能预览查询 (O(1)) |
+| **Heading** | `## 1. 参考 资料` | `id="h-1-参考-资料"` | 强制 `h-` 前缀 + Kebab-case slugify。 |
+| **Block** | `^block-id` | `id="block-id"` | 剥离 `^` 符号，作为标准 DOM ID。 |
 
----
-
-## 2. 统一解析协议 (Two-Layer Protocol)
-
-为确保跨平台一致性，所有路径到 Slug 的转换必须遵循以下双层处理模型：
-
-### Layer 1: 结构化解析 (Structural Resolution)
-由 Rust `markdown-parser` 或 TypeScript `@repo/utils/wikilink` 执行：
-1.  **Unicode 归一化**：强制使用 `NFC` (Normalization Form C)，解决 Mac/Linux 文件名不一致问题。
-2.  **组件拆分**：分离 `Path`、`Alias` (|) 和 `Fragment` (#)。
-3.  **Fragment 预处理**：
-    *   **Block ID** (以 `^` 开头)：去除 `^` 前缀，保留原始 ID。
-    *   **Heading**：应用 `slugifyPath` 并添加 `h-` 前缀（例如：`#2. 标题` -> `#h-2-标题`）。
-
-### Layer 2: 规范化解析 (Canonical Resolution)
-由 Rust `Sentinel` 同步器执行：
-1.  **路径决策**：根据文件系统索引或数据库记录，将文件名/别名映射到真实的 `Vault Path`。
-2.  **Slug 生成**：调用与前端对称的 `slugifyPath` 算法生成最终 URL。
-3.  **ID 注入**：从数据库获取目标文档的 `UUID` 并注入到 HTML 属性中。
-
----
-
-## 3. HTML 产出规范 (Data Attributes)
-
-同步后的 Wiki-Link 必须包含以下语义化属性：
+### 3.2 HTML 属性注入规范
+解析器 (`markdown-parser`) 产出的 `<a>` 标签必须在转换后包含以下属性：
 
 ```html
 <a 
-  class="internal-link" 
-  href="/blog/target-slug#h-heading-id" 
+  class="internal-link wiki-link" 
+  href="/blog/target-slug#h-anchor" 
   data-target="原始输入文本" 
   data-link-type="article | heading | block" 
-  data-document-id="UUID-1234-5678"
+  data-document-id="预分配的-UUID"
 >
-  显示文字
+  显示文本
 </a>
 ```
 
-*   **`href` (金标准)**：包含完全解析后的 URL。其中的 Fragment 必须直接对应目标 DOM 元素的 `id`。
-*   **`data-link-type`**：指示链接的精确类型，用于前端 UI 分支决策。
-*   **`data-document-id`**：可选但推荐。存在时，前端预览组件应优先基于 ID 进行 API 查询，而非字符串匹配。
+**关键注入逻辑 (`resolve_placeholders_in_html`)：**
+*   使用正则表达式识别带 `data-target` 的特定 `<a>` 占位符。
+*   **命中优先级**：内存索引 (Memory Index) > 数据库记录 (DB Backup)。
+*   **href 修正**：如果解析到目标 Slug 为 `target-slug`，则根据链接类型（heading/block）重构 `href`，确保其包含正确的 `h-` 前缀。
 
 ---
 
-## 4. 后端处理细节 (Rust)
+## 4. 阶段三：前端交互协议 (Frontend Interactivity)
 
-### A. Parser 层 (`markdown-parser`)
-*   **ID 注入**：`inject_heading_ids` 使用 `h-{slugify(text)}` 格式。
-*   **Href 构建**：`build_wikilink_href` 必须使用完全相同的 slugify 算法处理 fragment，确保 `href` 中的锚点与生成的标题 ID 100% 匹配。
+前端不再承担复杂的路径猜测逻辑，而是基于后端提供的确定性属性进行操作。
 
-### B. Sentinel 层
-*   **占位符替换**：在同步过程中，使用正则表达式识别所有带 `data-target` 的链接，并根据数据库解析结果注入 `data-document-id` 及完整的 `href`。
-*   **去重保护**：在处理长文档时，需对 HTML 中的重复链接目标进行去重处理，避免正则表达式多次替换导致属性冗余。
+### 4.1 精准定位逻辑 (`scrollToFragment`)
+1.  从 URL 获取 `hash`。
+2.  **不执行** Slugify 变换（因为后端已经做好了）。
+3.  直接调用 `document.getElementById(decodeURIComponent(hash))`。
+
+### 4.2 高保真预览策略 (`WikiLinkPreviewManager`)
+1.  **基于 ID 的快速预检**：
+    *   由于 HTML 中包含 `data-document-id`，前端预览首选通过该 ID 向服务器请求元数据。
+2.  **同页片段截取 (DOM Scraping)**：
+    *   如果链接指向当前 Slug，直接在当前 `article` 容器内通过 ID 定位元素。
+    *   **块引用预览**：截取 `id` 对应元素的父节点 (`parentElement`)。如果是 `<li>`，则包裹在 `<ul>` 中以维持列表样式。
+    *   **标题预览**：从目标标题开始，向下扫描直到遇到同级或更高级别的标题为止，截取中间的所有 DOM 节点。
 
 ---
 
-## 5. 前端处理行为 (Next.js / Client)
+## 5. 数据库查询优化 (SQL Optimization)
 
-### A. 精准滚动 (`scrollToFragment`)
-由于 Rust 后端已经保证了 `href` 中的锚点就是真实的 DOM ID，前端不再需要任何 fallback 猜测逻辑：
+### 5.1 鲁棒的片段查询 (`getPostFragmentPreviewQuery`)
+在服务器端处理预览请求时，SQL 必须兼容带/不带前缀的 ID 形式：
 
 ```typescript
-function scrollToFragment(fragment: string) {
-  const decoded = decodeURIComponent(fragment.replace("#", ""));
-  const targetElement = document.getElementById(decoded);
-  if (targetElement) {
-    targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+// 伪代码：兼容块引用和标题的鲁棒查询
+const isBlock = fragment.startsWith('^') || (!fragment.startsWith('h-') && fragment.length === 8);
+if (isBlock) {
+  const queryId = fragment.startsWith('^') ? fragment : `^${fragment}`;
+  // 查询 document_blocks 表
+} else {
+  // 查询 document_sections 表，匹配 headingId = fragment OR headingId = fragment.replace('h-', '')
 }
 ```
 
-### B. 高保真预览 (`WikiLinkPreviewManager`)
-1.  **Cache Key**：优先使用 `data-document-id` 作为缓存键，实现精确匹配。
-2.  **API 请求**：调用 `/api/preview?id=...`。后端应支持按 UUID 直接查询文档元数据和物理切片。
-3.  **DOM 提取**：如果链接指向当前页面 (`isSamePage`)，直接在当前 DOM 容器内查找 `id` 匹配的元素，并截取相邻节点作为预览内容。
-
 ---
 
-## 6. 协作模型总结
+## 6. 复现检查表 (Implementation Checklist)
 
-| 阶段 | 职责所在 | 关键产出 |
-| :--- | :--- | :--- |
-| **同步 (Sync)** | Sentinel (Rust) | 生成包含 UUID 和 Slugified Anchor 的持久化 HTML |
-| **渲染 (Render)** | Next.js (Server) | 零计算量输出预处理好的 HTML 字符串 |
-| **交互 (Interact)** | Interactivity (Client) | 通过 `getElementById` 实现 O(1) 定位；通过 UUID 实现 O(1) 预览 |
+- [ ] **Unicode**：全链路强制使用 `NFC` 归一化。
+- [ ] **IDs**：Heading ID 必须带有 `h-` 前缀。
+- [ ] **Paths**：所有路径处理禁止使用 `.split('/').pop()`，必须使用 `WikiLink` 工具库。
+- [ ] **UUIDs**：`MetadataExcerpt` 必须承载预分配 ID，`upsert_document` 必须接受该 ID 写入。
+- [ ] **Security**：`DOMPurify` 必须白名单放行 `data-link-type` 和 `data-document-id`。
 
-**结论**：这套“重后端、轻前端”的架构确保了非 ASCII 字符（如中文）和复杂锚点在所有场景下都能 100% 稳定运行，同时最大限度减少了客户端的计算开销。
+---

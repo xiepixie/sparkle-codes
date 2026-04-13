@@ -3,7 +3,7 @@
 import { Tag } from "@repo/ui";
 import { ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { BlogCard } from "@/components/Blog/BlogCard";
 import { BlogCardCompact } from "@/components/Blog/BlogCardCompact";
 import { BlogCardFeatured } from "@/components/Blog/BlogCardFeatured";
@@ -59,8 +59,7 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 	const pageSize = initialFeed.pageSize;
 	const [query, setQuery] = useState(initialQuery);
 	const [feed, setFeed] = useState(initialFeed);
-	const [isSearching, setIsSearching] = useState(false);
-	const [searchError, setSearchError] = useState<string | null>(null);
+	const [isPending, startTransition] = useTransition();
 	const [retryKey, setRetryKey] = useState(0);
 	const [inputPage, setInputPage] = useState<string | null>(null);
 	const deferredQuery = useDeferredValue(query);
@@ -98,13 +97,11 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 		const cachedFeed = getPrefetchedFeed(currentFeedKey);
 		if (cachedFeed) {
 			setFeed(cachedFeed);
-			setIsSearching(false);
 			return;
 		}
 
 		if (currentFeedKey === initialFeedKey) {
 			setFeed(initialFeed);
-			setIsSearching(false);
 			return;
 		}
 
@@ -112,14 +109,12 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 			try {
 				const result = await fetchFeed(currentFilters);
 				if (result) {
-					setFeed(result);
+					startTransition(() => {
+						setFeed(result);
+					});
 				}
 			} catch (_error) {
-				setSearchError(
-					"Search is temporarily unavailable. Try again in a moment.",
-				);
-			} finally {
-				setIsSearching(false);
+				console.error("Client-side search failed:", _error);
 			}
 		}, 120);
 
@@ -148,8 +143,6 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 	// Update URL and state simultaneously
 	const handleSearch = (val: string) => {
 		setQuery(val);
-		setIsSearching(true);
-		setSearchError(null);
 
 		const params = new URLSearchParams(searchParams);
 		if (val) {
@@ -159,17 +152,15 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 		}
 		params.delete("page");
 
-		// Update URL without full reload
 		const queryString = params.toString();
-		router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-			scroll: false,
+		startTransition(() => {
+			router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+				scroll: false,
+			});
 		});
 	};
 
 	const handleTagToggle = (tag: string) => {
-		setIsSearching(true);
-		setSearchError(null);
-
 		const params = new URLSearchParams(searchParams);
 		const currentTags = new Set(params.getAll("tag"));
 		if (currentTags.has(tag)) {
@@ -184,19 +175,22 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 		}
 		params.delete("page");
 		const queryString = params.toString();
-		router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-			scroll: false,
+		startTransition(() => {
+			router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+				scroll: false,
+			});
 		});
 	};
 
 	const clearTagFilters = () => {
-		setIsSearching(true);
 		const params = new URLSearchParams(searchParams);
 		params.delete("tag");
 		params.delete("page");
 		const queryString = params.toString();
-		router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-			scroll: false,
+		startTransition(() => {
+			router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+				scroll: false,
+			});
 		});
 	};
 
@@ -205,9 +199,6 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 			return;
 		}
 
-		setIsSearching(true);
-		setSearchError(null);
-
 		const params = new URLSearchParams(searchParams);
 		if (page <= 1) {
 			params.delete("page");
@@ -215,14 +206,18 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 			params.set("page", String(page));
 		}
 		const queryString = params.toString();
-		router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-			scroll: false,
+		startTransition(() => {
+			router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+				scroll: false,
+			});
 		});
 	};
 
 	const isArchiveView = currentPage > 1 || query.trim() !== "" || activeTags.length > 0;
 	const archiveHasFilters = query.trim() !== "" || activeTags.length > 0;
-	const isBrowserLoading = isSearching;
+	const isBrowserLoading = isPending;
+	const [searchError, _setSearchError] = useState<string | null>(null);
+	// Note: _setSearchError is currently reserved for future server-side error handling
 
 	// Magazine Mode (Page 1): 1 Hero -> 4 Details -> 3 Scans
 	const featuredPost = feed.posts.length > 0 ? feed.posts[0] : undefined;
@@ -328,7 +323,7 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 							aria-live="polite"
 							className={cn("flex-1", isArchiveView && "min-w-0")}
 						>
-							{isBrowserLoading
+							{isBrowserLoading && feed.posts.length === 0
 								? "Searching the archive..."
 								: query.trim()
 									? activeTags.length > 0
@@ -398,10 +393,10 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 								"min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:py-1",
 						)}
 					>
-						{isBrowserLoading ? (
+						{isBrowserLoading && feed.posts.length === 0 ? (
 							/* 
-							   Why: Context-aware skeleton loaders. In archive view, show grid skeletons 
-							   to match the final layout and prevent layout shift during loading.
+							   Why: Only show full skeleton if we have literally no content.
+							   Otherwise, use the isPending state to show a subtle overlay.
 							*/
 							isArchiveView ? (
 								<div className="grid content-start gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -467,63 +462,68 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 								</button>
 							</div>
 						) : feed.posts.length > 0 ? (
-							isArchiveView ? (
-								<div className="grid content-start gap-4 animate-in fade-in duration-500 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-									{feed.posts.map((post, i) => (
-										<BlogCardCompact
-											key={post.path}
-											post={post}
-											serialNumber={String(startIndex + i + 1).padStart(2, "0")}
-											onTagSelect={handleTagToggle}
-											activeTags={activeTags}
-										/>
-									))}
-								</div>
-							) : (
-								<div className="w-full space-y-8 animate-in fade-in duration-700">
-									{featuredPost && (
-										<div className="w-full">
-											<BlogCardFeatured
-												post={featuredPost}
+							<div className={cn(
+								"relative",
+								isBrowserLoading && "opacity-50 grayscale-[0.5] pointer-events-none transition-opacity duration-300"
+							)}>
+								{isArchiveView ? (
+									<div className="grid content-start gap-4 animate-in fade-in duration-500 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+										{feed.posts.map((post, i) => (
+											<BlogCardCompact
+												key={post.path}
+												post={post}
+												serialNumber={String(startIndex + i + 1).padStart(2, "0")}
 												onTagSelect={handleTagToggle}
 												activeTags={activeTags}
 											/>
-										</div>
-									)}
-									{mediumPosts.length > 0 && (
-										<div className="grid grid-cols-1 md:grid-cols-2 gap-6 [&>*:last-child:nth-child(odd)]:md:col-span-2">
-											{mediumPosts.map((post, i) => (
-												<BlogCard
-													key={post.path}
-													post={post}
-													index={startIndex + 1 + i}
+										))}
+									</div>
+								) : (
+									<div className="w-full space-y-8 animate-in fade-in duration-700">
+										{featuredPost && (
+											<div className="w-full">
+												<BlogCardFeatured
+													post={featuredPost}
 													onTagSelect={handleTagToggle}
 													activeTags={activeTags}
 												/>
-											))}
-										</div>
-									)}
-									{smallPosts.length > 0 && (
-										<div className={`grid gap-5 ${
-											smallPosts.length === 1 
-												? 'grid-cols-1' 
-												: smallPosts.length === 2 
-													? 'grid-cols-1 sm:grid-cols-2' 
-													: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-										}`}>
-											{smallPosts.map((post, i) => (
-												<BlogCardCompact
-													key={post.path}
-													post={post}
-													serialNumber={String(startIndex + 5 + i + 1).padStart(2, "0")}
-													onTagSelect={handleTagToggle}
-													activeTags={activeTags}
-												/>
-											))}
-										</div>
-									)}
-								</div>
-							)
+											</div>
+										)}
+										{mediumPosts.length > 0 && (
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-6 [&>*:last-child:nth-child(odd)]:md:col-span-2">
+												{mediumPosts.map((post, i) => (
+													<BlogCard
+														key={post.path}
+														post={post}
+														index={startIndex + 1 + i}
+														onTagSelect={handleTagToggle}
+														activeTags={activeTags}
+													/>
+												))}
+											</div>
+										)}
+										{smallPosts.length > 0 && (
+											<div className={`grid gap-5 ${
+												smallPosts.length === 1 
+													? 'grid-cols-1' 
+													: smallPosts.length === 2 
+														? 'grid-cols-1 sm:grid-cols-2' 
+														: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+											}`}>
+												{smallPosts.map((post, i) => (
+													<BlogCardCompact
+														key={post.path}
+														post={post}
+														serialNumber={String(startIndex + 5 + i + 1).padStart(2, "0")}
+														onTagSelect={handleTagToggle}
+														activeTags={activeTags}
+													/>
+												))}
+											</div>
+										)}
+									</div>
+								)}
+							</div>
 						) : (
 							<div className="rounded-3xl border border-dashed border-border/50 bg-background/20 py-16 text-center backdrop-blur-sm sm:py-20">
 								<p className="text-sm font-medium text-foreground">

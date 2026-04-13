@@ -21,7 +21,7 @@ export const config = {
 	// the themes that should be available in the app
 	enabledThemes: ["light", "dark"],
 	// the default theme
-	defaultTheme: "light",
+	defaultTheme: "dark",
 
 	// Social Links
 	github: "https://github.com/yourusername/sparkle-codes",

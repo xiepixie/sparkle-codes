@@ -201,11 +201,21 @@ export function slugifyHeader(text: string): string {
     return "";
   }
   
-  // 镜像 Rust: 仅将空格、特殊符号转换为连字符，保留字母、数字和中文字符
-  return text
-    .normalize("NFC")
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "");        // 移除首尾连字符
+  const normalized = text.normalize("NFC").toLowerCase().trim();
+  let out = "";
+  let lastWasDash = false;
+
+  for (const ch of normalized) {
+    if (/[\p{L}\p{N}]/u.test(ch)) {
+      out += ch;
+      lastWasDash = false;
+    } else if (ch === " " || ch === "-" || ch === "_" || ch === "/" || ch === "\\") {
+      if (out.length > 0 && !lastWasDash) {
+        out += "-";
+        lastWasDash = true;
+      }
+    }
+  }
+  
+  return out.replace(/^-+|-+$/g, "");
 }

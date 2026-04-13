@@ -1,10 +1,6 @@
 "use client";
 
-import {
-	isSameWikiPage,
-	normalizeSlug,
-	parseWikiLink,
-} from "@repo/utils";
+import { isSameWikiPage, normalizeSlug, parseWikiLink } from "@repo/utils";
 import { MarkdownRenderer } from "@v2/markdown-parser";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -90,11 +86,32 @@ function resolveClientWikiNavigation(
 	const linkInfo = parseWikiLink(effectiveDestination);
 	const fragment = linkInfo.fragment || "";
 
-	// Standard slug-based check
-	const isSamePage = isSameWikiPage(targetUrl, normalizeSlug(currentSlug || ""));
-	
-	const decodedFragment = fragment ? (fragment.startsWith("#") ? fragment.slice(1) : fragment) : "";
-	
+	// Primary check: data-target path vs current slug
+	let isSamePage = isSameWikiPage(
+		targetUrl,
+		normalizeSlug(currentSlug || ""),
+	);
+
+	// Secondary check: href path vs current slug
+	// Why: data-target carries the Obsidian vault filename (e.g. "博客测试2"),
+	// which can differ from the web slug (e.g. "sparkle-rendering-pipeline-deep-dive").
+	// Without this check, heading links on the same page fall through to router.push,
+	// which does not trigger hash scrolling for same-pathname navigation.
+	if (!isSamePage && href) {
+		const hrefInfo = parseWikiLink(href);
+		const hrefSlug = normalizeSlug(hrefInfo.path);
+		const currentNormalized = normalizeSlug(currentSlug || "");
+		if (hrefSlug && currentNormalized && hrefSlug === currentNormalized) {
+			isSamePage = true;
+		}
+	}
+
+	const decodedFragment = fragment
+		? fragment.startsWith("#")
+			? fragment.slice(1)
+			: fragment
+		: "";
+
 	return {
 		isSamePage,
 		fragment: decodedFragment,
@@ -107,7 +124,9 @@ function scrollToFragment(fragment: string) {
 		return;
 	}
 
-	// 🛡️ [Architecture] Fragment in href is now a direct DOM ID pre-slugified by Rust backend
+	// 🛡️ [Architecture] Per DOCS/wikilink.md §4.1:
+	// Do NOT re-slugify. The backend already provides the correct fragment.
+	// Just decode and getElementById directly.
 	const decoded = (() => {
 		const target = fragment.startsWith("#") ? fragment.slice(1) : fragment;
 		try {
@@ -126,6 +145,11 @@ function scrollToFragment(fragment: string) {
 
 	targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
 	window.history.pushState(null, "", `#${encodeURIComponent(decoded)}`);
+
+	// UX: Visual arrival confirmation — flash the target element
+	targetElement.classList.remove("jump-highlight");
+	void targetElement.offsetWidth; // Force reflow to restart animation
+	targetElement.classList.add("jump-highlight");
 }
 
 /**
@@ -148,13 +172,28 @@ export function MarkdownInteractivity({
 
 	const isFinePointer = React.useMemo(() => supportsFinePointer(), []);
 
+	// 0. Cross-page hash scroll: When arriving via wiki-link (router.push) or direct URL,
+	// Next.js client-side navigation does NOT auto-scroll to hash fragments.
+	// We detect the hash on mount/content-change and scroll manually.
+	useEffect(() => {
+		const hash = window.location.hash;
+		if (!hash) return;
+
+		// Delay to ensure markdown DOM is fully hydrated after navigation
+		const timer = setTimeout(() => {
+			scrollToFragment(hash);
+		}, 200);
+
+		return () => clearTimeout(timer);
+	}, [html]);
+
 	// 1. Navigation Controller (Next.js context dependent)
 	const handleWikiLinkClick = useCallback(
 		(targetUrl: string, href?: string) => {
 			const navigation = resolveClientWikiNavigation(
 				targetUrl,
 				href,
-				currentSlug
+				currentSlug,
 			);
 
 			if (navigation.isSamePage) {

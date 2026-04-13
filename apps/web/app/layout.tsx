@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Poppins } from "next/font/google";
 import "./globals.css";
+import { FloatingChatWidget } from "@/components/Chat/FloatingChatWidget";
 import { ClientProviders } from "@/components/ClientProviders";
 import { CommandMenuLazy as CommandMenu } from "@/components/CommandMenuLazy";
 import { NavBar } from "@/components/Layout/NavBar";
@@ -66,6 +67,7 @@ export default function RootLayout({
 
 					{/* Global Interaction Overlays */}
 					<CommandMenu />
+					<FloatingChatWidget />
 				</ClientProviders>
 			</body>
 		</html>

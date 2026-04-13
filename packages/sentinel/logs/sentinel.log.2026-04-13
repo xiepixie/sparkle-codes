@@ -1,0 +1,20 @@
+2026-04-13T03:52:44.061396Z  WARN sqlx_postgres::options::parse: ignoring unrecognized connect parameter key=channel_binding value=require
+2026-04-13T03:52:45.153963Z  INFO sentinel::app: Sentinel started. Watcher mode enabled. Vault root: "/Users/xpx/Data/xpx/Documents/I.P.A.R.A"
+2026-04-13T03:52:45.153999Z  INFO sentinel::sync: 🚀 [Lifecycle] Starting full vault synchronization...
+2026-04-13T03:52:45.156555Z  INFO sentinel::sync: 📂 Discovered 51 markdown files in vault.
+2026-04-13T03:52:45.156560Z  INFO sentinel::sync: 🔭 [Index] Starting metadata pre-scan for 51 files...
+2026-04-13T03:52:45.624090Z  INFO sentinel::sync: 🧠 [Index] Metadata index built with 177 keys.
+2026-04-13T03:52:46.798004Z  INFO sentinel::sync: ⏳ Progress:  39% | 20/51 files synced
+2026-04-13T03:52:47.473630Z  INFO sentinel::sync: ⏳ Progress:  78% | 40/51 files synced
+2026-04-13T03:52:48.339999Z  INFO sentinel::sync: ☁️ Uploaded attachment: Pasted image 20260408214723.png -> https://cdn.sparkle.codes/attachments/7cd80a7c1fe6d4abf2bdd94caf2985915b68079782b6803885981e96d309c2ce.png
+2026-04-13T03:53:03.476941Z  INFO sentinel::sync: ⏳ Progress: 100% | 51/51 files synced
+2026-04-13T03:53:03.477006Z  INFO sentinel::sync: ✅ [Lifecycle] Full sync finished in 17.852731666s: 51 files synced.
+2026-04-13T03:53:03.920376Z  INFO sentinel::sync: ✨ [Lifecycle] Initial sync completed successfully.
+2026-04-13T03:53:03.997290Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T03:53:05.019336Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T03:53:05.025097Z  INFO sentinel::watcher: Watching vault and attachments: /Users/xpx/Data/xpx/Documents/I.P.A.R.A | /Users/xpx/Data/xpx/Extras/附件
+2026-04-13T03:54:49.948187Z  INFO sentinel::watcher: 🔔 Received 102 file system events. Processing batch...
+2026-04-13T03:55:23.658493Z  WARN sqlx::query: slow statement: execution time exceeded alert threshold summary="INSERT INTO documents ( …" db.statement="\n\n\n        INSERT INTO documents (\n            \"id\", \"title\", \"slug\", \"vaultPath\", \"area\", \"content\", \"html\",\n            \"contentHash\", \"parserVersion\", \"aliases\", \"metadata\", \"updatedAt\", \"publishedAt\", \"lastSyncedAt\", \"isPublished\"\n        )\n        VALUES ($1, $2, $3, $4, CAST($5 AS \"Area\"), $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)\n        ON CONFLICT (\"vaultPath\") DO UPDATE SET\n            \"title\" = EXCLUDED.\"title\",\n            \"slug\" = EXCLUDED.\"slug\",\n            \"area\" = EXCLUDED.\"area\",\n            \"content\" = EXCLUDED.\"content\",\n            \"html\" = EXCLUDED.\"html\",\n            \"contentHash\" = EXCLUDED.\"contentHash\",\n            \"parserVersion\" = EXCLUDED.\"parserVersion\",\n            \"aliases\" = EXCLUDED.\"aliases\",\n            \"metadata\" = EXCLUDED.\"metadata\",\n            \"updatedAt\" = EXCLUDED.\"updatedAt\",\n            \"publishedAt\" = EXCLUDED.\"publishedAt\",\n            \"lastSyncedAt\" = EXCLUDED.\"lastSyncedAt\",\n            \"isPublished\" = EXCLUDED.\"isPublished\"\n        RETURNING id\n        \n" rows_affected=1 rows_returned=1 elapsed=2.019154334s elapsed_secs=2.019154334 slow_threshold=1s
+2026-04-13T03:55:50.014089Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T03:55:51.000310Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T03:55:51.000412Z  INFO sentinel::watcher: ✅ Batch processing finished.

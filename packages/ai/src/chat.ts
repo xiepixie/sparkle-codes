@@ -1,10 +1,9 @@
-import { createOpenAI } from "@ai-sdk/openai";
 import { deepseek } from "@ai-sdk/deepseek";
-import type { UIMessage } from "ai";
-import { convertToModelMessages, streamText } from "ai";
-import { hybridRetrieve } from "./retrieval";
-import { managedCloudflareSearch, isManagedSearchEnabled } from "./managed-search";
+import { createOpenAI } from "@ai-sdk/openai";
+import { type UIMessage, convertToModelMessages, streamText } from "ai";
 import os from "node:os";
+import { isManagedSearchEnabled, managedCloudflareSearch } from "./managed-search";
+import { hybridRetrieve } from "./retrieval";
 
 const SYSTEM_PROMPT = `You are Sparkle AI (✨), the elite technical assistant for Sparkle Codes.
     
@@ -21,7 +20,10 @@ KNOWLEDGE BASE CONTEXT:
 /**
  * Ask a question with RAG-enhanced tool calling
  */
-export async function askQuestion(messages: UIMessage[]) {
+export async function askQuestion(
+	messages: UIMessage[],
+	options?: { onFinish?: (text: string) => void },
+) {
 	console.log(
 		`🚀 [AI SDK] askQuestion initiated with ${messages.length} messages`,
 	);
@@ -45,28 +47,8 @@ export async function askQuestion(messages: UIMessage[]) {
 			  ""
 			: "";
 
-		// A) LOCAL RAG MODE (Mac + MLX + Neon)
-		if (isLocal && query) {
-			console.log(`\n🔍 [Local MLX RAG] Triggering retrieval for: "${query.substring(0, 50)}..."`);
-			try {
-				const results = await hybridRetrieve(query);
-				if (results && results.length > 0) {
-					console.log(`✅ [Local MLX RAG] Found ${results.length} relevant chunks`);
-					context = results
-						.map(
-							(r) =>
-								`[Context Section: [[${r.doc_slug}#${r.heading_id}|${r.doc_title} > ${r.heading_path}]]]\n${r.chunk_text}`,
-						)
-						.join("\n\n---\n\n");
-				} else {
-					console.log("⚠️ [Local MLX RAG] No relevant context found in database.");
-				}
-			} catch (retrievalError) {
-				console.error("❌ [Local MLX RAG] Context retrieval failed:", retrievalError);
-			}
-		} 
-		// B) CLOUD MANAGED RAG MODE (VPS + Cloudflare AI Search)
-		else if (isCloudSearch && query) {
+		// A) CLOUD MANAGED RAG MODE (Prioritized if enabled)
+		if (isCloudSearch && query) {
 			console.log(`\n☁️ [Cloud Managed RAG] Triggering Cloudflare AI Search for: "${query.substring(0, 50)}..."`);
 			try {
 				const results = await managedCloudflareSearch(query);
@@ -85,6 +67,26 @@ export async function askQuestion(messages: UIMessage[]) {
 				console.error("❌ [Cloud Managed RAG] Search failed:", searchError);
 			}
 		}
+		// B) LOCAL RAG MODE (Mac + MLX + Neon) - Fallback if Cloud is off
+		else if (isLocal && query) {
+			console.log(`\n🔍 [Local MLX RAG] Triggering retrieval for: "${query.substring(0, 50)}..."`);
+			try {
+				const results = await hybridRetrieve(query);
+				if (results && results.length > 0) {
+					console.log(`✅ [Local MLX RAG] Found ${results.length} relevant chunks`);
+					context = results
+						.map(
+							(r) =>
+								`[Context Section: [[${r.doc_slug}#${r.heading_id}|${r.doc_title} > ${r.heading_path}]]]\n${r.chunk_text}`,
+						)
+						.join("\n\n---\n\n");
+				} else {
+					console.log("⚠️ [Local MLX RAG] No relevant context found in database.");
+				}
+			} catch (retrievalError) {
+				console.error("❌ [Local MLX RAG] Context retrieval failed:", retrievalError);
+			}
+		} 
 		// C) PURE CHAT MODE
 		else if (!isLocal) {
 			console.log("☁️ [Cloud Mode] Bypassing RAG and using Cloudflare Gemma for standard chat assistance.");
@@ -93,9 +95,13 @@ export async function askQuestion(messages: UIMessage[]) {
 		// 2. Convert UIMessages to model-compatible format
 		const modelMessages = await convertToModelMessages(messages);
 
-		// 3. Cloudflare Mode vs Local Mode Output Generation
-		if (!isLocal) {
-			// Cloudflare Mode (Uses Gemma 4 MoE)
+		// 3. Selection: Should we use Cloudflare Workers AI or Deepseek?
+		const forceCloud = process.env.FORCE_CLOUD_CHAT === "true";
+		const useCloudflare = !isLocal || forceCloud;
+
+		if (useCloudflare) {
+			console.log("🤖 [MODEL] Route: Cloudflare Workers AI");
+			// Cloudflare Mode (Uses Llama 3.1 8B)
 			const accountId = process.env.CF_ACCOUNT_ID;
 			const token = process.env.CF_AI_TOKEN;
 
@@ -103,13 +109,13 @@ export async function askQuestion(messages: UIMessage[]) {
 				throw new Error("CF_ACCOUNT_ID and CF_AI_TOKEN must be set in .env for VPS deployment.");
 			}
 
-			const cloudflareAI = createOpenAI({
+			const cloudflare = createOpenAI({
 				baseURL: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`,
 				apiKey: token,
 			});
 
 			const result = streamText({
-				model: cloudflareAI("@cf/google/gemma-4-26b-a4b-it"),
+				model: cloudflare.chat("@cf/qwen/qwen3-30b-a3b-fp8"),
 				system: SYSTEM_PROMPT.replace(
 					"{{CONTEXT}}",
 					context
@@ -117,9 +123,14 @@ export async function askQuestion(messages: UIMessage[]) {
 						: "No blog context available. Act as a pure technical chat assistant.",
 				),
 				messages: modelMessages,
+				onFinish: ({ text }) => {
+					if (options?.onFinish) {
+						options.onFinish(text);
+					}
+				},
 			});
 
-			return result.toTextStreamResponse();
+			return result.toUIMessageStreamResponse();
 		}
 
 		// Local Mode (With RAG context, and Deepseek)
@@ -133,9 +144,14 @@ export async function askQuestion(messages: UIMessage[]) {
 					: "No blog context found for this query.",
 			),
 			messages: modelMessages,
+			onFinish: ({ text }) => {
+				if (options?.onFinish) {
+					options.onFinish(text);
+				}
+			},
 		});
 
-		return result.toTextStreamResponse();
+		return result.toUIMessageStreamResponse();
 	} catch (error) {
 		console.error("❌ [AI SDK] askQuestion Critical Error:", error);
 		throw error;

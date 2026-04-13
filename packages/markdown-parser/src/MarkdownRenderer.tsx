@@ -1098,17 +1098,23 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 			(e: React.MouseEvent) => {
 				const target = e.target as HTMLElement;
 
-				// WikiLinks
-				const wikiLink = target.closest(".wiki-link, .internal-link");
+				// 🏛️ [Navigation Boundary] Intercept both Wiki-links and standard Internal links.
+				// This ensures that clicking any link to a local blog post or page 
+				// triggers a Next.js soft navigation instead of a full browser reload.
+				const wikiLink = target.closest(".wiki-link, .internal-link, a");
 				if (wikiLink instanceof HTMLAnchorElement) {
-					const linkTarget =
-						wikiLink.dataset.target || wikiLink.getAttribute("href");
 					const href = wikiLink.getAttribute("href");
-					if (linkTarget && onWikiLinkClick) {
-						e.preventDefault();
-						onWikiLinkClick(linkTarget, href || undefined);
-						return;
+					const isInternal = href && (href.startsWith("/") || href.startsWith(window.location.origin));
+					
+					if (isInternal) {
+						const linkTarget = wikiLink.dataset.target || href;
+						if (onWikiLinkClick) {
+							e.preventDefault();
+							onWikiLinkClick(linkTarget, href || undefined);
+							return;
+						}
 					}
+					// For external links, we let the default browser behavior (<a> tag) handle it.
 				}
 
 				// Callout Folds

@@ -81,8 +81,13 @@ export async function managedCloudflareSearch(query: string) {
  * Helper to check if managed search should be used
  */
 export function isManagedSearchEnabled(): boolean {
+	// Respect the explicit toggle first
+	if (process.env.CF_AI_SEARCH_ENABLED === "true") {
+		return true;
+	}
+	// Fallback to platform check only if not explicitly enabled
 	return (
-		process.env.CF_AI_SEARCH_ENABLED === "true" &&
-		os.platform() !== "darwin" // Prioritize local RAG on Mac
+		process.env.CF_AI_SEARCH_ENABLED !== "false" &&
+		os.platform() !== "darwin"
 	);
 }

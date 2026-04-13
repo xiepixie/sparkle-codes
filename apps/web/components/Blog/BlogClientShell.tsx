@@ -210,8 +210,8 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 	const isShowFeatured = !isFiltering;
 	const featuredPost =
 		isShowFeatured && feed.posts.length > 0 ? feed.posts[0] : undefined;
-	const secondaryPosts = isShowFeatured ? feed.posts.slice(1, 4) : [];
-	const restPosts = isShowFeatured ? feed.posts.slice(4) : feed.posts;
+	const mediumPosts = isShowFeatured ? feed.posts.slice(1, 5) : feed.posts;
+	const smallPosts = isShowFeatured ? feed.posts.slice(5) : [];
 
 	return (
 		<div className="w-full">
@@ -347,26 +347,26 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 									/>
 								</div>
 							)}
-							{isShowFeatured && secondaryPosts.length > 0 && (
-								<div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-									{secondaryPosts.map((post, i) => (
-										<BlogCardCompact
+							{mediumPosts.length > 0 && (
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+									{mediumPosts.map((post, i) => (
+										<BlogCard
 											key={post.path}
 											post={post}
-											serialNumber={String(i + 2).padStart(2, "0")}
+											index={i + (isShowFeatured ? 1 : 0)}
 											onTagSelect={handleTagToggle}
 											activeTags={activeTags}
 										/>
 									))}
 								</div>
 							)}
-							{restPosts.length > 0 && (
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-									{restPosts.map((post, i) => (
-										<BlogCard
+							{isShowFeatured && smallPosts.length > 0 && (
+								<div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+									{smallPosts.map((post, i) => (
+										<BlogCardCompact
 											key={post.path}
 											post={post}
-											index={i + (isShowFeatured ? 4 : 0)}
+											serialNumber={String(i + 5).padStart(2, "0")}
 											onTagSelect={handleTagToggle}
 											activeTags={activeTags}
 										/>
@@ -392,42 +392,43 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 
 				{/* 3. Fast Pagination Matrix */}
 				{feed.totalPages > 1 && (
-					<nav className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
-						<button
-							type="button"
-							onClick={() => setPage(Math.max(1, currentPage - 1))}
-							disabled={!feed.hasPreviousPage}
-							aria-label="Go to previous page"
-							className={`flex min-h-11 w-full items-center justify-center gap-3 rounded-2xl border border-border/50 bg-background/40 px-6 py-3 text-[10px] font-bold uppercase tracking-[.25em] transition-[background-color,border-color,color,transform,box-shadow] active:scale-95 backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:w-auto sm:px-8 ${!feed.hasPreviousPage ? "pointer-events-none opacity-20" : "cursor-pointer hover:border-primary/50 hover:bg-primary/10 hover:text-primary hover:shadow-glow-sm"}`}
-						>
-							<ChevronLeft className="h-4 w-4" />
-							Previous
-						</button>
-
-						<div
-							className="flex flex-col items-center gap-1"
-							aria-live="polite"
-						>
-							<div className="text-[12px] font-mono text-primary tracking-tighter tabular-nums bg-primary/5 px-6 py-2.5 rounded-2xl border border-primary/20 shadow-glow-sm">
-								{currentPage.toString().padStart(2, "0")}{" "}
-								<span className="mx-2 opacity-20">/</span>{" "}
-								{feed.totalPages.toString().padStart(2, "0")}
-							</div>
-							<span className="mt-1 text-[10px] text-muted-foreground/60">
-								Page {currentPage} of {feed.totalPages}
-							</span>
+					<nav className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 sm:gap-6 w-full max-w-sm sm:max-w-2xl mx-auto">
+						<div className="flex justify-end">
+							<button
+								type="button"
+								onClick={() => setPage(Math.max(1, currentPage - 1))}
+								disabled={!feed.hasPreviousPage}
+								aria-label="Go to previous page"
+								className={`flex min-h-[44px] items-center justify-center gap-2 sm:gap-3 rounded-2xl border border-border/50 bg-background/40 px-4 py-3 sm:px-6 text-[10px] sm:text-[11px] font-bold uppercase tracking-[.2em] transition-all duration-300 active:scale-95 backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${!feed.hasPreviousPage ? "pointer-events-none opacity-20" : "cursor-pointer hover:border-primary/50 hover:bg-primary/10 hover:text-primary hover:shadow-glow-sm"}`}
+							>
+								<ChevronLeft className="h-4 w-4" />
+								<span className="hidden sm:inline">Previous</span>
+							</button>
 						</div>
 
-						<button
-							type="button"
-							onClick={() => setPage(currentPage + 1)}
-							disabled={!feed.hasNextPage}
-							aria-label="Go to next page"
-							className={`flex min-h-11 w-full items-center justify-center gap-3 rounded-2xl border border-border/50 bg-background/40 px-6 py-3 text-[10px] font-bold uppercase tracking-[.25em] transition-[background-color,border-color,color,transform,box-shadow] active:scale-95 backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:w-auto sm:px-8 ${!feed.hasNextPage ? "pointer-events-none opacity-20" : "cursor-pointer hover:border-primary/50 hover:bg-primary/10 hover:text-primary hover:shadow-glow-sm"}`}
+						<div
+							className="flex items-center justify-center"
+							aria-live="polite"
 						>
-							Next
-							<ChevronRight className="h-4 w-4" />
-						</button>
+							<div className="text-[13px] font-mono text-primary font-medium tracking-tighter tabular-nums bg-primary/[0.03] px-6 py-2.5 lg:py-3 rounded-2xl border border-primary/20 shadow-glow-sm min-w-[100px] flex items-center justify-center select-none backdrop-blur-sm">
+								{currentPage.toString().padStart(2, "0")}
+								<span className="mx-2 opacity-30">/</span>
+								{feed.totalPages.toString().padStart(2, "0")}
+							</div>
+						</div>
+
+						<div className="flex justify-start">
+							<button
+								type="button"
+								onClick={() => setPage(currentPage + 1)}
+								disabled={!feed.hasNextPage}
+								aria-label="Go to next page"
+								className={`flex min-h-[44px] items-center justify-center gap-2 sm:gap-3 rounded-2xl border border-border/50 bg-background/40 px-4 py-3 sm:px-6 text-[10px] sm:text-[11px] font-bold uppercase tracking-[.2em] transition-all duration-300 active:scale-95 backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${!feed.hasNextPage ? "pointer-events-none opacity-20" : "cursor-pointer hover:border-primary/50 hover:bg-primary/10 hover:text-primary hover:shadow-glow-sm"}`}
+							>
+								<span className="hidden sm:inline">Next</span>
+								<ChevronRight className="h-4 w-4" />
+							</button>
+						</div>
 					</nav>
 				)}
 			</div>

@@ -30,6 +30,7 @@ export function getHighlighter() {
 				"js",
 				"jsx",
 				"json",
+				"jsonc",
 				"bash",
 				"md",
 				"html",
@@ -239,22 +240,25 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 						// Detect indentation levels for LaTeX to improve source readability (e.g., matrices, cases)
 						const lineMetadata: { indent: number; text: string }[] = [];
 						let currentDepth = 0;
-						
+
 						// Basic source formatting
 						const normalizedTex = decodedTex
-							.replace(/\r\n/g, '\n')
-							.replace(/\r/g, '\n')
-							.replace(/(\\begin\{[^}]+\})/g, '\n$1\n')
-							.replace(/(\\end\{[^}]+\})/g, '\n$1\n')
-							.replace(/\\\\/g, '\\\\\n')
-							.replace(/\s*&\s*/g, ' & ');
+							.replace(/\r\n/g, "\n")
+							.replace(/\r/g, "\n")
+							.replace(/(\\begin\{[^}]+\})/g, "\n$1\n")
+							.replace(/(\\end\{[^}]+\})/g, "\n$1\n")
+							.replace(/\\\\/g, "\\\\\n")
+							.replace(/\s*&\s*/g, " & ");
 
-						const lines = normalizedTex.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+						const lines = normalizedTex
+							.split("\n")
+							.map((l: string) => l.trim())
+							.filter((l: string) => l.length > 0);
 
 						lines.forEach((line: string) => {
 							const begins = (line.match(/\\begin\{/g) || []).length;
 							const ends = (line.match(/\\end\{/g) || []).length;
-							
+
 							if (line.startsWith("\\end{")) {
 								currentDepth = Math.max(0, currentDepth - 1);
 								lineMetadata.push({ indent: currentDepth, text: line });
@@ -267,11 +271,16 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 
 						if (isDisplay) {
 							// Why: We build a pre+code block structure similar to shiki to maintain CSS compatibility
-							const formattedLines = lineMetadata.map((meta, i) => {
-								const lineNum = i + 1;
-								const indentStyle = meta.indent > 0 ? ` style="--indent-level: ${meta.indent};"` : "";
-								return `<pre data-prefix="${lineNum}"><span class="line-code"${indentStyle}>${highlightLatex(meta.text)}</span></pre>`;
-							}).join("");
+							const formattedLines = lineMetadata
+								.map((meta, i) => {
+									const lineNum = i + 1;
+									const indentStyle =
+										meta.indent > 0
+											? ` style="--indent-level: ${meta.indent};"`
+											: "";
+									return `<pre data-prefix="${lineNum}"><span class="line-code"${indentStyle}>${highlightLatex(meta.text)}</span></pre>`;
+								})
+								.join("");
 							highlightedSource = `<div class="code-fence mockup-code">${formattedLines}</div>`;
 						} else {
 							highlightedSource = `<span class="shiki-inline">${highlightLatex(decodedTex)}</span>`;
@@ -530,7 +539,7 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 						code.split("\n").forEach((line: string) => {
 							const begins = (line.match(/\\begin\{/g) || []).length;
 							const ends = (line.match(/\\end\{/g) || []).length;
-							
+
 							// If the line starts with \end, outdent it immediately
 							if (line.trim().startsWith("\\end{")) {
 								currentDepth = Math.max(0, currentDepth - 1);
@@ -569,7 +578,9 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 									node.properties = { "data-prefix": line };
 
 									const depth =
-										language === "latex" ? lineMetadata[line - 1]?.indent || 0 : 0;
+										language === "latex"
+											? lineMetadata[line - 1]?.indent || 0
+											: 0;
 
 									// Why: We wrap the code content in a dedicated span to isolate indentation from line numbers.
 									node.children = [
@@ -578,7 +589,8 @@ async function enhanceDocumentHtmlForReading(html: string): Promise<string> {
 											tagName: "span",
 											properties: {
 												class: "line-code",
-												style: depth > 0 ? `--indent-level: ${depth};` : undefined,
+												style:
+													depth > 0 ? `--indent-level: ${depth};` : undefined,
 											},
 											children: node.children,
 										},
@@ -680,7 +692,9 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
 		 * 显示日期优先级逻辑
 		 */
 		date: (doc.publishedAt || doc.updatedAt || doc.createdAt).toISOString(),
-		tags: (metadata.tags || []).sort((a: string, b: string) => a.localeCompare(b)),
+		tags: (metadata.tags || []).sort((a: string, b: string) =>
+			a.localeCompare(b),
+		),
 		authorName: metadata.authorName || "xpx",
 		readingTime: metadata.readingTime || calculatedReadingTime,
 		path: doc.slug,
@@ -727,7 +741,9 @@ function mapDocumentToSummary(doc: any): BlogPostSummary {
 		 * 优先使用 publishedAt 以尊重用户指定的发布/创作日期。
 		 */
 		date: (doc.publishedAt || doc.updatedAt || doc.createdAt).toISOString(),
-		tags: (metadata.tags || []).sort((a: string, b: string) => a.localeCompare(b)),
+		tags: (metadata.tags || []).sort((a: string, b: string) =>
+			a.localeCompare(b),
+		),
 		authorName: metadata.authorName || "xpx",
 		readingTime: metadata.readingTime || calculatedReadingTime,
 		path: doc.slug,

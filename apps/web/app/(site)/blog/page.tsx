@@ -36,7 +36,7 @@ export default async function BlogIndexPage({
 		query: resolvedSearchParams.search || "",
 		tags: toTagList(resolvedSearchParams.tag),
 		page: Number.parseInt(resolvedSearchParams.page || "1", 10) || 1,
-		pageSize: 7,
+		pageSize: 8,
 	});
 
 	return (
@@ -50,9 +50,9 @@ export default async function BlogIndexPage({
 						Engineering Reports
 					</h1>
 					<p className="mx-auto mb-8 max-w-2xl text-base text-muted-foreground sm:text-lg md:mb-10 text-balance">
-						Rigorous investigations into AI-driven reliability, math-centric architecture, 
-						and autonomous workflows. Documentation of a first-principles approach to building 
-						systems that last.
+						Rigorous investigations into AI-driven reliability, math-centric
+						architecture, and autonomous workflows. Documentation of a
+						first-principles approach to building systems that last.
 					</p>
 				</header>
 

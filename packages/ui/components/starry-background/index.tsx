@@ -22,7 +22,7 @@ import "./styles.css";
 
 const SKY_SCENE_STATE_KEY = "sky-scene";
 const GOLD_COLOR = "255, 215, 0";
-const IS_DEV = process.env.NODE_ENV !== "production";
+// const IS_DEV = process.env.NODE_ENV !== "production";
 
 // Static theme colors to avoid heavy getComputedStyle calls on theme toggle
 const THEME_COLORS = {
@@ -121,11 +121,8 @@ const GlobalSkyCache: SkyCache = {
   lastHeight: 0,
 };
 
-function debugLog(event: string, details?: Record<string, unknown>) {
-  if (!IS_DEV || typeof window === "undefined") {
-    return;
-  }
-  console.log("[StarryBackground]", event, details ?? {});
+function debugLog(_event: string, _details?: Record<string, unknown>) {
+  // Silent in all environments to prevent console lag
 }
 
 function createSeededRandom(seed: number) {
@@ -230,8 +227,6 @@ function createAmbientStar(
   // 我们模拟一条从左下到右上的斜贯银河带，增加带状区域附近的星星密度。
   // 这消除了“噪点感”，增加了宇宙的结构感。
   while (attempts < 15) {
-    const dx = xRel - 0.5;
-    const dy = yRel - 0.5;
     // 1. 避开主内容垂直区域 (UI 保护)
     // 保护视口中心的垂直带状区域 (50% 宽度)，确保文字阅读不受干扰
     const distFromCenterX = Math.abs(xRel - 0.5);

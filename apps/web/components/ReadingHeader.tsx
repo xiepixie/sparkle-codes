@@ -19,13 +19,16 @@ import {
 	useTransform,
 } from "framer-motion";
 import katex from "katex";
-import { FileText, Folder, Hash, Loader2, Menu, Search, Sparkles } from "lucide-react";
+import { FileText, Folder, Hash, Loader2, Menu, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import "katex/dist/katex.min.css";
 import { normalizeSlug } from "@repo/utils";
-import { openCommandCenter } from "@/lib/command-center";
+import {
+	openCommandCenter,
+	syncCommandCenterContext,
+} from "@/lib/command-center";
 import {
 	getReadingRecommendations,
 	readReadingHistory,
@@ -243,41 +246,41 @@ export function ReadingHeader({
 		if (entry?.sectionSlug) {
 			const targetId = entry.sectionSlug;
 
-		const restoreScroll = () => {
-			// Safety: Never trigger restoration during a theme transition
-			if ((window as any).__SPARKLE_THEME_TRANSITION__) {
-				return false;
-			}
-			
-			const element = document.getElementById(targetId);
-			if (element) {
-				isRestoring.current = true;
-				isGuarding.current = true;
+			const restoreScroll = () => {
+				// Safety: Never trigger restoration during a theme transition
+				if ((window as any).__SPARKLE_THEME_TRANSITION__) {
+					return false;
+				}
 
-				const headerOffset = 100;
-				// We use a RAF to ensure we calculate the position after the current paint cycle
-				requestAnimationFrame(() => {
-					const rect = element.getBoundingClientRect();
-					const top = rect.top + window.scrollY - headerOffset;
+				const element = document.getElementById(targetId);
+				if (element) {
+					isRestoring.current = true;
+					isGuarding.current = true;
 
-					window.scrollTo({ top, behavior: "smooth" });
+					const headerOffset = 100;
+					// We use a RAF to ensure we calculate the position after the current paint cycle
+					requestAnimationFrame(() => {
+						const rect = element.getBoundingClientRect();
+						const top = rect.top + window.scrollY - headerOffset;
 
-					// Apply highlight effect
-					element.classList.add("jump-highlight");
-					setTimeout(() => {
-						element.classList.remove("jump-highlight");
-						isGuarding.current = false;
-						// Only allow re-restoration after a significant cooling period
+						window.scrollTo({ top, behavior: "smooth" });
+
+						// Apply highlight effect
+						element.classList.add("jump-highlight");
 						setTimeout(() => {
-							isRestoring.current = false;
-						}, 3000);
-					}, 2000);
-				});
+							element.classList.remove("jump-highlight");
+							isGuarding.current = false;
+							// Only allow re-restoration after a significant cooling period
+							setTimeout(() => {
+								isRestoring.current = false;
+							}, 3000);
+						}, 2000);
+					});
 
-				return true;
-			}
-			return false;
-		};
+					return true;
+				}
+				return false;
+			};
 
 			// Attempt immediate restoration or wait for content hydration via MutationObserver
 			if (!restoreScroll()) {
@@ -581,10 +584,10 @@ export function ReadingHeader({
 		});
 	};
 
-	const openReadingSearch = () => {
-		openCommandCenter({
-			mode: "search",
-			reading: {
+	// Sync context to CommandCenter in background
+	useEffect(() => {
+		if (slug) {
+			syncCommandCenterContext({
 				title: displayTitle,
 				slug,
 				sections: segments.map((segment) => ({
@@ -594,13 +597,13 @@ export function ReadingHeader({
 					level: segment.level,
 				})),
 				recentPosts,
-			},
-		});
-	};
+			});
+		}
+	}, [slug, displayTitle, segments, recentPosts]);
 
-	const openReadingAsk = () => {
+	const openReadingSearch = () => {
 		openCommandCenter({
-			mode: "ask",
+			mode: "search",
 			reading: {
 				title: displayTitle,
 				slug,
@@ -742,18 +745,6 @@ export function ReadingHeader({
 						</button>
 
 						<div className="flex shrink-0 items-center gap-1 border-l border-border/20 pl-1 sm:gap-1.5 sm:pl-2">
-							<button
-								type="button"
-								onClick={openReadingAsk}
-								aria-label="Ask AI about this article"
-								className="group/ask flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform,opacity] hover:bg-primary/10 hover:text-primary active:scale-90 interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:h-11 md:w-11"
-							>
-								<Sparkles
-									size={15}
-									className="transition-transform group-hover/ask:scale-110"
-								/>
-							</button>
-
 							<button
 								type="button"
 								onClick={openReadingSearch}

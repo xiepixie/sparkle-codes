@@ -1,14 +1,13 @@
 "use client";
 
-import React from "react";
-import { ArrowRight, Calendar, Clock } from "lucide-react";
+import { useHoverPrefetch } from "@/hooks/use-hover-prefetch";
+import type { BlogPostSummary } from "@/lib/blog";
+import { Tag } from "@repo/ui";
 import { motion } from "framer-motion";
+import { ArrowRight, Calendar, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Tag } from "@repo/ui";
-import { prefetchPost } from "@/lib/client-prefetch";
-import type { BlogPostSummary } from "@/lib/blog";
+import React from "react";
 import { HighlightedText } from "./HighlightedText";
 
 interface BlogCardProps {
@@ -31,13 +30,16 @@ export function BlogCard({
 	activeTags = [],
 	onTagSelect,
 }: BlogCardProps) {
-	const router = useRouter();
-	const [prefetchState, setPrefetchState] = React.useState<
-		"idle" | "loading" | "ready"
-	>("idle");
-	const [hasBeenPrefetched, setHasBeenPrefetched] = React.useState(false);
+	const {
+		prefetchState,
+		hasBeenPrefetched,
+		handleMouseEnter,
+		handleMouseLeave,
+	} = useHoverPrefetch(post.path, 300);
 
-	const selectedTags = new Set(activeTags.map((tag: string) => tag.toLowerCase()));
+	const selectedTags = new Set(
+		activeTags.map((tag: string) => tag.toLowerCase()),
+	);
 	const hasDescription = Boolean(
 		post.highlightedDescription || post.description,
 	);
@@ -59,32 +61,9 @@ export function BlogCard({
 
 	const serialNumber = String(index + 1).padStart(2, "0");
 
-	const handleMouseEnter = () => {
-		if (prefetchState === "idle") {
-			if (hasBeenPrefetched) {
-				setPrefetchState("ready");
-			} else {
-				setPrefetchState("loading");
-				
-				// Actual Next.js Route Prefetch
-				router.prefetch(`/blog/${post.path}`);
-				
-				// Truthful Data Prefetch
-				prefetchPost(post.path).then(() => {
-					setPrefetchState("ready");
-					setHasBeenPrefetched(true);
-				});
-			}
-		}
-	};
-
-	const handleMouseLeave = () => {
-		setPrefetchState("idle");
-	};
-
 	return (
 		<article
-			className="h-full animate-in fade-in slide-in-from-bottom-4"
+			className="h-full"
 			style={{ animationDelay: `${index * 70}ms` }}
 			data-cursor="explore"
 			onMouseEnter={handleMouseEnter}
@@ -98,21 +77,39 @@ export function BlogCard({
 				</div>
 				{/* Orbiting Neon Trace (Unified Digital Interface Layer) */}
 				<div className="absolute inset-0 pointer-events-none z-20 overflow-hidden rounded-[inherit]">
-					<svg className="absolute inset-0 h-full w-full" style={{ overflow: "visible" }} aria-hidden="true">
+					<svg
+						className="absolute inset-0 h-full w-full"
+						style={{ overflow: "visible" }}
+						aria-hidden="true"
+					>
 						<motion.rect
 							initial={{ pathLength: 0, opacity: 0 }}
-							animate={{ 
-								pathLength: (prefetchState === "ready" || hasBeenPrefetched) ? 1 : prefetchState === "loading" ? 0.3 : 0,
-								opacity: prefetchState !== "idle" ? 1 : hasBeenPrefetched ? 0.25 : 0,
-								stroke: (prefetchState === "ready" || hasBeenPrefetched) ? "var(--color-primary)" : "var(--color-primary-muted, var(--color-primary))"
+							animate={{
+								pathLength:
+									prefetchState === "ready" || hasBeenPrefetched
+										? 1
+										: prefetchState === "loading"
+											? 0.3
+											: 0,
+								opacity:
+									prefetchState !== "idle" ? 1 : hasBeenPrefetched ? 0.25 : 0,
+								stroke:
+									prefetchState === "ready" || hasBeenPrefetched
+										? "var(--color-primary)"
+										: "var(--color-primary-muted, var(--color-primary))",
 							}}
-							transition={{ 
-								pathLength: { 
-									duration: prefetchState === "ready" ? (hasBeenPrefetched ? 0.15 : 0.25) : 1.2,
-									ease: prefetchState === "ready" ? "easeOut" : "linear"
+							transition={{
+								pathLength: {
+									duration:
+										prefetchState === "ready"
+											? hasBeenPrefetched
+												? 0.15
+												: 0.25
+											: 1.2,
+									ease: prefetchState === "ready" ? "easeOut" : "linear",
 								},
 								opacity: { duration: 0.3 },
-								stroke: { duration: 0.3 }
+								stroke: { duration: 0.3 },
 							}}
 							x="1"
 							y="1"
@@ -124,10 +121,14 @@ export function BlogCard({
 							strokeLinecap="round"
 							rx="16"
 							className="transition-all duration-300"
-							style={{ 
-								filter: (prefetchState === "ready" || (prefetchState === "idle" && hasBeenPrefetched))
-									? (prefetchState === "ready" ? "drop-shadow(0 0 8px var(--color-primary))" : "drop-shadow(0 0 3px var(--color-primary))")
-									: "none"
+							style={{
+								filter:
+									prefetchState === "ready" ||
+									(prefetchState === "idle" && hasBeenPrefetched)
+										? prefetchState === "ready"
+											? "drop-shadow(0 0 8px var(--color-primary))"
+											: "drop-shadow(0 0 3px var(--color-primary))"
+										: "none",
 							}}
 						/>
 					</svg>
@@ -187,7 +188,8 @@ export function BlogCard({
 									key={tag}
 									interactive
 									variant={
-										selectedTags.has(tag.toLowerCase()) ? "active" : "default"}
+										selectedTags.has(tag.toLowerCase()) ? "active" : "default"
+									}
 									onClick={(e) => {
 										e.preventDefault();
 										onTagSelect?.(tag);
@@ -227,18 +229,23 @@ export function BlogCard({
 
 				{/* Unified Industrial CTA (Bottom Right) */}
 				<div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 pointer-events-none">
-					<div className={`flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full border transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
-						${prefetchState === "ready" 
-							? "bg-primary border-primary shadow-[0_0_20px_rgba(var(--primary),0.5)] scale-110" 
-							: "bg-background/20 border-primary/20 shadow-none scale-100"
+					<div
+						className={`flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full border transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
+						${
+							prefetchState === "ready"
+								? "bg-primary border-primary shadow-[0_0_20px_rgba(var(--primary),0.5)] scale-110"
+								: "bg-background/20 border-primary/20 shadow-none scale-100"
 						}
 						${prefetchState !== "idle" || hasBeenPrefetched ? "opacity-100" : "opacity-0 translate-x-1"}
-					`}>
-						<ArrowRight className={`h-3 w-3 sm:h-4 sm:w-4 transition-all duration-500 
+					`}
+					>
+						<ArrowRight
+							className={`h-3 w-3 sm:h-4 sm:w-4 transition-all duration-500 
 							${prefetchState === "ready" ? "text-primary-foreground -rotate-45" : "text-primary/70 rotate-0"}
-						`} />
+						`}
+						/>
 					</div>
-					
+
 					{/* Predictive Loading Ring */}
 					{prefetchState === "loading" && (
 						<div className="absolute inset-0 rounded-full border border-primary/30 animate-ping opacity-40" />

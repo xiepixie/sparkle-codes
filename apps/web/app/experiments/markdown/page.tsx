@@ -68,17 +68,22 @@ function MarkdownRuntime({ children }: { children: React.ReactNode }) {
 				if (mathBlock.classList.contains("source-mode")) {
 					mathBlock.setAttribute("data-rendered", mathBlock.innerHTML);
 					const rawTex = mathBlock.getAttribute("data-tex") || "";
-					
+
 					// Use the logic from our production blog.ts for consistency
-                    const decodedTex = rawTex
-                        .replace(/&amp;/g, "&")
-                        .replace(/&lt;/g, "<")
-                        .replace(/&gt;/g, ">");
-                    
-                    const lines = decodedTex.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-                    const formattedLines = lines.map((line, i) => {
-                        return `<pre data-prefix="${i + 1}"><span class="line-code">${highlightLatex(line)}</span></pre>`;
-                    }).join("");
+					const decodedTex = rawTex
+						.replace(/&amp;/g, "&")
+						.replace(/&lt;/g, "<")
+						.replace(/&gt;/g, ">");
+
+					const lines = decodedTex
+						.split("\n")
+						.map((l) => l.trim())
+						.filter((l) => l.length > 0);
+					const formattedLines = lines
+						.map((line, i) => {
+							return `<pre data-prefix="${i + 1}"><span class="line-code">${highlightLatex(line)}</span></pre>`;
+						})
+						.join("");
 
 					mathBlock.innerHTML = `
             <div class="latex-source code-fence-container">

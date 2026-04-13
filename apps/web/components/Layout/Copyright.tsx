@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 /**
  * Copyright component (Client-side hydration)
- * 
+ *
  * 为什么这样做：
  * - 在 Next.js 15+ 的 Server Component 中使用 new Date() 会导致预渲染错误（PRERENDER_CURRENT_TIME）。
  * - 通过将年份显示移入 Client Component，我们可以保持父组件（HomePage）是静态的，

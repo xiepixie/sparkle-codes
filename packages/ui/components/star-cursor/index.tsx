@@ -29,7 +29,7 @@ export const getStrategy = (kind: CursorKind): CursorStrategy => {
 		case "navigate": return "free";
 		case "action": return "frame-tight";
 		case "explore": return "frame-soft";
-		case "text": return "free";
+		case "text": return "suppress";
 		case "tag": return "frame-tight";
 		case "disabled": return "suppress";
 		default: return "free";
@@ -399,7 +399,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			}
 
 			// Protocol 2: Fallback Inference (Smooth Migration)
-			const semanticTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge');
+			const semanticTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge, [data-button="true"], [data-action="true"]');
 			
 			if (semanticTarget) {
 				const isLink = semanticTarget.tagName === "A" || 
@@ -480,7 +480,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				// We try to snap to the protocol target first, otherwise fallback to the semantic target
 				let frameTarget = target.closest('[data-cursor="navigate"], [data-cursor="action"], [data-cursor="explore"], [data-cursor="tag"]');
 				if (!frameTarget) {
-					frameTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge');
+					frameTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge, [data-button="true"], [data-action="true"]');
 				}
 
 				if (frameTarget !== activeTarget.current) {

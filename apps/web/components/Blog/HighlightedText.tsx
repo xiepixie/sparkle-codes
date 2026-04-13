@@ -21,7 +21,7 @@ export function HighlightedText({ html, className }: HighlightedTextProps) {
 		// This is a simple regex-based parser for the specific tags used in renderMarkdownSnippet.
 		// We split by any of the supported tags, capturing the tag and its contents.
 		// Pattern: (<tag[^>]*>.*?</tag>)
-		const tagPattern = /(<(mark|strong|em|del|a|h3|code|span)[^>]*>.*?<\/\2>)/g;
+		const tagPattern = /(<(?:mark|strong|em|del|a|h3|code|span)[^>]*>[\s\S]*?<\/(?:mark|strong|em|del|a|h3|code|span)>)/gi;
 		const segments = html.split(tagPattern);
 
 		return segments.map((segment, index) => {

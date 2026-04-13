@@ -22,25 +22,25 @@ const focusAreas = [
 	{
 		title: "AI Workflows",
 		description:
-			"I'm exploring how LLMs can simplify the daily grind. Not a pro, just building 'calm' tools to manage the noise.",
+			"I build with LLMs to reduce boring work, not to make louder software. The goal is simple: fewer tabs, fewer repeats, fewer dropped details.",
 		icon: Bot,
 	},
 	{
 		title: "Sanity Testing",
 		description:
-			"Learning to use AI to write better tests. As an amateur, I rely on automated certainty to move fast without breaking things.",
+			"I treat tests as a way to protect momentum. If a system helps me move faster, it should also help me notice when I am about to break it.",
 		icon: TestTube2,
 	},
 	{
 		title: "Math & Logic",
 		description:
-			"A math major's lens on code. I prefer first principles and clean abstractions over complex 'industry standards'.",
+			"I like first-principles reasoning, clean edges, and explanations that survive contact with reality. Fancy abstractions only earn their keep if they stay legible.",
 		icon: Workflow,
 	},
 	{
 		title: "The Personal Lab",
 		description:
-			"sparkle.codes is my open notebook. I document the 'why' behind experiments, failures, and accidental discoveries.",
+			"sparkle.codes is where I publish the working notes, not just the polished result: tradeoffs, dead ends, and the small decisions that actually matter.",
 		icon: BrainCircuit,
 	},
 ];
@@ -51,7 +51,7 @@ const projects = [
 		href: "https://time-vista-tasks.vercel.app/",
 		eyebrow: "AI scheduling system",
 		description:
-			"A personal time-management app that uses agents and Notion MCP to update schedules, rearrange tasks, and help users execute the day with less friction.",
+			"An agent-assisted planning system for turning an overpacked day into something executable. It updates schedules, reshuffles tasks, and keeps the plan close to reality.",
 		bullets: [
 			"Agent-assisted planning",
 			"Notion MCP workflows",
@@ -64,7 +64,7 @@ const projects = [
 		href: "https://smart-error-archiver.vercel.app/",
 		eyebrow: "AI mistake management",
 		description:
-			"An AI-first error notebook for study and review: upload images, recognize formulas, record questions, and revisit with spaced repetition.",
+			"A study system for mistakes worth remembering. It captures problem screenshots, extracts formulas, stores the reasoning gap, and brings it back when review is useful.",
 		bullets: [
 			"AI vision ingestion",
 			"LaTeX-friendly authoring",
@@ -113,19 +113,20 @@ export default async function HomePage() {
 						</div>
 
 						<h1 className="mt-8 max-w-[42rem] text-balance text-[clamp(2.8rem,8vw,5.8rem)] font-bold leading-[1.02] tracking-[-0.04em] text-foreground">
-							Crafting{" "}
+							Building{" "}
 							<span className="bg-gradient-to-br from-primary via-primary/90 to-primary/60 bg-clip-text text-transparent">
-								quiet experiments
+								useful systems
 							</span>{" "}
-							& simple automation.
+							for messy, real work.
 						</h1>
 						<p className="mt-10 max-w-[32rem] text-[1.1rem] sm:text-[1.2rem] leading-[1.7] text-muted-foreground/90">
 							Hi, I'm{" "}
 							<span className="font-semibold text-foreground">
 								Xavier Pax (xpx)
 							</span>
-							. I'm a math hobbyist and software experimenter. This is my lab
-							for exploring how AI can make workflows more{" "}
+							. I write about AI workflows, testing, and personal tools with
+							one standard: they should be calm, specific, and actually useful.
+							This site is my lab for making workflows more{" "}
 							<span className="text-foreground/80 italic">
 								reliable and legible
 							</span>
@@ -135,7 +136,7 @@ export default async function HomePage() {
 						<div className="mt-12 flex flex-col gap-4 sm:flex-row sm:items-center">
 							<Link
 								href="/blog"
-								className="group relative inline-flex min-h-14 items-center justify-center overflow-hidden rounded-2xl bg-primary px-10 text-[1.05rem] font-semibold text-primary-foreground shadow-glow transition-all hover:scale-[1.02] active:scale-95"
+								className="no-dash group relative inline-flex min-h-14 items-center justify-center overflow-hidden rounded-2xl bg-primary px-10 text-[1.05rem] font-semibold text-primary-foreground shadow-glow transition-all hover:scale-[1.02] active:scale-95"
 							>
 								<span className="relative z-10 flex items-center">
 									Read the blog
@@ -145,7 +146,7 @@ export default async function HomePage() {
 							</Link>
 							<a
 								href="mailto:wrxpx5@163.com"
-								className="group inline-flex min-h-14 items-center justify-center rounded-2xl border border-border/60 bg-background/40 px-10 text-[1.05rem] font-medium backdrop-blur-xl transition-all hover:border-primary/40 hover:bg-accent active:scale-95"
+								className="no-dash group inline-flex min-h-14 items-center justify-center rounded-2xl border border-border/60 bg-background/40 px-10 text-[1.05rem] font-medium backdrop-blur-xl transition-all hover:border-primary/40 hover:bg-accent active:scale-95"
 							>
 								<Mail className="mr-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
 								Get in touch
@@ -165,7 +166,7 @@ export default async function HomePage() {
 								The Daily Grind
 							</h2>
 							<p className="mt-2 text-[0.95rem] text-muted-foreground/80 leading-relaxed">
-								Keeping the momentum with small, steady improvements.
+								Small commits, fewer mysteries, steady progress.
 							</p>
 							<div className="mt-8">
 								<GithubActivity />
@@ -207,13 +208,13 @@ export default async function HomePage() {
 						<div className="sticky top-32">
 							<SectionEyebrow>Selected work</SectionEyebrow>
 							<h2 className="mt-5 text-[clamp(2.5rem,5vw,4.2rem)] font-bold leading-[1] tracking-[-0.04em]">
-								Tools for <br />
-								<span className="text-primary italic">Momentum.</span>
+								Tools that make <br />
+								<span className="text-primary italic">follow-through</span> easier.
 							</h2>
 							<p className="mt-8 text-[1.15rem] leading-[1.8] text-muted-foreground">
-								I experiment with functional prototypes to solve daily friction.
-								These are living systems currently running my own routines and
-								learning loops.
+								I prototype around everyday friction: planning, review,
+								retrieval, and the gap between a good idea and consistent
+								execution. These projects are built to be used, not just shown.
 							</p>
 							<div className="mt-10 hidden lg:block">
 								<div className="h-[2px] w-24 bg-gradient-to-r from-primary/40 to-transparent" />
@@ -234,7 +235,7 @@ export default async function HomePage() {
 										href={href}
 										target="_blank"
 										rel="noreferrer"
-										className="block transition-all"
+										className="no-dash block transition-all"
 									>
 										<div className="flex flex-col sm:flex-row sm:items-start justify-between gap-8">
 											<div className="flex-1">
@@ -314,22 +315,22 @@ export default async function HomePage() {
 
 							<h2 className="text-[clamp(2.4rem,6vw,4.5rem)] font-bold leading-[1] tracking-[-0.05em] text-balance">
 								The <span className="text-primary italic">Open Notebook</span>{" "}
-								philosophy.
+								approach.
 							</h2>
 
 							<p className="mt-8 mx-auto max-w-[34rem] text-[1.15rem] leading-[1.8] text-muted-foreground/80 font-medium italic">
-								I document the "why" behind every line. No technical pride—just
-								a record of experiments, failures, and the quiet logic that
-								holds it all together.
+								I try to document the part people usually skip: why this choice,
+								why this tradeoff, why this failed. The writing is meant to be
+								useful even when the experiment is unfinished.
 							</p>
 
 							<div className="mt-14 flex flex-col sm:flex-row gap-6 w-full sm:w-auto justify-center items-center">
 								<Link
 									href="/blog"
-									className="group relative inline-flex h-16 w-full sm:w-auto items-center justify-center overflow-hidden rounded-[1.25rem] bg-primary px-12 text-[1.05rem] font-bold text-primary-foreground shadow-glow transition-all hover:scale-[1.02] active:scale-95"
+									className="no-dash group relative inline-flex h-16 w-full sm:w-auto items-center justify-center overflow-hidden rounded-[1.25rem] bg-primary px-12 text-[1.05rem] font-bold text-primary-foreground shadow-glow transition-all hover:scale-[1.02] active:scale-95"
 								>
 									<span className="relative z-10 flex items-center">
-										Explore the Blog
+										Read the writing
 										<ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
 									</span>
 									<div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
@@ -337,9 +338,9 @@ export default async function HomePage() {
 
 								<Link
 									href={getAppUrl("docs")}
-									className="inline-flex h-16 w-full sm:w-auto items-center justify-center rounded-[1.25rem] bg-background/40 px-12 text-[1.05rem] font-bold backdrop-blur-md border border-border/80 transition-all hover:border-primary/40 hover:bg-accent active:scale-95"
+									className="no-dash inline-flex h-16 w-full sm:w-auto items-center justify-center rounded-[1.25rem] bg-background/40 px-12 text-[1.05rem] font-bold backdrop-blur-md border border-border/80 transition-all hover:border-primary/40 hover:bg-accent active:scale-95"
 								>
-									Lab Documentation
+									Browse the docs
 								</Link>
 							</div>
 
@@ -370,9 +371,9 @@ export default async function HomePage() {
 							</p>
 						</div>
 						<p className="max-w-xs text-[1rem] leading-relaxed text-muted-foreground/80">
-							Personal research lab & industrial blog. <br />
+							Personal lab for useful software and honest notes. <br />
 							<span className="text-foreground/40 font-medium">
-								Built with precision. Designed with starlight.
+								Built carefully. Written plainly.
 							</span>
 						</p>
 					</div>

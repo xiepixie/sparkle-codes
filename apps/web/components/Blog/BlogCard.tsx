@@ -69,7 +69,7 @@ export function BlogCard({
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
 		>
-			<div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/40 transition-all duration-300 ease-[cubic-bezier(0.2,1,0.2,1)] hover:-translate-y-px [transform-style:preserve-3d] [backface-visibility:hidden] transform-gpu isolation-isolate">
+			<div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/40 transition-all duration-300 ease-[cubic-bezier(0.2,1,0.2,1)] hover:-translate-y-px isolation-isolate">
 				{/* Performance Optimized Background Cluster */}
 				<div className="absolute inset-0 z-[-10] pointer-events-none rounded-[inherit] overflow-hidden contain-paint">
 					<div className="absolute inset-0 bg-background/40 backdrop-blur-xl" />

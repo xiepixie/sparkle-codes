@@ -184,7 +184,41 @@
 }
 
 .cursor-ring.contrast {
-    border-color: white !important;
+    border-color: #fff !important;
+}
+
+/* Core Contrast Awareness */
+.cursor-core.contrast {
+    background: #fff !important;
+}
+
+.cursor-core.contrast::before,
+.cursor-core.contrast::after {
+    background: #fff !important;
+}
+
+/* Light Mode Contrast Refinement
+   Why: In light mode, white on primary purple is visible, but the frame offset (+12px) 
+   causes the outer edge of the frame to land on the white page background. 
+   White-on-white makes the frame invisible. We use Aurora Teal for a technical contrast 
+   that remains visible on both purple and white. 
+*/
+:not(.dark) .cursor-ring.contrast {
+    border-color: var(--aurora) !important;
+}
+
+:not(.dark) .cursor-core.contrast {
+    background: var(--aurora) !important;
+}
+
+:not(.dark) .cursor-core.contrast::before,
+:not(.dark) .cursor-core.contrast::after {
+    background: var(--aurora) !important;
+    box-shadow: 0 0 8px color-mix(in oklab, var(--aurora) 40%, transparent);
+}
+
+:not(.dark) .cursor-ring.contrast .cursor-corner {
+    border-color: var(--aurora) !important;
 }
 
 /* --- Constellation Brackets (Ornamental) --- */
@@ -231,10 +265,34 @@ body.custom-cursor-active [contenteditable] {
     cursor: text !important;
 }
 
+/* 5. Theme Transition Screen Capture Prevention 
+   Why: The View Transition API takes a screenshot synchronously. 
+   To prevent the custom cursor from being permanently frozen into the old snapshot image 
+   while hovering the theme button, we must force opacity to 0 immediately when the 
+   html.theme-transitioning class is applied.
+*/
+.theme-transitioning .cursor-ring,
+.theme-transitioning .cursor-core,
+.theme-transitioning .cursor-aura {
+    opacity: 0 !important;
+    transition: none !important;
+    animation: none !important;
+}
+
+
 .cursor-ring.is-snapped.kind-action .cursor-brackets,
 .cursor-ring.is-snapped.kind-tag .cursor-brackets {
     opacity: 1;
     transform: scale(1.02);
+}
+
+/* Synced Brackets Contrast */
+.cursor-ring.contrast .cursor-brackets .cursor-corner {
+    border-color: #fff !important;
+}
+
+:not(.dark) .cursor-ring.contrast .cursor-brackets .cursor-corner {
+    border-color: var(--aurora) !important;
 }
 
 /* 

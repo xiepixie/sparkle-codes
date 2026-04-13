@@ -56,8 +56,8 @@ export async function askQuestion(
 					console.log(`✅ [Cloud Managed RAG] Found ${results.length} relevant documents`);
 					context = results
 						.map(
-							(r) =>
-								`[Context Document: ${r.title}]\n${r.content}`
+							(r: any) =>
+								`[Context Document: /blog/${r.slug}]\n${r.content}`
 						)
 						.join("\n\n---\n\n");
 				} else {

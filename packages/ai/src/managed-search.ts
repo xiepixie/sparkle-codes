@@ -66,11 +66,28 @@ export async function managedCloudflareSearch(query: string) {
 		}
 
 		// Flatten the results into a unified format for the chat context
-		return data.result.data.map((item) => ({
-			title: item.filename,
-			content: item.content.map((c) => c.text).join("\n\n"),
-			score: item.score,
-		}));
+		return data.result.data.map((item) => {
+			// Extract slug from URL if it's a sparkle.codes link
+			// Example: https://sparkle.codes/blog/my-post -> my-post
+			let slug = item.filename;
+			try {
+				if (item.filename.startsWith("http")) {
+					const url = new URL(item.filename);
+					const parts = url.pathname.split("/").filter(Boolean);
+					// If it's a blog post, the last part is the slug
+					slug = parts[parts.length - 1] || item.filename;
+				}
+			} catch (_e) {
+				console.warn("[Managed Search] Failed to parse slug from filename:", item.filename);
+			}
+
+			return {
+				title: item.filename,
+				slug: slug, // Added extracted slug
+				content: item.content.map((c) => c.text).join("\n\n"),
+				score: item.score,
+			};
+		});
 	} catch (error) {
 		console.error("❌ [Cloudflare AI Search] Request failed:", error);
 		return [];

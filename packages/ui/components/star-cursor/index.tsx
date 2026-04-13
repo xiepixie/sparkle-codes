@@ -133,6 +133,19 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			 */
 			if (!isAnimating.current || (window as any).__SPARKLE_THEME_TRANSITION__) {
 				if (isAnimating.current) {
+					if ((window as any).__SPARKLE_THEME_TRANSITION__) {
+						// 坐标同步：强制内部环与真实指针保持一致。
+						// 解决：主题切换期间若用户移动鼠标，过渡结束后光标会从旧按钮“飞”过来。
+						state.current.ring.x = state.current.pointer.x;
+						state.current.ring.y = state.current.pointer.y;
+						state.current.ringSize.w = 32;
+						state.current.ringSize.h = 32;
+
+						// 静默隐藏：在切换瞬间对各层执行降维级隐藏，避免旧快照内出现光标残影
+						if (coreRef.current) coreRef.current.style.opacity = "0";
+						if (ringRef.current) ringRef.current.style.opacity = "0";
+						if (auraRef.current) auraRef.current.style.opacity = "0";
+					}
 					rafId.current = requestAnimationFrame(update);
 				}
 				return;

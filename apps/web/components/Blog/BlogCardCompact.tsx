@@ -5,10 +5,9 @@ import { motion } from "framer-motion";
 import { ArrowRight, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import React from "react";
-import type { BlogPostSummary } from "@/lib/blog";
 import { useHoverPrefetch } from "@/hooks/use-hover-prefetch";
+import type { BlogPostSummary } from "@/lib/blog";
 import { HighlightedText } from "./HighlightedText";
 
 interface BlogCardCompactProps {
@@ -41,12 +40,21 @@ export function BlogCardCompact({
 	return (
 		<article
 			className="h-full"
-			style={{ animationDelay: `${(Number.parseInt(serialNumber) - 1) * 70}ms` }}
+			/* 
+			   Why: Staggered animation delay based on serial number to create 
+			   a natural entry flow for grid items. 
+			*/
+			style={{ animationDelay: `${(Number.parseInt(serialNumber, 10) - 1) * 70}ms` }}
 			data-cursor="explore"
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
 		>
-			<div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/40 transition-all duration-300 ease-[cubic-bezier(0.2,1,0.2,1)] hover:-translate-y-px [transform-style:preserve-3d] [backface-visibility:hidden] transform-gpu isolation-isolate">
+			{/* 
+			    Why: Removed [transform-style:preserve-3d], [backface-visibility:hidden], and transform-gpu 
+			    to prevent text anti-aliasing jitter and blurring on MacOS/Safari that occurs 
+			    when forcing hardware acceleration on elements with text.
+			*/}
+			<div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/40 transition-all duration-300 ease-[cubic-bezier(0.2,1,0.2,1)] hover:-translate-y-px isolation-isolate">
 				{/* Performance Optimized Background Cluster */}
 				<div className="absolute inset-0 z-[-10] pointer-events-none rounded-[inherit] overflow-hidden contain-paint">
 					<div className="absolute inset-0 bg-background/40 backdrop-blur-xl" />

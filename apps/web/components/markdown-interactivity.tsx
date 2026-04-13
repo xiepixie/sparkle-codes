@@ -177,7 +177,9 @@ export function MarkdownInteractivity({
 	// We detect the hash on mount/content-change and scroll manually.
 	useEffect(() => {
 		const hash = window.location.hash;
-		if (!hash) return;
+		if (!hash) {
+			return;
+		}
 
 		// Delay to ensure markdown DOM is fully hydrated after navigation
 		const timer = setTimeout(() => {

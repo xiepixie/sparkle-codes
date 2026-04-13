@@ -54,7 +54,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 	const [isEnabled, setIsEnabled] = useState(false);
 
-	// Pure Data State for the RAF loop
 	const state = useRef({
 		kind: "none" as CursorKind,
 		isHidden: true,
@@ -69,7 +68,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 		lastMoveTime: 0,
 	});
 
-	// Magnetic Bounds Cache (Avoiding Layout Thrashing)
 	const activeTarget = useRef<HTMLElement | null>(null);
 	const bounds = useRef({
 		w: 32,
@@ -83,13 +81,9 @@ export function StarCursor({ pathname }: StarCursorProps) {
 	const isAnimating = useRef(false);
 	const lastProcessedTarget = useRef<HTMLElement | null>(null);
 
-	// Memoization Caches (Industrial Performance Rule)
-	// Why: Deeply nested structures like KaTeX or Shiki cause hundreds of mouseover events.
-	// Redundant .closest() walks on every tiny span would eventually drop frames.
 	const kindCache = useRef(new WeakMap<HTMLElement, CursorKind>());
 	const contrastCache = useRef(new WeakMap<HTMLElement, boolean>());
 
-	// Method to update bounds from activeTarget safely
 	const updateTargetBounds = () => {
 		if (activeTarget.current && bounds.current.isActive) {
 			const rect = activeTarget.current.getBoundingClientRect();
@@ -98,7 +92,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				h: rect.height,
 				cx: rect.left + rect.width / 2,
 				cy: rect.top + rect.height / 2,
-				isActive: true, // Maintain active flag
+				isActive: true,
 			};
 		}
 	};
@@ -116,7 +110,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 		syncCapability();
 
-		// Responsive Resize Observer to track dynamic element size changes
 		const resizeObserver = new ResizeObserver(() => {
 			updateTargetBounds();
 		});
@@ -127,7 +120,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			 * THEME TRANSITION LOCK (决策型注释)
 			 * 为什么：在 View Transition API 运行期间，浏览器会捕捉当前页面的快照并与新状态进行混合。
 			 * 如果此时动画循环继续运行，会导致：
-			 * 1. CPU 争用：快照捕获与动画重绘竞争主线程。
+			 * 1. CPU 争用：快照捕照与动画重绘竞争主线程。
 			 * 2. 视觉幽灵：快照中包含旧位置，而实时渲染层跳转到新位置，造成“双影”现象。
 			 * 在 transition 期间静默循环直到锁释放，确保了工业级的交互丝滑感。
 			 */
@@ -142,9 +135,15 @@ export function StarCursor({ pathname }: StarCursorProps) {
 						state.current.ringSize.h = 32;
 
 						// 静默隐藏：在切换瞬间对各层执行降维级隐藏，避免旧快照内出现光标残影
-						if (coreRef.current) coreRef.current.style.opacity = "0";
-						if (ringRef.current) ringRef.current.style.opacity = "0";
-						if (auraRef.current) auraRef.current.style.opacity = "0";
+						if (coreRef.current) {
+							coreRef.current.style.opacity = "0";
+						}
+						if (ringRef.current) {
+							ringRef.current.style.opacity = "0";
+						}
+						if (auraRef.current) {
+							auraRef.current.style.opacity = "0";
+						}
 					}
 					rafId.current = requestAnimationFrame(update);
 				}
@@ -155,21 +154,17 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			const b = bounds.current;
 			const strategy = getStrategy(s.kind);
 
-			// Base Target Definitions
 			let targetX = s.pointer.x;
 			let targetY = s.pointer.y;
 			let targetW = 32;
 			let targetH = 32;
 			let ringLerp = 0.35;
 
-			// TEXT ZONE OPTIMIZATION: Hide the ring but keep the StarCore active 
-			// and Native pointer suppressed.
 			if (s.kind === "text") {
 				targetW = 0;
 				targetH = 0;
 			}
 
-			// --- Refined Semantic-driven kinematics ---
 			if (s.isHidden) {
 				targetW = 0;
 				targetH = 0;
@@ -190,9 +185,12 @@ export function StarCursor({ pathname }: StarCursorProps) {
 						break;
 					case "frame-soft":
 						if (s.kind === "explore") {
-							// AMBIENT EXPLORATION: For large display blocks (Math/Mermaid), 
-							// we stay pointer-centered but expand the ring to indicate the active zone. 
-							// This avoids the 'floating loose frame' feeling on oversized elements.
+							/**
+							 * AMBIENT EXPLORATION (决策型注释)
+							 * 为什么：对于 Mermaid / Math 等大型展示块，这种“氛围式探索”策略能避免
+							 * 物理框选带来的“巨大方框笼罩感”。光标保持在指针中心，但放大圆环
+							 * 以通过视觉张力传达“你正处于交互区”的反馈。
+							 */
 							targetW = 64;
 							targetH = 64;
 							targetX = s.pointer.x;
@@ -399,45 +397,65 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			const cached = kindCache.current.get(target);
 			if (cached) { return cached; }
 
-			let result: CursorKind = "none";
+			// --- Priority Logic (Industrial Standard) ---
+			// Higher Priority: Elements closer to the actual hover target.
+			// We find the closest [data-cursor] and the closest semantic target, 
+			// then we compare their proximity to the actual target.
+			
+			const protocolTarget = target.closest('[data-cursor]') as HTMLElement | null;
+			const semanticTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge, [data-button="true"], [data-action="true"]') as HTMLElement | null;
 
-			// Protocol 1: Explicit Data Attribute (Highest Priority)
-			const protocolTarget = target.closest('[data-cursor]');
-			if (protocolTarget) {
-				const protocolKind = protocolTarget.getAttribute('data-cursor') as CursorKind;
-				if (protocolKind && ["navigate", "action", "explore", "text", "tag", "disabled", "none"].includes(protocolKind)) {
-					kindCache.current.set(target, protocolKind);
-					return protocolKind;
+			let bestTarget: HTMLElement | null = null;
+			let isProtocol = false;
+
+			if (protocolTarget && semanticTarget) {
+				// Compare which one is the closer ancestor
+				if (semanticTarget.contains(protocolTarget)) {
+					// protocolTarget is inner
+					bestTarget = protocolTarget;
+					isProtocol = true;
+				} else {
+					// semanticTarget is inner (or same)
+					bestTarget = semanticTarget;
+					isProtocol = false;
 				}
+			} else if (protocolTarget) {
+				bestTarget = protocolTarget;
+				isProtocol = true;
+			} else if (semanticTarget) {
+				bestTarget = semanticTarget;
+				isProtocol = false;
 			}
 
-			// Protocol 2: Fallback Inference (Smooth Migration)
-			const semanticTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge, [data-button="true"], [data-action="true"]');
-			
-			if (semanticTarget) {
-				const isLink = semanticTarget.tagName === "A" || 
-							 semanticTarget.classList.contains("premium-link") || 
-							 semanticTarget.classList.contains("wiki-link");
+			let result: CursorKind = "none";
+
+			if (bestTarget && isProtocol) {
+				const protocolKind = bestTarget.getAttribute('data-cursor') as CursorKind;
+				if (protocolKind && ["navigate", "action", "explore", "text", "tag", "disabled", "none"].includes(protocolKind)) {
+					result = protocolKind;
+				}
+			} else if (bestTarget) {
+				// Semantic Inference
+				const isLink = bestTarget.tagName === "A" || 
+							 bestTarget.classList.contains("premium-link") || 
+							 bestTarget.classList.contains("wiki-link");
 				
-				// Identify large UI-level routing blocks (e.g. NavBar elements, Drawer entries)
-				// These shouldn't act like inline text links; they behave physically like buttons.
-				const isStructuralLink = isLink && semanticTarget.classList.contains("no-dash");
+				const isStructuralLink = isLink && bestTarget.classList.contains("no-dash");
 
 				if (target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
-					// Inside display zones, we only lock onto true actions.
-					if (semanticTarget !== target.closest('.math-block, .math-display, .math-inline')) {
+					if (bestTarget !== target.closest('.math-block, .math-display, .math-inline')) {
 						result = (isLink && !isStructuralLink) ? "navigate" : "action";
 					} else {
 						result = (isLink && !isStructuralLink) ? "navigate" : "none";
 					}
 				}
 				else if (target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence')) {
-					result = (semanticTarget.classList.contains('code-copy-btn') || semanticTarget.classList.contains('math-copy-option')) 
+					result = (bestTarget.classList.contains('code-copy-btn') || bestTarget.classList.contains('math-copy-option')) 
 						? "action" 
 						: "text";
 				}
 				else {
-					if (semanticTarget.classList.contains('interactive-card')) {
+					if (bestTarget.classList.contains('interactive-card')) {
 						result = "explore";
 					} else {
 						result = (isLink && !isStructuralLink) ? "navigate" : "action";
@@ -490,10 +508,28 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 			// Activate Intelligence Bounds Cache for things we frame
 			if (strategy === "frame-tight" || strategy === "frame-soft") {
+				const protocolTarget = target.closest('[data-cursor]') as HTMLElement | null;
+				const semanticTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge, [data-button="true"], [data-action="true"]') as HTMLElement | null;
+				
+				const protocolKindList = ["navigate", "action", "explore", "text", "tag", "disabled", "none"];
+
 				// We try to snap to the protocol target first, otherwise fallback to the semantic target
-				let frameTarget = target.closest('[data-cursor="navigate"], [data-cursor="action"], [data-cursor="explore"], [data-cursor="tag"]');
-				if (!frameTarget) {
-					frameTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge, [data-button="true"], [data-action="true"]');
+				let frameTarget: HTMLElement | null = null;
+				
+				if (protocolTarget && semanticTarget) {
+					// Snap to the inner-most one
+					frameTarget = semanticTarget.contains(protocolTarget) ? protocolTarget : semanticTarget;
+				} else {
+					frameTarget = protocolTarget || semanticTarget;
+				}
+
+				// Only snap if the frameTarget is the protocolTarget and it has one of the framable kinds
+				// We use a guard to ensure protocolTarget is not null before calling getAttribute
+				if (frameTarget && protocolTarget && frameTarget === protocolTarget) {
+					const kind = protocolTarget.getAttribute('data-cursor');
+					if (!kind || !["navigate", "action", "explore", "tag"].includes(kind)) {
+						frameTarget = semanticTarget; // Fallback to semantic target (e.g. if parent has data-cursor="none")
+					}
 				}
 
 				if (frameTarget !== activeTarget.current) {
@@ -574,6 +610,21 @@ export function StarCursor({ pathname }: StarCursorProps) {
 		const pointerQuery = window.matchMedia("(pointer: fine)");
 		pointerQuery.addEventListener("change", syncCapability);
 
+		// INDUSTRIAL FIX: BFCache (Back/Forward Cache) Recovery
+		// Why: If the user navigates to an external site and then clicks 'Back',
+		// useEffect might not re-run if the browser restores from cache.
+		// We listen for 'pageshow' to ensure state synchronization.
+		const handlePageShow = (event: PageTransitionEvent) => {
+			if (event.persisted) {
+				syncCapability();
+				if (state.current.started && !isAnimating.current) {
+					isAnimating.current = true;
+					rafId.current = requestAnimationFrame(update);
+				}
+			}
+		};
+		window.addEventListener("pageshow", handlePageShow);
+
 		return () => {
 			window.removeEventListener("mousemove", handleMouseMove);
 			document.removeEventListener("mouseover", handleMouseOver);
@@ -582,7 +633,8 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			window.removeEventListener("mouseup", handleMouseUp);
 			window.removeEventListener("scroll", handleScroll, { capture: true });
 			pointerQuery.removeEventListener("change", syncCapability);
-            resizeObserver.disconnect();
+			window.removeEventListener("pageshow", handlePageShow);
+			resizeObserver.disconnect();
 
 			document.body.classList.remove("custom-cursor-active");
 			isAnimating.current = false;
@@ -611,7 +663,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				position: "fixed",
 				top: 0,
 				left: 0,
-				zIndex: 999999,
+				zIndex: 2147483647, // Maximum possible z-index to stay above portals and toasts
 			}}
 		>
 			<div ref={auraRef} className="cursor-aura is-hidden" />

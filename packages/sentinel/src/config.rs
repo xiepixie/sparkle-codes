@@ -90,8 +90,8 @@ impl SyncConfig {
             .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false);
 
-        let revalidate_url = env::var("NEXTJS_REVALIDATE_URL").ok();
-        let revalidate_secret = env::var("NEXTJS_REVALIDATE_SECRET").ok();
+        let revalidate_url = env::var("REVALIDATE_URL").ok();
+        let revalidate_secret = env::var("REVALIDATE_SECRET").ok();
 
         Self {
             blog_dest: PathBuf::from(

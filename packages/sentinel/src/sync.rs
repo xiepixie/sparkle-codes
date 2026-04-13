@@ -355,7 +355,7 @@ impl SyncEngine {
             return Ok(());
         }
 
-        debug!("🔄 Processing: {} [{:?}]", vault_path, action);
+        info!("🔄 Syncing [{}]: {} [Area: {:?}]", action, vault_path, area);
 
         // 4. Parse & Resolve (Heavy lifting)
         let (html, links, sections, blocks) = match self.parse_and_resolve_document(&ctx, &clean_body, &mut meta).await {
@@ -384,6 +384,34 @@ impl SyncEngine {
         if let Err(e) = self.persist_sync(&ctx, &meta, &clean_body, &html, &links, &sections, &blocks, &chunks).await {
             error!("❌ Database persistence failed for {}: {}", vault_path, e);
             return Ok(());
+        }
+
+        // 6.5. Update metadata index (Fix stale resolution)
+        {
+            let mut index = self.metadata_index.write().await;
+            let excerpt = crate::types::MetadataExcerpt {
+                id: meta.id.clone(),
+                vault_path: ctx.full_path.to_string_lossy().to_string(),
+                slug: meta.slug.clone(),
+                title: meta.title.clone(),
+                aliases: meta.aliases.clone(),
+                area: meta.area.clone(),
+            };
+
+            // 🛡️ [Index Update Logic]
+            // We update the same 5 keys as initial_sync to ensure internal links stay consistent.
+            index.insert(vault_path.to_lowercase(), excerpt.clone());
+            
+            let name = vault_path.split('/').last().unwrap_or(&vault_path).replace(".md", "").replace(".mdx", "");
+            index.insert(name.nfc().collect::<String>().to_lowercase(), excerpt.clone());
+            
+            index.insert(meta.slug.to_lowercase(), excerpt.clone());
+            index.insert(meta.title.to_lowercase(), excerpt.clone());
+            
+            for alias in &meta.aliases {
+                index.insert(alias.to_lowercase(), excerpt.clone());
+            }
+            debug!("🧠 [Index] Updated metadata for: {}", meta.slug);
         }
 
         // 7. Output Generation
@@ -435,7 +463,7 @@ impl SyncEngine {
             match self.http_client.get(target_url).send().await {
                 Ok(resp) => {
                     if resp.status().is_success() {
-                        info!("⚡ Cache revalidated successfully for {}", url_trimmed);
+                        info!("⚡ Cache revalidated successfully for: {} (Tag: posts)", url_trimmed);
                     } else {
                         warn!("⚠️ Cache revalidation for {} returned status: {}", url_trimmed, resp.status());
                     }

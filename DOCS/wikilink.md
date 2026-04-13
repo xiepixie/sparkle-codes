@@ -50,8 +50,12 @@ graph TD
 
 | 类型 | 处理前 (Obsidian) | 处理后 (HTML ID & Href) | 逻辑说明 |
 | :--- | :--- | :--- | :--- |
-| **Heading** | `## 1. 参考 资料` | `id="h-1-参考-资料"` | 强制 `h-` 前缀 + Kebab-case slugify。 |
+| **Heading** | `## 1. 参考 资料` | `id="h-1-参考-资料"` | 强制 `h-` 前缀 + 统一使用 `slugifyPath`。 |
 | **Block** | `^block-id` | `id="block-id"` | 剥离 `^` 符号，作为标准 DOM ID。 |
+
+> [!IMPORTANT]
+> **Symmetry Rule (对称性规则)**：
+> 无论是在 Rust 后端还是 TypeScript 前端，Heading ID 的生成逻辑必须完全复用路径 Slug 的生成算法。禁止使用独立的 `slugifyHeader` 函数，以确保全链路锚点跳转的 100% 确定性。
 
 ### 3.2 HTML 属性注入规范
 解析器 (`markdown-parser`) 产出的 `<a>` 标签必须在转换后包含以下属性：
@@ -111,6 +115,24 @@ if (isBlock) {
 ```
 
 ---
+
+## 6. AI 聊天渲染协议 (Chat Markdown Protocol)
+
+由于 AI 生成的 Markdown 文本不经过 Sentinel 转换，`ChatMarkdown.tsx` 必须在运行时模拟部分解析逻辑：
+
+### 6.1 链接识别逻辑
+- **Internal Detection**: 检查链接是否以 `/` 开头，或包含 `sparkle.codes` / `localhost[:port]` 等本地域名。
+- **Domain Stripping**: 如果判定为内部链接，必须剥离域名部分（如 `http://localhost:3000`），强制转换为以 `/blog/` 为根的 SPA 路径，以利用 `next/link` 的性能优化。
+
+### 6.2 锚点即时拼装
+- **Assembly**: 检测到 `/blog/` 路径且包含 `#` 时，对 Fragment 进行 `decodeURIComponent`。
+- **Re-slugify**: 对解码后的文本执行 `slugifyPath` 并补齐 `h-` 前缀。
+- **Special Case**: 如果 Fragment 以 `^` 开头（Block ID），则跳过 Slugify，直接透传。
+
+### 6.3 视觉区分 (Highlighting)
+- **Internal Links**: 必须显式添加 `.internal-link` 类名，以激活紫色样式（由 `typography.css` 定义）。
+- **External Links**: 使用原生 `<a>` 标签并添加 `target="_blank"`，禁止使用 `next/link` 以避免不必要的预取行为。
+
 
 ## 6. 复现检查表 (Implementation Checklist)
 

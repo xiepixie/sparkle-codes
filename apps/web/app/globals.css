@@ -546,7 +546,7 @@
    Sonner Toast Starry Night Adaptation
    ========================================= */
 @layer overrides {
-	[data-sonner-toast] {
+	[data-sonner-toast][data-styled="true"] {
 		--bg: color-mix(in srgb, var(--background), transparent 2%);
 		--border-color: color-mix(in srgb, var(--primary), transparent 85%);
 		--success-bg: var(--bg);
@@ -563,7 +563,7 @@
 		font-family: var(--font-sans) !important;
 	}
 
-	[data-sonner-toast] [data-title] {
+	[data-sonner-toast][data-styled="true"] [data-title] {
 		font-family: "Poppins", var(--font-sans) !important;
 		font-weight: 700 !important;
 		letter-spacing: -0.02em !important;
@@ -572,7 +572,7 @@
 		margin-bottom: 4px !important;
 	}
 
-	[data-sonner-toast] [data-description] {
+	[data-sonner-toast][data-styled="true"] [data-description] {
 		font-size: 12px !important;
 		color: var(--muted-foreground) !important;
 		line-height: 1.5 !important;
@@ -580,7 +580,7 @@
 	}
 
 	/* Premium Starry Action Button */
-	[data-sonner-toast] [data-button] {
+	[data-sonner-toast][data-styled="true"] [data-button] {
 		background: var(--primary) !important;
 		color: white !important;
 		font-weight: 800 !important;
@@ -595,17 +595,17 @@
 		box-shadow: 0 4px 12px color-mix(in oklab, var(--primary) 20%, transparent) !important;
 	}
 
-	[data-sonner-toast] [data-button]:hover {
+	[data-sonner-toast][data-styled="true"] [data-button]:hover {
 		filter: brightness(1.15) !important;
 		transform: translateY(-1px) !important;
 		box-shadow: 0 6px 16px color-mix(in oklab, var(--primary) 40%, transparent) !important;
 	}
 
-	[data-sonner-toast] [data-button]:active {
+	[data-sonner-toast][data-styled="true"] [data-button]:active {
 		transform: scale(0.94) !important;
 	}
 
-	[data-sonner-toast] [data-close-button] {
+	[data-sonner-toast][data-styled="true"] [data-close-button] {
 		background: rgba(255, 255, 255, 0.03) !important;
 		border: 1px solid rgba(255, 255, 255, 0.05) !important;
 		color: var(--muted-foreground) !important;
@@ -613,7 +613,7 @@
 		cursor: pointer !important;
 	}
 
-	[data-sonner-toast] [data-close-button]:hover {
+	[data-sonner-toast][data-styled="true"] [data-close-button]:hover {
 		background: rgba(255, 255, 255, 0.1) !important;
 		color: var(--foreground) !important;
 	}

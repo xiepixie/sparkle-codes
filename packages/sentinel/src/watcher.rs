@@ -14,7 +14,7 @@ pub async fn run(engine: Arc<SyncEngine>) {
 
     // 2. Watcher Setup
     let mut debouncer = new_debouncer(
-        std::time::Duration::from_millis(500),
+        std::time::Duration::from_millis(1000),
         None,
         move |result| {
             if let Ok(events) = result {

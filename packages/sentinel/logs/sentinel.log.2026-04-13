@@ -71,3 +71,111 @@
 2026-04-13T06:22:08.860555Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
 2026-04-13T06:22:08.860989Z  INFO sentinel::watcher: ✅ Batch processing finished.
 2026-04-13T06:50:22.771357Z  INFO sentinel::watcher: 🔔 Received 2 file system events. Processing batch...
+2026-04-13T06:50:33.929287Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T06:50:34.938076Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T06:50:34.938147Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T06:52:30.220745Z  INFO sentinel::watcher: 🔔 Received 2 file system events. Processing batch...
+2026-04-13T06:52:39.303892Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T06:52:40.323995Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T06:52:40.324031Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T06:53:37.979205Z  INFO sentinel::watcher: 🔔 Received 2 file system events. Processing batch...
+2026-04-13T06:53:47.778047Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T06:53:48.623869Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T06:53:48.623972Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T06:53:48.623992Z  INFO sentinel::watcher: 🔔 Received 2 file system events. Processing batch...
+2026-04-13T06:53:56.709763Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T06:53:57.273496Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T06:53:57.273518Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T06:54:04.149461Z  INFO sentinel::watcher: 🔔 Received 2 file system events. Processing batch...
+2026-04-13T06:54:10.406989Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T06:54:10.755653Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T06:54:10.755712Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T06:54:10.755737Z  INFO sentinel::watcher: 🔔 Received 4 file system events. Processing batch...
+2026-04-13T06:54:16.798458Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T06:54:17.148010Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T06:54:17.148031Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T06:54:17.148041Z  INFO sentinel::watcher: 🔔 Received 4 file system events. Processing batch...
+2026-04-13T06:54:23.287223Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T06:54:23.634657Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T06:54:23.634695Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T07:39:09.092249Z  INFO sentinel::watcher: 🔔 Received 1 file system events. Processing batch...
+2026-04-13T07:39:11.787723Z  INFO sentinel::sync: ☁️ Uploaded attachment: Pasted image 20260408214723.png -> https://cdn.sparkle.codes/attachments/7cd80a7c1fe6d4abf2bdd94caf2985915b68079782b6803885981e96d309c2ce.png
+2026-04-13T07:39:20.220971Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T07:39:22.288411Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T07:39:22.288421Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T07:39:22.288427Z  INFO sentinel::watcher: 🔔 Received 17 file system events. Processing batch...
+2026-04-13T07:39:23.203308Z  INFO sentinel::sync: ☁️ Uploaded attachment: Pasted image 20260408214723.png -> https://cdn.sparkle.codes/attachments/7cd80a7c1fe6d4abf2bdd94caf2985915b68079782b6803885981e96d309c2ce.png
+2026-04-13T07:39:31.164317Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T07:39:31.522111Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T07:39:31.522125Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T07:39:49.101978Z  INFO sentinel::watcher: 🔔 Received 2 file system events. Processing batch...
+2026-04-13T07:39:50.629030Z  INFO sentinel::sync: ☁️ Uploaded attachment: Pasted image 20260408214723.png -> https://cdn.sparkle.codes/attachments/7cd80a7c1fe6d4abf2bdd94caf2985915b68079782b6803885981e96d309c2ce.png
+2026-04-13T07:39:56.685417Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for http://localhost:3000/api/revalidate
+2026-04-13T07:39:57.039292Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for https://sparkle.codes/api/revalidate
+2026-04-13T07:39:57.039324Z  INFO sentinel::watcher: ✅ Batch processing finished.
+2026-04-13T07:48:14.686172Z  WARN sqlx_postgres::options::parse: ignoring unrecognized connect parameter key=channel_binding value=require
+2026-04-13T07:48:15.786541Z  INFO sentinel::app: Sentinel started. Watcher mode enabled. Vault root: "/Users/xpx/Data/xpx/Documents/I.P.A.R.A"
+2026-04-13T07:48:15.786579Z  INFO sentinel::sync: 🚀 [Lifecycle] Starting full vault synchronization...
+2026-04-13T07:48:15.788011Z  INFO sentinel::sync: 📂 Discovered 51 markdown files in vault.
+2026-04-13T07:48:15.788015Z  INFO sentinel::sync: 🔭 [Index] Starting metadata pre-scan for 51 files...
+2026-04-13T07:48:16.188507Z  INFO sentinel::sync: 🧠 [Index] Metadata index built with 178 keys.
+2026-04-13T07:48:16.703373Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 学习领域/资源/Docker+K8s/K8s-Pod.md [Area: Learn]
+2026-04-13T07:48:17.330338Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 0-收集箱/常用提示词整理/知识提取.md [Area: Inbox]
+2026-04-13T07:48:17.333020Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/APP测试/用 POM 分层、关键字封装和数据驱动搭建 Appium 自动化测试框架.md [Area: Work]
+2026-04-13T07:48:17.337728Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 0-收集箱/常用提示词整理/豆豆生图.md [Area: Inbox]
+2026-04-13T07:48:17.337757Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 学习领域/收集/导师.md [Area: Learn]
+2026-04-13T07:48:17.337905Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 学习领域/项目/多agents.md [Area: Learn]
+2026-04-13T07:48:17.339866Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/WikiLink 技术规范与实现指南 (v2.0).md [Area: Work]
+2026-04-13T07:48:17.343082Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 学习领域/资源/建站/1panel.md [Area: Learn]
+2026-04-13T07:48:17.346963Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 学习领域/资源/建站/VPS购买.md [Area: Learn]
+2026-04-13T07:48:17.349744Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 0-收集箱/未命名.md [Area: Inbox]
+2026-04-13T07:48:17.351843Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/归档/卡片盒笔记主题索引卡/Privacy Policy.md [Area: Work]
+2026-04-13T07:48:17.354088Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 0-收集箱/华测测试课程资料.md [Area: Inbox]
+2026-04-13T07:48:17.354156Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 学习领域/资源/建站/docker配置容器monorepo.md [Area: Learn]
+2026-04-13T07:48:17.359771Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/博客测试.md [Area: Work]
+2026-04-13T07:48:17.366256Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/归档/macOS Apple Silicon 终极开发环境装机指南.md [Area: Work]
+2026-04-13T07:48:17.366274Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/APP测试/Appium 自动化入门：为什么要从线性脚本走向 POM 分层.md [Area: Work]
+2026-04-13T07:48:17.368610Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 学习领域/资源/建站/端口转发配置.md [Area: Learn]
+2026-04-13T07:48:17.372508Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/APP测试/Appium 自动化数据驱动：Excel、Pytest 参数化与断言分流.md [Area: Work]
+2026-04-13T07:48:17.373862Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 0-收集箱/常用提示词整理/文本打磨.md [Area: Inbox]
+2026-04-13T07:48:17.376264Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 学习领域/归档/建站/SSH服务 - 排查.md [Area: Learn]
+2026-04-13T07:48:18.271085Z  INFO sentinel::sync: ☁️ Uploaded attachment: Pasted image 20260408214723.png -> https://cdn.sparkle.codes/attachments/7cd80a7c1fe6d4abf2bdd94caf2985915b68079782b6803885981e96d309c2ce.png
+2026-04-13T07:48:19.251097Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/case-of-frozen-chat-input.md [Area: Work]
+2026-04-13T07:48:19.314545Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/消失的图标.md [Area: Work]
+2026-04-13T07:48:19.589464Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/RAG/rag-vps-deployment-and-architectural-evolution.md [Area: Work]
+2026-04-13T07:48:19.593452Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/RAG/rag-semantic-representation-fundamentals.md [Area: Work]
+2026-04-13T07:48:19.600222Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/RAG/local-retrieval-model-selection-guide-2026.md [Area: Work]
+2026-04-13T07:48:19.657726Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/RAG/rag-multistage-retrieval-strategy.md [Area: Work]
+2026-04-13T07:48:19.659963Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/RAG/enterprise-rag-implementation-guide.md [Area: Work]
+2026-04-13T07:48:19.710207Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day07/Web自动化-鼠标键盘模拟与滚动机制.md [Area: Work]
+2026-04-13T07:48:19.732534Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day09/Web自动化-验证码绕过与图像识别方案.md [Area: Work]
+2026-04-13T07:48:19.771930Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day08/Web自动化-文件上传与日期控件处理.md [Area: Work]
+2026-04-13T07:48:19.799145Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day06/Web自动化-弹窗与多窗口管理.md [Area: Work]
+2026-04-13T07:48:19.806436Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day06/Web自动化-常见控件交互与窗口切换.md [Area: Work]
+2026-04-13T07:48:19.808354Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day01/自动化测试：从手工到代码的跨越.md [Area: Work]
+2026-04-13T07:48:27.771120Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day12/Pytest 进阶-利用 Hooks 与 Allure 自动化构建故障证据链.md [Area: Work]
+2026-04-13T07:48:35.288066Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day14/Web自动化实战：从 Excel 与 YAML 驱动到全套 POM 实现.md [Area: Work]
+2026-04-13T07:48:35.906232Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day13/Web自动化架构：POM分层设计自顶向下解析.md [Area: Work]
+2026-04-13T07:48:37.497264Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day04/Web自动化-元素定位方法全集.md [Area: Work]
+2026-04-13T07:48:37.741181Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day03/实战演练：读书屋项目背景与数据对接.md [Area: Work]
+2026-04-13T07:48:43.658094Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Web自动化预习-大纲.md [Area: Work]
+2026-04-13T07:48:45.397843Z  INFO sentinel::sync: ⏳ Progress:  39% | 20/51 files synced
+2026-04-13T07:48:45.654486Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day02/稳定压倒一切：Selenium 4 与 Python 环境搭建.md [Area: Work]
+2026-04-13T07:48:48.872272Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day05/Web自动化-等待机制详解.md [Area: Work]
+2026-04-13T07:48:49.517267Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day11/Web自动化-实战：读书屋登录与搜索.md [Area: Work]
+2026-04-13T07:48:51.889897Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day11/Web自动化-Pytest：从入门到数据驱动实战.md [Area: Work]
+2026-04-13T07:48:59.777125Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/web测试/Day10/Web自动化-测试框架对比：Unittest vs Pytest.md [Area: Work]
+2026-04-13T07:49:01.797757Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/博客测试2.md [Area: Work]
+2026-04-13T07:49:03.824235Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/从-Pages-到-Workers-：如何让你的静态博客拥有更自由的边缘能力.md [Area: Work]
+2026-04-13T07:49:05.316738Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/Time Vista/AI 驱动的学习重构：Time Vista 深度学习体系设计.md [Area: Work]
+2026-04-13T07:49:08.592669Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/收集/证书准备.md [Area: Work]
+2026-04-13T07:49:09.604090Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/APP测试/Appium 登录自动化：Page、Object 与 Module 的拆分实践.md [Area: Work]
+2026-04-13T07:49:09.618163Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/APP测试/Appium 自动化框架进阶：YAML、Allure 与读书屋搜索案例.md [Area: Work]
+2026-04-13T07:49:10.156536Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 0-收集箱/常用提示词整理/错误整理.md [Area: Inbox]
+2026-04-13T07:49:24.791823Z  INFO sentinel::sync: ⏳ Progress:  78% | 40/51 files synced
+2026-04-13T07:49:50.466857Z  INFO sentinel::sync: ⏳ Progress: 100% | 51/51 files synced
+2026-04-13T07:49:50.466902Z  INFO sentinel::sync: ✅ [Lifecycle] Full sync finished in 94.277788792s: 51 files synced.
+2026-04-13T07:49:50.914263Z  INFO sentinel::sync: ✨ [Lifecycle] Initial sync completed successfully.
+2026-04-13T07:49:50.970958Z  WARN sentinel::sync: ⚠️ Cache revalidation for http://localhost:3000/api/revalidate returned status: 401 Unauthorized
+2026-04-13T07:49:51.978442Z  WARN sentinel::sync: ⚠️ Cache revalidation for https://sparkle.codes/api/revalidate returned status: 401 Unauthorized
+2026-04-13T07:49:51.991677Z  INFO sentinel::watcher: Watching vault and attachments: /Users/xpx/Data/xpx/Documents/I.P.A.R.A | /Users/xpx/Data/xpx/Extras/附件

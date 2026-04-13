@@ -1,9 +1,11 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { normalizeSlug } from "@repo/utils";
 import { cn } from "@repo/ui";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bot, FileText, RefreshCw, Sparkles, X, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChatPanel } from "./ChatPanel";
@@ -38,6 +40,7 @@ export function FloatingChatWidget() {
 	// Persist session state even when collapsed
 	const chat = useChat({
 		id: "sparkle-floating-chat",
+		experimental_throttle: 50,
 	});
 
 	const { isLoading } = chat as any;
@@ -79,9 +82,55 @@ export function FloatingChatWidget() {
 			);
 	}, []);
 
+	const router = useRouter();
+
 	if (!mounted) {
 		return null;
 	}
+
+	const handleLinkClick = (url: string) => {
+		// 1. Instant Same-Page Anchor Detection
+		if (url.startsWith("#")) {
+			window.dispatchEvent(
+				new CustomEvent("sparkle:scroll-to-fragment", {
+					detail: { fragment: url.slice(1) },
+				}),
+			);
+			return;
+		}
+
+		// 2. Protocol/External Check
+		if (url.startsWith("http://") || url.startsWith("https://")) {
+			window.open(url, "_blank", "noopener,noreferrer");
+			return;
+		}
+
+		// 3. Normalized Context Matching
+		// Strip leading /blog/ or / if present for comparison
+		const cleanPath = url
+			.split("#")[0]
+			.replace(/^\/(blog|docs)\//, "") // Strip /blog/ or /docs/
+			.replace(/^\/+/, "");
+		
+		const fragment = url.split("#")[1] || "";
+		const targetSlug = normalizeSlug(cleanPath);
+		const currentSlug = normalizeSlug(readingContext?.slug);
+
+		if (!targetSlug || targetSlug === currentSlug) {
+			if (fragment) {
+				window.dispatchEvent(
+					new CustomEvent("sparkle:scroll-to-fragment", {
+						detail: { fragment },
+					}),
+				);
+			}
+			return;
+		}
+
+		// 4. Cross-page navigation (ensure absolute path)
+		const destination = url.startsWith("/") ? url : `/blog/${url}`;
+		router.push(destination);
+	};
 
 	return (
 		<>
@@ -204,7 +253,6 @@ export function FloatingChatWidget() {
 											toast.custom((t) => (
 												<div 
 													className="flex w-[min(calc(100vw-3rem),340px)] flex-col gap-3 rounded-2xl border border-red-500/20 bg-background/95 p-4 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden group/toast animate-in slide-in-from-bottom-2 fade-in duration-500"
-													data-cursor="none"
 												>
 													{/* Premium Top Edge Highlight */}
 													<div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
@@ -275,7 +323,7 @@ export function FloatingChatWidget() {
 														/>
 													</div>
 												</div>
-											), { duration: 10000 });
+											), { duration: 10000, unstyled: true });
 										}}
 										className="flex items-center justify-center h-8 px-3 rounded-lg hover:bg-red-500/10 text-muted-foreground/40 hover:text-red-500/80 transition-all text-[9px] font-black uppercase tracking-widest gap-2 bg-foreground/[0.02] border border-transparent hover:border-red-500/20"
 										title="Reset AI Context"
@@ -298,6 +346,7 @@ export function FloatingChatWidget() {
 							chat={chat}
 							hideInput={false}
 							showHeader={false}
+							onLinkClick={handleLinkClick}
 							context={
 								readingContext
 									? { title: readingContext.title, slug: readingContext.slug }

@@ -59,7 +59,42 @@ export async function POST(req: Request) {
 		console.info(`[KV] Checking Hash: ${promptHash.substring(0, 8)} | Target: "${normalizedPrompt}"`);
 		console.info(`[KV] Config Status: kvId=${!!kvId}, accountId=${!!accountId}, token=${!!token}`);
 
-		// 2. [HIT CHECK] Try to find a global cached answer in the edge
+		// 2. [MANUAL OVERRIDE] Check for explicit shortcuts (FAQ)
+		// Why: This allows constant-time, zero-cost responses for high-frequency questions
+		// like "Introduce the blog" without needing LLM inference.
+		if (kvId && accountId && token) {
+			try {
+				const manualKey = `manual:${normalizedPrompt}`;
+				const manualUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/${encodeURIComponent(manualKey)}`;
+				
+				const manualResponse = await fetch(manualUrl, {
+					headers: { Authorization: `Bearer ${token}` },
+				});
+
+				if (manualResponse.ok) {
+					const manualText = await manualResponse.text();
+					console.log(`\n${"=".repeat(50)}`);
+					console.log(`🌟 [KV SHORTCUT] HIT! (Key: ${manualKey})`);
+					console.log("⚡️ Serving curated manual response.");
+					console.log(`${"=".repeat(50)}\n`);
+					
+					const textId = `manual-${promptHash.substring(0, 8)}`;
+					return createUIMessageStreamResponse({
+						stream: createUIMessageStream({
+							execute({ writer }) {
+								writer.write({ type: "text-start", id: textId });
+								writer.write({ type: "text-delta", id: textId, delta: manualText });
+								writer.write({ type: "text-end", id: textId });
+							},
+						}),
+					});
+				}
+			} catch (manualError) {
+				console.error("⚠️ [KV SHORTCUT] Check failed:", manualError);
+			}
+		}
+
+		// 3. [CACHE HIT CHECK] Try to find a global cached answer in the edge
 		if (kvId && accountId && token) {
 			try {
 				const cacheUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/${promptHash}`;

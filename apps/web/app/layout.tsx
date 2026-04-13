@@ -17,19 +17,27 @@ const jetbrainsMono = JetBrains_Mono({
 	display: "swap",
 });
 
+import { config } from "@/config";
+
 export const metadata: Metadata = {
 	title: "sparkle.codes | Xavier Pax",
 	description:
 		"The personal blog and product lab of Xavier Pax (xpx), focused on applied AI, workflow systems, and technical writing.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
+	// In Next.js 15+, calling cookies() at the root layout without Suspense
+	// can block static rendering for the entire site.
+	// We default to deep-midnight (config.defaultTheme) for the server-render
+	// and let the client-side ClientProviders/ThemeScript handle the actual preference.
+	const initialTheme = config.defaultTheme;
+
 	return (
-		<html lang="en" suppressHydrationWarning>
+		<html lang="en" className={initialTheme} suppressHydrationWarning>
 			<head>
 				{/* Preload critical KaTeX fonts to minimize CLS on math-heavy pages */}
 				<link
@@ -57,7 +65,7 @@ export default function RootLayout({
 			<body
 				className={`${poppins.className} ${jetbrainsMono.variable} min-h-screen bg-background text-foreground antialiased selection:bg-primary/30`}
 			>
-				<ClientProviders>
+				<ClientProviders initialTheme={initialTheme}>
 					{/* Immersive Starry Layers (Client Components) */}
 
 					<NavBar />

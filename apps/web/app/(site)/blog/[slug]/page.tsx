@@ -57,7 +57,7 @@ export default async function PostPage({ params }: PostPageProps) {
 	}).format(new Date(post.date));
 
 	return (
-		<div className="starry-night-theme relative mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+		<div className="relative mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
 			{/* Sticky Global Navigation - Managed Header */}
 			<ReadingHeader
 				key={post.slug}
@@ -152,7 +152,7 @@ export default async function PostPage({ params }: PostPageProps) {
 						)}
 					</header>
 
-					<article className="prose prose-starry prose-invert max-w-none">
+					<article className="prose prose-starry dark:prose-invert max-w-none">
 						<MarkdownInteractivity
 							html={post.body.html || ""}
 							currentSlug={slug}

@@ -125,11 +125,11 @@ function scrollToFragment(fragment: string) {
 	}
 
 	// 🛡️ [Architecture] Per DOCS/wikilink.md §4.1:
-	// Do NOT re-slugify. The backend already provides the correct fragment.
-	// Just decode and getElementById directly.
+	// The fragment can be raw (from internal code) or encoded (from URL).
 	const decoded = (() => {
 		const target = fragment.startsWith("#") ? fragment.slice(1) : fragment;
 		try {
+			// Normal decode — handles standard URI encoding
 			return decodeURIComponent(target);
 		} catch {
 			return target;
@@ -139,12 +139,24 @@ function scrollToFragment(fragment: string) {
 	const targetElement = document.getElementById(decoded);
 
 	if (!targetElement) {
+		// If it's a valid encoded hash but getElementById failed, try one more time decoded
 		console.warn(`[Scroll] Target not found for fragment: "${decoded}"`);
 		return;
 	}
 
-	targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
-	window.history.pushState(null, "", `#${encodeURIComponent(decoded)}`);
+	// Calculate offset for sticky headers (ReadingHeader + NavBar)
+	const headerOffset = 80;
+	const elementPosition = targetElement.getBoundingClientRect().top;
+	const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+	window.scrollTo({
+		top: offsetPosition,
+		behavior: "smooth"
+	});
+
+	// Update browser URL without jumping back to top (native hash navigation is avoided)
+	const cleanUrl = window.location.pathname + window.location.search + `#${encodeURIComponent(decoded)}`;
+	window.history.pushState(null, "", cleanUrl);
 
 	// UX: Visual arrival confirmation — flash the target element
 	targetElement.classList.remove("jump-highlight");
@@ -172,21 +184,41 @@ export function MarkdownInteractivity({
 
 	const isFinePointer = React.useMemo(() => supportsFinePointer(), []);
 
-	// 0. Cross-page hash scroll: When arriving via wiki-link (router.push) or direct URL,
-	// Next.js client-side navigation does NOT auto-scroll to hash fragments.
-	// We detect the hash on mount/content-change and scroll manually.
+	// 0. Global Fragment Watcher
+	// Why: Handles same-page anchor jumps from external components (FloatingChatWidget, CommandMenu)
 	useEffect(() => {
-		const hash = window.location.hash;
-		if (!hash) {
-			return;
+		const handleHashChange = () => {
+			if (window.location.hash) {
+				scrollToFragment(window.location.hash);
+			}
+		};
+
+		const handleCustomScroll = (e: Event) => {
+			const customEvent = e as CustomEvent<{ fragment: string }>;
+			if (customEvent.detail?.fragment) {
+				scrollToFragment(customEvent.detail.fragment);
+			}
+		};
+
+		window.addEventListener("hashchange", handleHashChange);
+		window.addEventListener("sparkle:scroll-to-fragment", handleCustomScroll as EventListener);
+		
+		// Initial check on mount/content change
+		if (window.location.hash) {
+			const timer = setTimeout(() => {
+				scrollToFragment(window.location.hash);
+			}, 300);
+			return () => {
+				clearTimeout(timer);
+				window.removeEventListener("hashchange", handleHashChange);
+				window.removeEventListener("sparkle:scroll-to-fragment", handleCustomScroll as EventListener);
+			};
 		}
 
-		// Delay to ensure markdown DOM is fully hydrated after navigation
-		const timer = setTimeout(() => {
-			scrollToFragment(hash);
-		}, 200);
-
-		return () => clearTimeout(timer);
+		return () => {
+			window.removeEventListener("hashchange", handleHashChange);
+			window.removeEventListener("sparkle:scroll-to-fragment", handleCustomScroll as EventListener);
+		};
 	}, [html]);
 
 	// 1. Navigation Controller (Next.js context dependent)

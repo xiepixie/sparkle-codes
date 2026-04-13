@@ -1,18 +1,19 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-import { Button, cn } from "@repo/ui";
-import { motion } from "framer-motion";
 import {
 	ArrowDown,
 	Bot,
 	FileText,
+	Link2,
+	Search,
 	Send,
 	Sparkles,
 	User,
-	Search,
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
+import { Button, cn } from "@repo/ui";
 import { CitationRenderer } from "./CitationRenderer";
 
 type ChatState = any;
@@ -39,33 +40,55 @@ export function ChatPanel({
 	onLinkClick,
 	navigatingUrl,
 }: ChatPanelProps) {
-	// RULES OF HOOKS: All hooks must be called unconditionally at the top.
-	const fallbackChat = useChat({ id: "chat-panel-internal" });
-	const activeChat = chat || fallbackChat;
+	// --- 1. Top-Level Hooks (Unconditional) ---
+	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const lastSubmitRef = useRef<number>(0);
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const initialized = useRef(false);
+	const historyLoaded = useRef(false);
+	const isAutoScrolling = useRef(false);
 
+	// Safe destructuring with fallbacks for use before the early return
+	const activeChat = (chat || {}) as any;
 	const {
-		input,
+		input = "",
+		messages = [],
+		isLoading = false,
+		error = null,
 		handleInputChange,
-		handleSubmit,
-		isLoading,
-		error,
+		// handleSubmit is inherited from SDK but we use handleManualSubmit for custom buffer synchronization
+		handleSubmit: _handleSubmit,
 		sendMessage,
 		setInput,
 		setMessages,
-		messages,
-	} = activeChat as any;
+	} = activeChat;
 
-	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const [localValue, setLocalValue] = useState(input || "");
-	const lastSubmitRef = useRef<number>(0);
+	const [isAtBottom, setIsAtBottom] = useState(true);
+	const [showScrollButton, setShowScrollButton] = useState(false);
+	const [isSubmitting, setIsSubmitting] = useState(false);
+
+	// Sync isSubmitting with isLoading from the SDK
+	useEffect(() => {
+		if (isLoading) {
+			setIsSubmitting(false);
+		}
+		
+		// Safety fallback: if we are submitting but SDK doesn't pick up loading within 3s,
+		// reset state to avoid getting the UI "stuck".
+		if (isSubmitting && !isLoading) {
+			const timer = setTimeout(() => {
+				setIsSubmitting(false);
+			}, 3000);
+			return () => clearTimeout(timer);
+		}
+	}, [isLoading, isSubmitting]);
+
+	const effectiveLoading = isLoading || isSubmitting;
 
 	// Sync local value when external input changes (e.g. from RAG or Reset)
-	// Why: We only sync when NOT focused to avoid overwriting the user's active keystrokes
-	// before the parent state (useChat) reflects the latest change.
 	useEffect(() => {
-		if (document.activeElement !== inputRef.current) {
-			setLocalValue(input || "");
-		}
+		setLocalValue(input || "");
 	}, [input]);
 
 	// Explicitly handle input changes to ensure state sync and immediate feedback
@@ -96,7 +119,7 @@ export function ChatPanel({
 		const finalInput = (localValue || "").trim();
 		
 		// 1. Strict guard: No empty, no multiple concurrent, 1s cooldown
-		if (!finalInput || isLoading || (now - lastSubmitRef.current < 1000)) {
+		if (!finalInput || effectiveLoading || (now - lastSubmitRef.current < 1000)) {
 			return;
 		}
 
@@ -104,27 +127,28 @@ export function ChatPanel({
 
 		const {
 			append,
+			setInput: setSdkInput,
 		} = activeChat as any;
 
-		// 2. Sync the value back to the underlying SDK input state
-		if (typeof setInput === "function") {
-			setInput(finalInput);
-		}
-
-		// 3. Clear local UI buffer immediately for snappy feel
+		// 2. Clear local UI buffer immediately for snappy feel
 		setLocalValue("");
 		if (inputRef.current) {
 			inputRef.current.style.height = "40px";
+			inputRef.current.focus();
 		}
 
-		// 4. Use standard handleSubmit if available
-		if (typeof handleSubmit === "function") {
-			handleSubmit(e as any);
-		} 
-		else if (typeof append === "function") {
+		// 3. Sync SDK state and trigger completion
+		setIsSubmitting(true);
+		
+		if (typeof append === "function") {
+			// Direct append is more reliable than handleSubmit when using a local buffer
 			append({ role: "user", content: finalInput });
-		}
-		else if (typeof sendMessage === "function") {
+			
+			// Stay in sync
+			if (typeof setSdkInput === "function") {
+				setSdkInput("");
+			}
+		} else if (typeof sendMessage === "function") {
 			sendMessage({ text: finalInput });
 		}
 	};
@@ -139,23 +163,21 @@ export function ChatPanel({
 		// Standard Enter is now Newline (Default behavior for Textarea)
 	};
 
-	// Snappy UX: Force focus when the panel is mounted (Expanded)
+	// --- 2. Functional Hooks & Logic ---
+	// Focus management
 	useEffect(() => {
-		if (!hideInput) {
+		if (chat && !hideInput) {
 			const timer = setTimeout(() => {
 				inputRef.current?.focus();
-			}, 300); // Allow window animation to finish
+			}, 300);
 			return () => clearTimeout(timer);
 		}
-	}, [hideInput]);
+	}, [chat, hideInput]);
 
-	const scrollRef = useRef<HTMLDivElement>(null);
-	const initialized = useRef(false);
-	const [isAtBottom, setIsAtBottom] = React.useState(true);
-	const [showScrollButton, setShowScrollButton] = React.useState(false);
-
+	// Initial query trigger
 	useEffect(() => {
 		if (
+			chat &&
 			initialQuery &&
 			!initialized.current &&
 			typeof sendMessage === "function"
@@ -163,35 +185,69 @@ export function ChatPanel({
 			initialized.current = true;
 			sendMessage({ text: initialQuery });
 		}
-	}, [initialQuery, sendMessage]);
+	}, [chat, initialQuery, sendMessage]);
+
+	// Autoscroll logic when messages update
+	useEffect(() => {
+		if (chat && isAtBottom && scrollRef.current && !isAutoScrolling.current) {
+			requestAnimationFrame(() => {
+				if (scrollRef.current && isAtBottom) {
+					isAutoScrolling.current = true;
+					scrollRef.current.scrollTo({
+						top: scrollRef.current.scrollHeight + 200,
+						behavior: "auto",
+					});
+					isAutoScrolling.current = false;
+				}
+			});
+		}
+	}, [chat, messages, isAtBottom]);
 
 	const handleScroll = () => {
 		if (!scrollRef.current) {
 			return;
 		}
+		
 		const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-		const isBottom = scrollHeight - scrollTop - clientHeight < 50;
-		setIsAtBottom(isBottom);
-		setShowScrollButton(!isBottom);
+		// Use a slightly larger threshold (100px) for better UX
+		const atBottom = scrollHeight - scrollTop - clientHeight < 100;
+		
+		// If we are not auto-scrolling and the user scrolls up, disable auto-bottom-lock
+		if (!isAutoScrolling.current && !atBottom) {
+			setIsAtBottom(false);
+		} else if (atBottom) {
+			setIsAtBottom(true);
+		}
+		
+		setShowScrollButton(!atBottom);
 	};
 
-	const scrollToBottom = () => {
+	const scrollToBottom = (instant = false) => {
 		if (scrollRef.current) {
+			setIsAtBottom(true); // Re-engage sticky-bottom lock
+			isAutoScrolling.current = true;
+			
+			const targetTop = scrollRef.current.scrollHeight + 1000;
+			
 			scrollRef.current.scrollTo({
-				top: scrollRef.current.scrollHeight,
-				behavior: "smooth",
+				top: targetTop,
+				behavior: instant ? "auto" : "smooth",
 			});
+			
+			// Second pass after a small delay to handle layout shifts (e.g. streaming content)
+			setTimeout(() => {
+				if (scrollRef.current && isAtBottom) {
+					scrollRef.current.scrollTo({
+						top: scrollRef.current.scrollHeight + 1000,
+						behavior: "auto",
+					});
+				}
+				isAutoScrolling.current = false;
+			}, 300);
 		}
 	};
 
-	useEffect(() => {
-		if (isAtBottom && scrollRef.current) {
-			scrollRef.current.scrollTo({
-				top: scrollRef.current.scrollHeight,
-				behavior: "smooth",
-			});
-		}
-	}, [messages, isAtBottom]);
+
 
 	// Extract citations from tool call results in the message history
 	const getCitationsForMessage = () => {
@@ -214,23 +270,34 @@ export function ChatPanel({
 		return citations;
 	};
 
-	// Persistence: Save to local storage on message update - with a slight delay to avoid excessive writes
+	// Persistence: Save to local storage on message update
 	useEffect(() => {
-		if (!messages || messages.length === 0) {
+		if (!chat || !messages || messages.length === 0) {
 			return;
 		}
 		
 		const timer = setTimeout(() => {
-			localStorage.setItem("sparkle_chat_history", JSON.stringify(messages));
-		}, 500);
+			const persistenceTask = () => {
+				try {
+					localStorage.setItem("sparkle_chat_history", JSON.stringify(messages));
+				} catch (e) {
+					console.warn("Failed to persist chat history", e);
+				}
+			};
+
+			if (typeof window.requestIdleCallback === "function") {
+				window.requestIdleCallback(persistenceTask, { timeout: 2000 });
+			} else {
+				persistenceTask();
+			}
+		}, 1000);
 		
 		return () => clearTimeout(timer);
-	}, [messages]);
+	}, [chat, messages]);
 
-	// 2. Load from local storage on mount - ENSURE IT ONLY RUNS ONCE
-	const historyLoaded = useRef(false);
+	// Load from local storage on mount
 	useEffect(() => {
-		if (historyLoaded.current) {
+		if (!chat || historyLoaded.current) {
 			return;
 		}
 		
@@ -238,11 +305,9 @@ export function ChatPanel({
 		if (saved) {
 			try {
 				const parsed = JSON.parse(saved);
-				// Only load if we are currently empty or if history is significantly larger
 				if (messages.length <= 1) {
-					setMessages(parsed);
-					if (typeof activeChat.setMessages === "function") {
-						activeChat.setMessages(parsed);
+					if (typeof setMessages === "function") {
+						setMessages(parsed);
 					}
 					console.log("📂 [ChatPanel] Restored history:", parsed.length, "messages");
 				}
@@ -253,7 +318,13 @@ export function ChatPanel({
 		} else {
 			historyLoaded.current = true;
 		}
-	}, [setMessages, messages.length, activeChat]);
+	}, [chat, setMessages, messages.length]);
+
+	// --- 3. Conditional Early Return ---
+	// Now safe because all hooks have been called.
+	if (!chat) {
+		return null;
+	}
 
 	return (
 		<div className="flex flex-col h-full w-full bg-transparent relative overflow-hidden">
@@ -266,7 +337,7 @@ export function ChatPanel({
 								"relative flex h-7 w-7 items-center justify-center rounded-full border transition-all duration-500",
 								navigatingUrl
 									? "bg-emerald-500/10 border-emerald-500/30 rotate-12"
-									: isLoading
+									: effectiveLoading
 										? "bg-amber-500/5 border-amber-500/20 shadow-[0_0_12px_rgba(245,158,11,0.1)]"
 										: "bg-primary/5 border-primary/10 shadow-glow-sm",
 							)}
@@ -293,7 +364,7 @@ export function ChatPanel({
 									"absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-background transition-all duration-500",
 									navigatingUrl
 										? "bg-emerald-500"
-										: isLoading
+										: effectiveLoading
 											? "bg-amber-500 animate-pulse"
 											: messages.length > 0
 												? "bg-emerald-500"
@@ -310,7 +381,7 @@ export function ChatPanel({
 							>
 								{navigatingUrl
 									? "Navigating..."
-									: isLoading
+									: effectiveLoading
 										? "Thinking..."
 										: context
 											? "Knowledge Assistant"
@@ -320,7 +391,7 @@ export function ChatPanel({
 								<span className="text-[9px] font-bold text-muted-foreground/30 tracking-wider leading-none truncate max-w-[180px]">
 									{navigatingUrl
 										? `Entering: ${navigatingUrl.split("/").pop()?.split("#")[0] || "Target"}`
-										: isLoading
+										: effectiveLoading
 											? "Analyzing context & generating..."
 											: context
 												? `Focusing: ${context.title}`
@@ -335,52 +406,76 @@ export function ChatPanel({
 				</div>
 			)}
 
-			{/* 2. Messages area: Clean content-first layout */}
-			<div
-				ref={scrollRef}
-				onScroll={handleScroll}
-				className="flex-1 overflow-y-auto px-4 py-4 space-y-8 scroll-smooth scrollbar-none"
-			>
-				{messages.length === 0 && !isLoading && (
-					<div className="h-full flex flex-col items-center justify-center text-center opacity-60 animate-in fade-in zoom-in-95 duration-1000">
-						<Sparkles
-							className="w-8 h-8 text-primary/40 mb-4"
-							strokeWidth={1.5}
-						/>
-						<div className="space-y-1">
-							<p className="text-xs font-bold uppercase tracking-[0.2em] text-foreground/80">
-								Sparkle AI Interface
-							</p>
-							<p className="text-[11px] text-muted-foreground/60 max-w-[200px] leading-relaxed font-medium">
-								Ask about the current article or explore general technical
-								concepts.
-							</p>
-						</div>
-					</div>
-				)}
+				{/* 2. Messages area: Clean content-first layout */}
+				<div
+					ref={scrollRef}
+					onScroll={handleScroll}
+					className="flex-1 overflow-y-auto px-4 py-4 space-y-8 scroll-smooth scrollbar-none"
+				>
+					<AnimatePresence mode="popLayout" initial={false}>
+						{messages.length === 0 && !effectiveLoading && (
+							<motion.div 
+								key="empty-state"
+								initial={{ opacity: 0, scale: 0.98 }}
+								animate={{ opacity: 1, scale: 1 }}
+								exit={{ opacity: 0, scale: 0.95 }}
+								className="h-full flex flex-col items-center justify-center text-center opacity-60 py-20"
+							>
+								<Sparkles
+									className="w-8 h-8 text-primary/40 mb-4"
+									strokeWidth={1.5}
+								/>
+								<div className="space-y-1">
+									<p className="text-xs font-bold uppercase tracking-[0.2em] text-foreground/80">
+										Sparkle AI Interface
+									</p>
+									<p className="text-[11px] text-muted-foreground/60 max-w-[200px] leading-relaxed font-medium">
+										Ask about the current article or explore general technical
+										concepts.
+									</p>
+								</div>
+							</motion.div>
+						)}
+						{(() => {
+							// Unify messages and skeleton into a single stream for zero-flicker transition
+							const augmentedMessages = (effectiveLoading && (!messages.length || messages[messages.length - 1].role !== 'assistant'))
+								? [...messages, { id: 'thinking-skeleton', role: 'assistant', content: '', _isSkeleton: true }]
+								: messages;
 
-				{messages?.map((m: any, i: number) => {
-					const isUser = m.role === "user";
-					// Robust text extraction: content -> text -> parts
-					const textContent = m.content || 
-						m.text ||
-						(m.parts as any[])?.filter(p => p.type === "text").map(p => p.text).join("") ||
-						"";
+							return augmentedMessages.map((m: any, i: number) => {
+								const isUser = m.role === "user";
+								
+								// Robust text extraction: content -> text -> parts
+								const textContent = m.content || 
+									m.text ||
+									(m.parts as any[])?.filter(p => p.type === "text").map(p => p.text).join("") ||
+									"";
 
-					// Ensure we always render something for an assistant message to show it's "listening"
-					// We only skip if it's truly a zombie message (no role)
-					if (!m.role) {
-						return null;
-					}
+								if (!m.role) 
+									{
+										return null;
+									}
 
-					return (
-						<div
-							key={m.id}
-							className={cn(
-								"group/message relative flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2 duration-700 pr-2",
-								isUser ? "items-end" : "items-start",
-							)}
-						>
+								// Stable Item Key: Use a persistent key for the active stream to prevent AnimatePresence flickers
+								// during the transition from skeleton to actual message arrival.
+								const isLastAssistant = !isUser && i === augmentedMessages.length - 1;
+								const itemKey = (m._isSkeleton || (isLastAssistant && effectiveLoading)) 
+									? 'active-assistant-stream' 
+									: m.id;
+
+								return (
+									<motion.div
+										key={itemKey}
+										layout="position"
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										exit={{ opacity: 0, scale: 0.95 }}
+										transition={{ duration: 0.4, ease: "easeOut" }}
+										className={cn(
+											"group/message relative flex flex-col gap-3 pr-2 w-full",
+											isUser ? "items-end" : "items-start text-left",
+										)}
+									>
 							{/* Identity Label */}
 							<div
 								className={cn(
@@ -403,11 +498,6 @@ export function ChatPanel({
 									) : (
 										<Sparkles
 											size={10}
-											className={cn(
-												isLoading &&
-													i === messages.length - 1 &&
-													"animate-pulse",
-											)}
 										/>
 									)}
 								</div>
@@ -423,7 +513,7 @@ export function ChatPanel({
 										: "w-full bg-transparent p-0",
 								)}
 							>
-									<div className={cn(!isUser && "prose dark:prose-invert max-w-none text-foreground/90")}>
+									<div className={cn(!isUser && "max-w-none !text-left !ml-0 !mr-auto text-foreground/90")}>
 										{!isUser ? (
 											<div className="flex flex-col gap-2">
 												<CitationRenderer
@@ -432,7 +522,7 @@ export function ChatPanel({
 													onLinkClick={onLinkClick}
 												/>
 												{/* Enhanced Loading State: Show if content is truly empty for assistant */}
-												{!textContent && !m.toolCalls && (
+												{!textContent && effectiveLoading && (
 													<div className="flex items-center gap-2 py-1">
 														<div className="flex gap-1">
 															<div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
@@ -444,6 +534,57 @@ export function ChatPanel({
 														</span>
 													</div>
 												)}
+
+												{/* Source Footer: List all cited documents at the bottom */}
+												{(() => {
+													const citations = getCitationsForMessage();
+													if (citations.length === 0) {
+														return null;
+													}
+													return (
+														<div className="mt-6 pt-4 border-t border-border/5 animate-in fade-in slide-in-from-bottom-2 duration-500">
+															<div className="flex items-center gap-2 mb-3">
+																<div className="flex h-4 w-4 items-center justify-center rounded-sm bg-primary/10 border border-primary/20">
+																	<Link2 size={9} className="text-primary" />
+																</div>
+																<span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">
+																	Sources & References
+																</span>
+															</div>
+															<div className="flex flex-wrap gap-2">
+																{citations.map((c, idx) => {
+																	const href = `/blog/${c.slug}${c.headingId ? `#${c.headingId}` : ""}`;
+																	return (
+																		<Link
+																			key={`${m.id}-cite-${idx}`}
+																			href={href}
+																			onClick={(e: React.MouseEvent) => {
+																				if (onLinkClick) {
+																					e.preventDefault();
+																					onLinkClick(href);
+																				}
+																			}}
+																			className="inline-flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-sm bg-primary/[0.03] dark:bg-white/[0.02] border-l-2 border-primary/30 transition-all no-underline group/source"
+																			data-cursor="link"
+																		>
+																			<div className="flex items-center justify-center w-3 h-3 text-primary/40 transition-colors">
+																				<Sparkles size={9} strokeWidth={2.5} />
+																			</div>
+																			<div className="flex items-center gap-1.5">
+																				<span className="text-[9px] font-black uppercase tracking-widest text-primary/20 transition-colors shrink-0">
+																					S{idx + 1}
+																				</span>
+																				<span className="text-[11px] font-bold text-foreground/70 transition-colors truncate max-w-[140px] tracking-tight">
+																					{c.title}
+																				</span>
+																			</div>
+																		</Link>
+																	);
+																})}
+															</div>
+														</div>
+													);
+												})()}
 											</div>
 										) : (
 											<span className="text-sm leading-relaxed whitespace-pre-wrap">
@@ -460,8 +601,9 @@ export function ChatPanel({
 											initial={{ opacity: 0, scale: 0.95 }}
 											animate={{ opacity: 1, scale: 1 }}
 											className="mt-6 inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-primary/5 border border-primary/10 group/tool overflow-hidden relative"
+											data-cursor="action"
 										>
-											<div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent -translate-x-full group-hover/tool:animate-shimmer" />
+											<div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent -translate-x-full" />
 											<Search
 												size={11}
 												className={cn(
@@ -477,23 +619,13 @@ export function ChatPanel({
 										</motion.div>
 									))}
 							</div>
-						</div>
-					);
-				})}
+									</motion.div>
+								);
+							});
+						})()}
+					</AnimatePresence>
 
-				{/* Loading Skeleton Message */}
-				{isLoading && messages[messages.length - 1]?.role !== "assistant" && (
-					<div className="flex gap-4 animate-in fade-in slide-in-from-bottom-3">
-						<div className="w-8 h-8 rounded-full flex items-center justify-center border mt-0.5 bg-primary/10 border-primary/20 text-primary">
-							<Sparkles size={14} className="animate-pulse" />
-						</div>
-						<div className="flex items-center gap-2 h-8">
-							<div className="w-1 h-1 rounded-full bg-primary/40 animate-bounce [animation-delay:-0.3s]" />
-							<div className="w-1 h-1 rounded-full bg-primary/40 animate-bounce [animation-delay:-0.15s]" />
-							<div className="w-1 h-1 rounded-full bg-primary/40 animate-bounce" />
-						</div>
-					</div>
-				)}
+
 
 				{/* Errors */}
 				{error && (
@@ -522,7 +654,7 @@ export function ChatPanel({
 				<div className="absolute bottom-[88px] right-6 flex justify-end pointer-events-none z-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
 					<button
 						type="button"
-						onClick={scrollToBottom}
+						onClick={() => scrollToBottom()}
 						data-cursor="action"
 						className="pointer-events-auto w-10 h-10 rounded-full bg-background/60 dark:bg-white/5 border border-primary/20 backdrop-blur-xl text-primary hover:bg-primary/10 hover:border-primary/40 hover:shadow-glow-sm transition-all flex items-center justify-center group shadow-2xl"
 					>
@@ -564,7 +696,7 @@ export function ChatPanel({
 						<Button
 							type="submit"
 							data-cursor="action"
-							disabled={isLoading || !(localValue || "").trim()}
+							disabled={effectiveLoading || !(localValue || "").trim()}
 							className="rounded-2xl h-11 w-11 p-0 bg-primary/10 text-primary transition-colors flex items-center justify-center shrink-0 border border-primary/20 mb-[1px] !pointer-events-auto"
 						>
 							<Send size={14} />

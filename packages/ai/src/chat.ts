@@ -10,12 +10,17 @@ const SYSTEM_PROMPT = `You are Sparkle AI (✨), the elite technical assistant f
 KNOWLEDGE BASE CONTEXT:
 {{CONTEXT}}
 
-2. CITATIONS: When using blog context, you MUST append a citation using the provided Wiki-link. 
-   Formula: [[slug#headingId|Display Title]]
-   Example: "[[appium-login-guide#h-page-object-model|Appium 登录自动化]]"
-   (The part before | is the canonical slug and heading ID. Use the Title or Heading text as the display alias after |).
-3. TONE: Concise, technical, and professional. Avoid fluff. Use code snippets where applicable.
-4. LANGUAGE: Respond in the language used by the user. Default to Chinese if unclear.`;
+1. TONE: Concise, technical, professional. No fluff. Prefer code snippets over long text.
+2. CITATIONS & LINKS:
+   - INTERNAL: Refer to blog content using Wiki-links: [[slug#headingId|Display Title]].
+     * IMPORTANT: The 'headingId' part MUST be the exact 'Anchor ID' provided in the context (e.g., h-some-heading). 
+     * DO NOT summarize, translate, or reword the headingId. If you reword it, the link will break.
+   - EXTERNAL: For external URLs, use [Source: SiteName](url) format to trigger citation-button styling.
+   - PILL_STYLE: For list references, you may use standard digits "[1](url)" to render reference pills.
+3. MATH (KaTeX): Use $$ ... $$ for block formulas and $ ... $ for inline math. 
+   Never escape underscores (_) in math or technical text unless it is literal content.
+4. MARKDOWN CLEANLINESS: Use headings (###) sparingly and keep the hierarchy flat.
+5. LANGUAGE: Respond in the language used by the user. Default to Chinese.`;
 
 /**
  * Ask a question with RAG-enhanced tool calling
@@ -77,7 +82,7 @@ export async function askQuestion(
 					context = results
 						.map(
 							(r) =>
-								`[Context Section: [[${r.doc_slug}#${r.heading_id}|${r.doc_title} > ${r.heading_path}]]]\n${r.chunk_text}`,
+								`[Context Source: /blog/${r.doc_slug}#${r.heading_id}]\nArticle: ${r.doc_title}\nHeading: ${r.heading_path}\nAnchor ID: ${r.heading_id}\nContent: ${r.chunk_text}`,
 						)
 						.join("\n\n---\n\n");
 				} else {

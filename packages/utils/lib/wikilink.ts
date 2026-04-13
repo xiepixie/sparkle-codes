@@ -1,10 +1,18 @@
 /**
  * 🔗 Sparkle Wiki-Link Standard Protocol (Layered Architecture)
  *
- * 这套协议定义了项目如何处理从 Obsidian 原始引用到 Web 路由的转换。
- * 包含两层职责：
- * 1. Resolution (解析层): 将原始字符串拆解为结构化路径和片段。
- * 2. Slugify (归一化层): 将规范路径转换为确定性的 Web Slug。
+ * 本模块定义了从 Obsidian 原始引用到 Web 路由的完整转换链路。
+ *
+ * 职责分层：
+ *   Layer 1 - parseWikiLink:  结构化拆分（路径 / 片段 / 块引用），不涉及路由。
+ *   Layer 2 - slugifyPath:    确定性 Slug 生成，必须与 Rust 端完全对称。
+ *   Utility - normalizeSlug:  URL → 纯 Slug 的归一化（用于比较 / 去重）。
+ *   Utility - isSameWikiPage:  页面身份判等（用于导航 / 高亮）。
+ *
+ * 对称性约束 (Symmetry Rule):
+ *   TypeScript slugifyPath  ⟷  Rust slugify_publish_path  (packages/sentinel/src/utils/path.rs)
+ *   TypeScript slugifyPath  ⟷  Rust slugify_publish_path  (packages/markdown-parser/src/protocol/links.rs)
+ *   Heading ID = `h-${slugifyPath(headingText)}`，两端均使用同一函数，禁止引入独立的 heading slug 函数。
  */
 
 export interface WikiLinkInfo {
@@ -25,10 +33,14 @@ export interface WikiLinkInfo {
 
 /**
  * Layer 1: 解析层 (Resolve/Normalize)
- * 职责：严格按照 Obsidian 语义拆分字符串，不涉及 Web 路由逻辑。
- * 
- * 为什么这样做：
- * 保证无论输入是什么样（含空格、反斜杠、Unicode NFD），都能产出一致的内部表示。
+ *
+ * 职责：严格按照 Obsidian Wiki-Link 语义拆分字符串，产出结构化的 WikiLinkInfo。
+ * 不涉及任何 Web 路由逻辑（路由由 slugifyPath 负责）。
+ *
+ * 处理步骤：NFC 归一化 → 锚点剥离(# / ^) → URI 解码 → 路径清洗 → 文件名提取
+ *
+ * 为什么用 indexOf 而非 split：
+ *   链接中可能存在多个 '#'（如 URI 编码的中文标题），split 会截断后续内容。
  */
 export function parseWikiLink(raw: string): WikiLinkInfo {
   // 1. Unicode 归一化 (NFC)
@@ -40,33 +52,35 @@ export function parseWikiLink(raw: string): WikiLinkInfo {
   let isBlock = false;
 
   // 2. 剥离锚点 (# 或 ^)
-  if (normalizedRaw.includes("#")) {
-    const parts = normalizedRaw.split("#");
-    linkPath = parts[0];
+  const hashIdx = normalizedRaw.indexOf("#");
+  const caretIdx = normalizedRaw.indexOf("^");
+
+  if (hashIdx !== -1) {
+    linkPath = normalizedRaw.substring(0, hashIdx);
+    const rawFrag = normalizedRaw.substring(hashIdx + 1);
     try {
-      fragment = parts[1] ? decodeURIComponent(parts[1]) : null;
+      fragment = decodeURIComponent(rawFrag);
     } catch {
-      fragment = parts[1] || null;
+      fragment = rawFrag;
     }
-  } else if (normalizedRaw.includes("^")) {
-    const idx = normalizedRaw.indexOf("^");
-    linkPath = normalizedRaw.substring(0, idx);
-    fragment = normalizedRaw.substring(idx);
+  } else if (caretIdx !== -1) {
+    linkPath = normalizedRaw.substring(0, caretIdx);
+    fragment = normalizedRaw.substring(caretIdx);
   }
 
-  // 3. 路径归一化
+  // 3. 路径 URI 解码
   try {
     linkPath = decodeURIComponent(linkPath);
   } catch {
-    // ignore
+    // 容错：linkPath 可能包含无效的 percent-encoding，保留原始值
   }
 
-  // 识别 Block 类型
+  // 4. 识别 Block Reference 类型
   if (fragment?.startsWith("^")) {
     isBlock = true;
   }
 
-  // 3. 规范化路径分隔符
+  // 5. 规范化路径分隔符
   const path = linkPath
     .replace(/\\/g, "/")                // 统一斜杠
     .replace(/\/+/g, "/")               // 去重
@@ -87,10 +101,23 @@ export function parseWikiLink(raw: string): WikiLinkInfo {
 
 /**
  * Layer 2: 归一化层 (Slugify)
- * 职责：核心路由算法。必须与 Rust 端的 `slugify_publish_path` 完全对称。
- * 
- * 逻辑参照：packages/sentinel/src/utils/path.rs
- * 惩罚性原则：若逻辑不一致，会导致前端链接 404 或双向链接预览失效。
+ *
+ * 核心路由算法。同时用于：
+ *   1. 路径 → URL Slug 转换（路由生成）
+ *   2. Heading 文本 → Heading ID 生成（`h-${slugifyPath(text)}`）
+ *
+ * 对称源码 (Symmetry Sources):
+ *   - packages/sentinel/src/utils/path.rs          :: slugify_publish_path
+ *   - packages/markdown-parser/src/protocol/links.rs :: slugify_publish_path
+ *   - packages/markdown-parser/src/protocol/anchors.rs :: inject_heading_ids (line 23)
+ *
+ * 字符映射规则：
+ *   '/' | '\\' | ' ' | '_'  →  '-'  (分隔符)
+ *   c.is_alphanumeric()     →  c.toLowerCase()  (保留)
+ *   '-'                     →  '-'  (保留，去重)
+ *   其他字符                →  丢弃（不产生分隔符）
+ *
+ * 惩罚性约束：若与 Rust 端逻辑不一致，会导致前端链接 404 或双向链接预览失效。
  */
 export function slugifyPath(input: string): string {
   if (!input) {
@@ -137,8 +164,14 @@ export function slugifyPath(input: string): string {
 }
 
 /**
- * Canonical slug normalization — the SINGLE SOURCE OF TRUTH for all slug
- * comparison / dedup / storage in the reading-history subsystem.
+ * Canonical Slug 归一化 — 阅读历史子系统中所有 slug 比较 / 去重 / 存储的唯一真相源。
+ *
+ * 用途：将 URL 路径（可能包含 /blog/ 前缀、fragment、query string）
+ *       清洗为纯粹的小写 slug，用于相等性判断。
+ *
+ * 为什么双重 decodeURIComponent：
+ *   Obsidian → Sentinel → Next.js 管线中经常出现双重编码（如中文路径），
+ *   单次解码不足以还原原始字符串。
  */
 export function normalizeSlug(raw?: string): string {
   if (!raw) {
@@ -171,7 +204,12 @@ export function normalizeSlug(raw?: string): string {
 }
 
 /**
- * isSameWikiPage - Standard identity check for Wiki navigation.
+ * 页面身份判等 — 用于 Wiki 导航中的「当前页面」检测。
+ *
+ * 为什么需要 endsWith 兜底：
+ *   Obsidian 的短链接（仅文件名）经过 slugifyPath 后可能只是完整 slug 的后缀，
+ *   例如 target="Guide" → "guide"，current="local-retrieval-model-selection-guide"。
+ *   endsWith 允许这种模糊匹配，避免同页链接被误判为跨页。
  */
 export function isSameWikiPage(target: string, currentSlug: string): boolean {
   if (!target) {
@@ -188,34 +226,4 @@ export function isSameWikiPage(target: string, currentSlug: string): boolean {
   
   return targetSlug === currentNormalized || 
          currentNormalized.endsWith(`-${targetSlug}`);
-}
-
-/**
- * Heading ID logic — mirrors the Markdown parser's heading slugification.
- * 为什么这样做：
- * 为了在预览 (WikiLinkPreview) 中能够正确提取非 ASCII 标题 (如中文) 的片段。
- * 该逻辑必须与 Rust 端 `h-{slug}` 的生成规则一致。
- */
-export function slugifyHeader(text: string): string {
-  if (!text) {
-    return "";
-  }
-  
-  const normalized = text.normalize("NFC").toLowerCase().trim();
-  let out = "";
-  let lastWasDash = false;
-
-  for (const ch of normalized) {
-    if (/[\p{L}\p{N}]/u.test(ch)) {
-      out += ch;
-      lastWasDash = false;
-    } else if (ch === " " || ch === "-" || ch === "_" || ch === "/" || ch === "\\") {
-      if (out.length > 0 && !lastWasDash) {
-        out += "-";
-        lastWasDash = true;
-      }
-    }
-  }
-  
-  return out.replace(/^-+|-+$/g, "");
 }

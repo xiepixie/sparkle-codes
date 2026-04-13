@@ -215,9 +215,16 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 
 	const isArchiveView = currentPage > 1 || query.trim() !== "" || activeTags.length > 0;
 	const archiveHasFilters = query.trim() !== "" || activeTags.length > 0;
-	const isBrowserLoading = isPending;
+	
+	/* 
+	   Why: Only show the global loading opacity/flicker if we are actually 
+	   waiting for a network request. If the data is already in the feedCache, 
+	   isPending will still be true during the router transition, but we 
+	   suppress the feedback to make the switch feel instantaneous.
+	*/
+	const isCached = !!getPrefetchedFeed(currentFeedKey);
+	const isBrowserLoading = isPending && !isCached;
 	const [searchError, _setSearchError] = useState<string | null>(null);
-	// Note: _setSearchError is currently reserved for future server-side error handling
 
 	// Magazine Mode (Page 1): 1 Hero -> 4 Details -> 3 Scans
 	const featuredPost = feed.posts.length > 0 ? feed.posts[0] : undefined;
@@ -283,7 +290,7 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 								Search blog posts
 							</label>
 							<Search className="absolute left-4 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-							{isBrowserLoading ? (
+							{isPending ? (
 								<Loader2 className={cn("absolute h-4 w-4 animate-spin text-primary/80", query ? "right-12" : "right-4")} />
 							) : null}
 							<input
@@ -554,6 +561,11 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 								<button
 									type="button"
 									onClick={() => setPage(Math.max(1, currentPage - 1))}
+									onMouseEnter={() => {
+										if (feed.hasPreviousPage) {
+											void prefetchBlogFeed({ ...currentFilters, page: currentPage - 1 });
+										}
+									}}
 									disabled={!feed.hasPreviousPage}
 									aria-label="Go to previous page"
 									className={`flex min-h-[44px] items-center justify-center gap-2 sm:gap-3 rounded-2xl border border-border/50 bg-background/40 px-4 py-3 sm:px-6 text-[10px] sm:text-[11px] font-bold uppercase tracking-[.2em] transition-all duration-300 active:scale-95 backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${!feed.hasPreviousPage ? "pointer-events-none opacity-20" : "cursor-pointer hover:border-primary/50 hover:bg-primary/10 hover:text-primary hover:shadow-glow-sm"}`}
@@ -574,6 +586,12 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 										type="text"
 										inputMode="numeric"
 										pattern="[0-9]*"
+										onMouseEnter={() => {
+											// Briefly pre-warm next page if they focus the jump-input area
+											if (currentPage < feed.totalPages) {
+												void prefetchBlogFeed({ ...currentFilters, page: currentPage + 1 });
+											}
+										}}
 										value={inputPage !== null ? inputPage : currentPage.toString().padStart(2, "0")}
 										onChange={(e) => {
 											const val = e.target.value.replace(/\D/g, "");
@@ -610,6 +628,11 @@ export function BlogClientShell({ initialFeed }: BlogClientShellProps) {
 								<button
 									type="button"
 									onClick={() => setPage(currentPage + 1)}
+									onMouseEnter={() => {
+										if (feed.hasNextPage) {
+											void prefetchBlogFeed({ ...currentFilters, page: currentPage + 1 });
+										}
+									}}
 									disabled={!feed.hasNextPage}
 									aria-label="Go to next page"
 									className={`flex min-h-[44px] items-center justify-center gap-2 sm:gap-3 rounded-2xl border border-border/50 bg-background/40 px-4 py-3 sm:px-6 text-[10px] sm:text-[11px] font-bold uppercase tracking-[.2em] transition-all duration-300 active:scale-95 backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${!feed.hasNextPage ? "pointer-events-none opacity-20" : "cursor-pointer hover:border-primary/50 hover:bg-primary/10 hover:text-primary hover:shadow-glow-sm"}`}

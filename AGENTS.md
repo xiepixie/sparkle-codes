@@ -359,8 +359,9 @@ Adhere to the following specifications for visual consistency:
    - Maintain a minimal sidebar footer. Toggle visibility via `DocsLayout` props.
    - Use sharp bottom borders for active navigation states.
 4. **Interaction Design**:
-   - Apply `active:scale-95` for tactile feedback on buttons.
-   - Use primary-colored glow effects (`shadow-glow`) on hover states.
+   - **Tactile Feedback**: Apply `active:scale-95` to all interactive buttons for physical response.
+   - **Global Cursor Delegation**: Favor global cursor effects over custom CSS hover styles. Components MUST use `data-cursor` tokens (e.g., `link`, `action`, `text`) to delegate visual hover behavior to the centralized cursor handler instead of implementing local `hover:` utility overrides.
+   - **Glow Effects**: Limit `shadow-glow` usage to critical CTA components or as part of the global cursor response system.
 5. **Focus Management**:
    - Avoid the `autoFocus` attribute for search inputs and modals.
    - Use `useEffect` or component-library hooks to manually trigger focus (`.focus()`) after transitions or modal animations have completed to ensure a11y compatibility.

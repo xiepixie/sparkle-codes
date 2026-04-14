@@ -15,6 +15,7 @@ export interface QueryPostSummariesOptions {
   pageSize?: number;
   query?: string;
   tags?: string[];
+  pathPrefix?: string;
 }
 
 export interface ExplorerNode {
@@ -86,6 +87,7 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
     basePostFilter,
     buildSearchFilter(options.query),
     buildTagFilter(options.tags),
+    options.pathPrefix ? sql`${documents.vaultPath} LIKE ${`${options.pathPrefix}%`}` : undefined,
   );
   
   const isSearch = !!options.query?.trim();
@@ -125,8 +127,8 @@ export async function queryPostSummariesQuery(options: QueryPostSummariesOptions
  * Fetch a single page of post summaries (paginated).
  * Uses SQL window functions for a single-round-trip count + data fetch.
  */
-export async function getPostsPageQuery(page = 1, pageSize = 5, query?: string) {
-  return await queryPostSummariesQuery({ page, pageSize, query });
+export async function getPostsPageQuery(page = 1, pageSize = 5, query?: string, pathPrefix?: string) {
+  return await queryPostSummariesQuery({ page, pageSize, query, pathPrefix });
 }
 
 /**
@@ -334,7 +336,7 @@ function buildSectionSearchFilter(query: string) {
 /**
  * Search across all document sections to find specific hits.
  */
-export async function searchPostSectionsQuery(query: string, limit = 20) {
+export async function searchPostSectionsQuery(query: string, limit = 20, pathPrefix?: string) {
   const trimmed = query.trim();
   if (!trimmed) {
     return [];
@@ -364,7 +366,8 @@ export async function searchPostSectionsQuery(query: string, limit = 20) {
     .where(
       and(
         basePostFilter,
-        buildSectionSearchFilter(trimmed)
+        buildSectionSearchFilter(trimmed),
+        pathPrefix ? sql`${documents.vaultPath} LIKE ${`${pathPrefix}%`}` : undefined,
       )
     )
     .orderBy(sql`section_rank desc`, desc(documents.createdAt))

@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, Compass, Hash, Loader2 } from "lucide-react";
+import { Clock, Compass, Loader2 } from "lucide-react";
 import { cn } from "@repo/ui";
 import { CommandEmptyState } from "@/components/CommandSurface";
 import type { CommandCenterReadingContext } from "@/lib/command-center";
@@ -129,20 +129,25 @@ export const JumpPanel = React.memo(({
 									onClick={() => navigateToBlogPost(item.url)}
 									onMouseEnter={() => setActiveIndex(globalIdx)}
 									className={cn(
-										"group relative flex w-full items-center gap-4 rounded-3xl border border-border/30 bg-background/55 px-4 py-3.5 text-left transition-all duration-300 select-none outline-none hover:border-border/50 hover:bg-background/75",
+										"group relative flex w-full items-center gap-4 rounded-3xl border border-border/30 bg-background/55 px-4 py-3.5 text-left transition-all duration-300 select-none outline-none hover:border-primary/30 hover:bg-background/75",
 										globalIdx === activeIndex
 											? "border-primary/35 bg-primary/[0.045] shadow-[0_16px_34px_rgba(var(--primary-rgb),0.08)]"
 											: "opacity-78 hover:opacity-100",
 										pendingUrl && !isPending && "opacity-30 grayscale-[0.5] blur-[0.5px]"
 									)}
 								>
-									<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border/20 bg-background/75">
+									<div className={cn(
+										"flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-all duration-300",
+										globalIdx === activeIndex 
+											? "border-primary/40 bg-primary/10 shadow-[0_0_15px_rgba(var(--primary-rgb),0.1)]" 
+											: "border-border/20 bg-background/75"
+									)}>
 										{isPending ? (
 											<Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
 										) : (
 											<Clock className={cn(
 												"h-4 w-4 shrink-0 transition-transform group-hover:rotate-12",
-												globalIdx === activeIndex ? "text-primary" : "text-muted-foreground/40"
+												globalIdx === activeIndex ? "text-primary" : "text-primary/60"
 											)} />
 										)}
 									</div>

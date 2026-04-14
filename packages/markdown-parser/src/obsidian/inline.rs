@@ -45,7 +45,7 @@ pub fn process_inline_entities(html: &str) -> InlineProcessResult {
                     let tag_name_raw = if is_closing {
                         tag_html.trim_start_matches("</").trim_end_matches('>').trim()
                     } else {
-                        tag_html.trim_start_matches('<').trim_end_matches('>').trim_end_matches('/').trim()
+                        tag_html.trim_start_matches('<').trim_end_matches('>').trim_end_matches('/')
                             .split_whitespace().next().unwrap_or("")
                     };
 
@@ -79,7 +79,7 @@ pub fn process_inline_entities(html: &str) -> InlineProcessResult {
                         let escaped_full = escape_html_attr(parts.raw_target);
                         let escaped_page = escape_html_attr(parts.page);
                         let escaped_frag = escape_html_attr(parts.fragment);
-                        
+
                         extracted_links.push(WikiLink {
                             raw_target: parts.raw_target.to_string(),
                             normalized_target: normalize_wikilink_target(parts.raw_target),
@@ -115,11 +115,15 @@ pub fn process_inline_entities(html: &str) -> InlineProcessResult {
                                 let link_type = if parts.fragment.is_empty() { "article" } else if parts.fragment.starts_with('^') { "block" } else { "heading" };
                                 out.push_str("data-target=\"");
                                 out.push_str(&escaped_full);
+                                out.push_str("\" data-page=\"");
+                                out.push_str(&escaped_page);
+                                out.push_str("\" data-fragment=\"");
+                                out.push_str(&escaped_frag);
                                 out.push_str("\" data-link-type=\"");
                                 out.push_str(link_type);
                                 out.push_str("\" ");
                             }
-                            out.push_str(">");
+                            out.push('>');
                             out.push_str("</span>");
                         } else {
                             has_wiki_links = true;
@@ -130,6 +134,10 @@ pub fn process_inline_entities(html: &str) -> InlineProcessResult {
                             out.push_str(CLASS_INTERNAL_LINK);
                             out.push_str("\" data-target=\"");
                             out.push_str(&escaped_full);
+                            out.push_str("\" data-page=\"");
+                            out.push_str(&escaped_page);
+                            out.push_str("\" data-fragment=\"");
+                            out.push_str(&escaped_frag);
                             out.push_str("\" data-link-type=\"");
                             out.push_str(link_type);
                             out.push_str("\" href=\"");
@@ -139,7 +147,7 @@ pub fn process_inline_entities(html: &str) -> InlineProcessResult {
                             if parts.has_explicit_label && !parts.label.is_empty() {
                                 out.push_str(&escape_html_text(parts.label));
                             } else {
-                                push_default_display(&mut out, parts.page, &parts.fragment);
+                                push_default_display(&mut out, parts.page, parts.fragment);
                             }
                             out.push_str("</a>");
                         }
@@ -153,10 +161,7 @@ pub fn process_inline_entities(html: &str) -> InlineProcessResult {
             }
             b'#' => {
                 if skip_depth == 0 {
-                    let is_start = i == 0 || match bytes[i-1] {
-                        b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'|' | b'(' | b'[' | b'{' | b':' | b',' | b';' => true,
-                        _ => false,
-                    };
+                    let is_start = i == 0 || matches!(bytes[i-1], b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'|' | b'(' | b'[' | b'{' | b':' | b',' | b';');
 
                     if is_start {
                         let start = i + 1;

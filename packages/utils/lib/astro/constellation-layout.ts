@@ -103,10 +103,14 @@ export function resolveSlots(
     pIdx = 0;
     while (pIdx < weights.length) {
       r -= weights[pIdx];
-      if (r <= 0) break;
+      if (r <= 0) {
+        break;
+      }
       pIdx++;
     }
-    if (pIdx >= availableSlots.length) pIdx = availableSlots.length - 1;
+    if (pIdx >= availableSlots.length) {
+      pIdx = availableSlots.length - 1;
+    }
   } else {
     // Deterministic fallback based on names
     pIdx = Math.abs(primary.length) % availableSlots.length;

@@ -155,7 +155,7 @@ function scrollToFragment(fragment: string) {
 	});
 
 	// Update browser URL without jumping back to top (native hash navigation is avoided)
-	const cleanUrl = window.location.pathname + window.location.search + `#${encodeURIComponent(decoded)}`;
+	const cleanUrl = `${window.location.pathname}${window.location.search}#${encodeURIComponent(decoded)}`;
 	window.history.pushState(null, "", cleanUrl);
 
 	// UX: Visual arrival confirmation — flash the target element

@@ -58,7 +58,7 @@ export const SearchPanel = React.memo(({
 										"group flex w-full items-start gap-4 rounded-3xl border p-4 text-left transition-all duration-300",
 										idx === activeIndex
 											? "border-primary/35 bg-primary/[0.045] shadow-[0_16px_34px_rgba(var(--primary-rgb),0.08)]"
-											: "border-border/30 bg-background/55 hover:border-border/50 hover:bg-background/75",
+											: "border-border/30 bg-background/55 hover:border-primary/30 hover:bg-background/75",
 										pendingUrl && !isPending && "opacity-40 grayscale-[0.5] blur-[0.5px]",
 										isPending && "scale-[0.98] border-primary/40 bg-primary/10",
 									)}
@@ -156,16 +156,24 @@ export const SearchPanel = React.memo(({
 										"group flex w-full items-center gap-4 rounded-3xl border px-4 py-3.5 text-left transition-all duration-300",
 										idx === activeIndex
 											? "border-primary/35 bg-primary/[0.045] shadow-[0_16px_34px_rgba(var(--primary-rgb),0.08)]"
-											: "border-border/30 bg-background/55 hover:border-border/50 hover:bg-background/75",
+											: "border-border/30 bg-background/55 hover:border-primary/30 hover:bg-background/75",
 										pendingUrl && !isPending && "opacity-40 grayscale-[0.5] blur-[0.5px]",
 										isPending && "scale-[0.98] border-primary/40 bg-primary/10",
 									)}
 								>
-										<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border/20 bg-background/75">
+										<div className={cn(
+											"flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-all duration-300",
+											idx === activeIndex 
+												? "border-primary/40 bg-primary/10 shadow-[0_0_15px_rgba(var(--primary-rgb),0.1)]" 
+												: "border-border/20 bg-background/75"
+										)}>
 											{isPending ? (
 												<Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
 											) : (
-												<Clock className="h-4 w-4 text-primary/60 transition-transform group-hover:rotate-6 shrink-0" />
+												<Clock className={cn(
+													"h-4 w-4 shrink-0 transition-transform group-hover:rotate-6",
+													idx === activeIndex ? "text-primary" : "text-primary/60"
+												)} />
 											)}
 										</div>
 										<div className="flex min-w-0 flex-col gap-1">

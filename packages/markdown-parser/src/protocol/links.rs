@@ -48,9 +48,8 @@ pub fn build_wikilink_href(page: &str, fragment: &str) -> String {
 
     if fragment.is_empty() {
         base
-    } else if fragment.starts_with('^') {
+    } else if let Some(block_id) = fragment.strip_prefix('^') {
         // Block anchor: Obsidian uses ^id, but DOM ID is just the id
-        let block_id = &fragment[1..];
         if base.is_empty() {
             format!("#{}", block_id)
         } else {

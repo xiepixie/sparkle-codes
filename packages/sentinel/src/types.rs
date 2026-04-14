@@ -79,8 +79,10 @@ pub struct DocumentMetadata {
     pub slug: String,
     pub area: VaultArea,
     /// Second-level PARA classification. Retained for semantic completeness and future aggregation logic.
+    #[allow(dead_code)]
     pub section: VaultSection,
     /// Pre-calculated content hash. Used for idempotency checks and cache invalidation.
+    #[allow(dead_code)]
     pub content_hash: String,
     pub parser_version: String,
     pub updated_at: DateTime<Utc>,
@@ -117,6 +119,7 @@ pub struct LinkInstance {
     pub attachment_url: Option<String>,
     /// Original occurrence order in markdown. Retained for document-order traceability. 
     /// Note: DB persistence currently uses 0-based index for actual ordering.
+    #[allow(dead_code)]
     pub source_order: i32,
 }
 
@@ -160,6 +163,7 @@ pub enum SyncAction {
     Create,
     Update,
     /// File removed from vault. Retained variant for upcoming watcher 'Removed' event integration.
+    #[allow(dead_code)]
     Delete,
 }
 

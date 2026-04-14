@@ -65,11 +65,7 @@ pub fn push_default_display(out: &mut String, page: &str, fragment: &str) {
         if !page.is_empty() {
             out.push_str(" > ");
         }
-        let display_fragment = if fragment.starts_with('^') {
-            &fragment[1..]
-        } else {
-            fragment
-        };
+        let display_fragment = fragment.strip_prefix('^').unwrap_or(fragment);
         out.push_str(&escape_html_text(display_fragment));
     }
 }

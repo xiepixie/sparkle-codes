@@ -16,7 +16,8 @@ export async function GET(request: Request) {
 			return NextResponse.json([]);
 		}
 
-		const blogResults = await searchBlogPosts(query, 8);
+		const prefix = searchParams.get("prefix") || undefined;
+		const blogResults = await searchBlogPosts(query, 8, prefix);
 		return NextResponse.json(blogResults, {
 			headers: {
 				"Cache-Control": "public, s-maxage=3600, stale-while-revalidate=600",

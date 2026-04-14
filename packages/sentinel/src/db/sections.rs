@@ -1,4 +1,4 @@
-use sqlx::QueryBuilder;
+
 use crate::types::{SectionMetadata, BlockMetadata};
 
 pub async fn upsert_sections(

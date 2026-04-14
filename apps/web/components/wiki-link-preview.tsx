@@ -14,7 +14,7 @@ import {
 } from "@repo/utils";
 import DOMPurify from "dompurify";
 import { Skeleton } from "@repo/ui/components/skeleton";
-import { ArrowRight, FileText, Loader2, Unlink, HelpCircle } from "lucide-react";
+import { ArrowRight, FileText, Unlink, HelpCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";

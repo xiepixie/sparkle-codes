@@ -62,7 +62,7 @@ pub fn convert_admonition_blocks(input: &str) -> String {
                 out.push(' ');
                 out.push_str(&title);
             }
-            out.push_str("\n");
+            out.push('\n');
             
             out.push_str(&body);
             out

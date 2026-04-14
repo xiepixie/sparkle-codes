@@ -67,13 +67,11 @@ pub fn parse_frontmatter(content: &str) -> ParsedFM {
 
     if let Some(fm_slice) = split.raw_yaml {
         if let Ok(docs) = YamlLoader::load_from_str(fm_slice) {
-            if let Some(doc) = docs.first() {
-                if let Yaml::Hash(hash) = doc {
-                    for (k, v) in hash {
-                        if let Some(key_str) = k.as_str() {
-                            if let Some(json_val) = yaml_to_json(v) {
-                                fields.insert(key_str.to_string(), json_val);
-                            }
+            if let Some(Yaml::Hash(hash)) = docs.first() {
+                for (k, v) in hash {
+                    if let Some(key_str) = k.as_str() {
+                        if let Some(json_val) = yaml_to_json(v) {
+                            fields.insert(key_str.to_string(), json_val);
                         }
                     }
                 }
@@ -111,11 +109,7 @@ fn yaml_to_json(yaml: &Yaml) -> Option<Value> {
         other => {
             // Attempt to stringify unknown types as a last resort
             // This captures Dates or Alias if handled by the parser but not explicitly by us
-            if let Some(s) = other.as_str() {
-                Some(Value::String(s.to_string()))
-            } else {
-                None
-            }
+            other.as_str().map(|s| Value::String(s.to_string()))
         }
     }
 }

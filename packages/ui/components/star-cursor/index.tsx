@@ -184,9 +184,12 @@ export function StarCursor({ pathname }: StarCursorProps) {
 							targetH = b.h + 12;
 							
 							// ELASTIC CENTER PROTOCOL (决策型注释)
-							// 为什么：如果光标点位绝对锁定在按钮中心，用户快速划过时会感到“被吸住”的严重卡滞感。
-							// 通过增加 15% 的弹性引力，让环在框选的同时随指针微动，提供丝滑的物理感。
-							targetX = b.cx + (s.pointer.x - b.cx) * 0.15;
+							// 为什么：为解决长型交互元素（如长按钮）中光标偏移过大的问题：
+							// 1. 优先保证 Y 轴弹性（按钮多为横向，纵向位移较小且更显灵动）。
+							// 2. 对于 X 轴分段处理：短小元素保留 15% 弹性增加丝滑感；
+							//    宽度超过 160px 的长型元素强制减少 X 轴位移（仅保留 2%），确保框选重心稳固。
+							const xElastic = b.w < 160 ? 0.15 : 0.02;
+							targetX = b.cx + (s.pointer.x - b.cx) * xElastic;
 							targetY = b.cy + (s.pointer.y - b.cy) * 0.15;
 						} else {
 							targetW = 28;
@@ -206,8 +209,9 @@ export function StarCursor({ pathname }: StarCursorProps) {
 							if (b.isActive) {
 								targetW = b.w + 6;
 								targetH = b.h + 6;
-								// Elastic framing for links too
-								targetX = b.cx + (s.pointer.x - b.cx) * 0.12;
+								// Elastic framing for links too (Priority to Y-axis)
+								const xElastic = b.w < 200 ? 0.12 : 0.02;
+								targetX = b.cx + (s.pointer.x - b.cx) * xElastic;
 								targetY = b.cy + (s.pointer.y - b.cy) * 0.12;
 							} else {
 								targetW = 32;

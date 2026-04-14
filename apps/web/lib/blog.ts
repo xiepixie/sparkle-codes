@@ -759,6 +759,7 @@ export async function getPostsPage(
 	page = 1,
 	pageSize = 5,
 	query?: string,
+	pathPrefix?: string,
 ): Promise<{
 	posts: BlogPostSummary[];
 	totalCount: number;
@@ -768,7 +769,7 @@ export async function getPostsPage(
 	}
 
 	try {
-		const results = await getPostsPageQuery(page, pageSize, query);
+		const results = await getPostsPageQuery(page, pageSize, query, pathPrefix);
 		const totalCount = results.length > 0 ? Number(results[0].totalCount) : 0;
 		const posts = results.map(mapDocumentToSummary);
 
@@ -985,6 +986,7 @@ function buildDescriptionPreview(description?: string | null) {
 export async function searchBlogPosts(
 	query: string,
 	limit = 8,
+	pathPrefix?: string,
 ): Promise<BlogSearchResult[]> {
 	const trimmed = query.trim().toLowerCase();
 	if (!trimmed) {
@@ -992,10 +994,10 @@ export async function searchBlogPosts(
 	}
 
 	// 1. Hit DB for post-level matches
-	const { posts } = await getPostsPage(1, limit, trimmed);
+	const { posts } = await getPostsPage(1, limit, trimmed, pathPrefix);
 
 	// 2. Hit DB for section-level matches (High-fidelity structural search)
-	const sections = await searchPostSectionsQuery(trimmed, limit);
+	const sections = await searchPostSectionsQuery(trimmed, limit, pathPrefix);
 
 	// 3. Map Post hits
 	const postResults: BlogSearchResult[] = posts.map((doc) => {

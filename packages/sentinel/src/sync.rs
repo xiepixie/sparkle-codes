@@ -184,7 +184,7 @@ impl SyncEngine {
             // Determine ID: use existing from DB or pre-allocate a new one
             let id = existing_ids.get(&vault_path)
                 .cloned()
-                .unwrap_or_else(|| cuid());
+                .unwrap_or_else(cuid);
 
             set.spawn(async move {
                 let _permit = semaphore.acquire().await.ok();
@@ -205,7 +205,7 @@ impl SyncEngine {
                         let title = fm.fields.get("title")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string())
-                            .unwrap_or_else(|| vault_path.split('/').last().unwrap_or(&vault_path).replace(".md", ""));
+                            .unwrap_or_else(|| vault_path.split('/').next_back().unwrap_or(&vault_path).replace(".md", ""));
                             
                         let aliases = fm.fields.get("aliases")
                             .and_then(|v| v.as_array())
@@ -233,7 +233,7 @@ impl SyncEngine {
                 index.insert(vault_path.to_lowercase(), excerpt.clone());
                 
                 // 2. Basename (Obsidian Native)
-                let name = vault_path.split('/').last().unwrap_or(&vault_path).replace(".md", "").replace(".mdx", "");
+                let name = vault_path.split('/').next_back().unwrap_or(&vault_path).replace(".md", "").replace(".mdx", "");
                 index.insert(name.nfc().collect::<String>().to_lowercase(), excerpt.clone());
                 
                 // 3. Slug (Logical)
@@ -320,7 +320,7 @@ impl SyncEngine {
             let index = self.metadata_index.read().await;
             index.get(&vault_path.to_lowercase())
                 .map(|e| e.id.clone())
-                .unwrap_or_else(|| cuid())
+                .unwrap_or_else(cuid)
         };
 
         // 2. Read and Context
@@ -402,7 +402,7 @@ impl SyncEngine {
             // We update the same 5 keys as initial_sync to ensure internal links stay consistent.
             index.insert(vault_path.to_lowercase(), excerpt.clone());
             
-            let name = vault_path.split('/').last().unwrap_or(&vault_path).replace(".md", "").replace(".mdx", "");
+            let name = vault_path.split('/').next_back().unwrap_or(vault_path).replace(".md", "").replace(".mdx", "");
             index.insert(name.nfc().collect::<String>().to_lowercase(), excerpt.clone());
             
             index.insert(meta.slug.to_lowercase(), excerpt.clone());
@@ -536,7 +536,7 @@ impl SyncEngine {
             id,
             title: fm.fields.get("title")
                 .and_then(|v| v.as_str())
-                .unwrap_or_else(|| ctx.vault_path.split('/').last().unwrap_or("Untitled").trim_end_matches(".md"))
+                .unwrap_or_else(|| ctx.vault_path.split('/').next_back().unwrap_or("Untitled").trim_end_matches(".md"))
                 .to_string(),
             slug,
             area,
@@ -690,7 +690,7 @@ impl SyncEngine {
         let mut section_block_counts = std::collections::HashMap::new();
 
         for blk in result.blocks {
-            let fallback_section_id = sections.first().map(|s| s.id.clone()).unwrap_or_else(|| cuid());
+            let fallback_section_id = sections.first().map(|s| s.id.clone()).unwrap_or_else(cuid);
             let section_id = section_index_to_id.get(&blk.section_index).cloned().unwrap_or(fallback_section_id);
             let index = section_block_counts.entry(blk.section_index).or_insert(0);
             
@@ -712,6 +712,7 @@ impl SyncEngine {
         Ok((resolved_html, resolved_instances, sections, blocks))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn persist_sync(
         &self,
         ctx: &FileContext,

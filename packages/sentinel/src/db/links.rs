@@ -71,7 +71,7 @@ pub async fn resolve_targets_batch(
             let mut best_match: Option<(i32, crate::types::ResolvedLink)> = None;
 
             for (id, slug, area, _title, _aliases, vault_path) in &candidates {
-                let mut vault_basename = vault_path.split('/').last().unwrap_or("");
+                let mut vault_basename = vault_path.split('/').next_back().unwrap_or("");
                 if let Some(stripped) = vault_basename.strip_suffix(".md") {
                     vault_basename = stripped;
                 } else if let Some(stripped) = vault_basename.strip_suffix(".mdx") {
@@ -96,7 +96,7 @@ pub async fn resolve_targets_batch(
                 if let Some(idx_map) = local_index {
                     // Try to find the excerpt by VaultPath match or Filename/Title/Alias
                     for excerpt in idx_map.values() {
-                        let mut vault_basename = excerpt.vault_path.split('/').last().unwrap_or("");
+                        let mut vault_basename = excerpt.vault_path.split('/').next_back().unwrap_or("");
                         if let Some(stripped) = vault_basename.strip_suffix(".md") {
                             vault_basename = stripped;
                         }

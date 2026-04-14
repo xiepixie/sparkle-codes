@@ -64,6 +64,7 @@ pub struct SyncConfig {
     pub embedding_model: String,
 
     /// [AI] Reranker Model Name
+    #[allow(dead_code)]
     pub reranker_model: String,
 
     /// [AI] Embedding Strategy (local | http)
@@ -158,6 +159,7 @@ impl SyncConfig {
 
     /// Whether this area represents a publicly publishable domain.
     /// Retained to support future expansion of web publishing strategies and routing logic.
+    #[allow(dead_code)]
     pub fn should_publish_to_web(&self, area: &VaultArea) -> bool {
         matches!(area, VaultArea::Work | VaultArea::Learn)
     }

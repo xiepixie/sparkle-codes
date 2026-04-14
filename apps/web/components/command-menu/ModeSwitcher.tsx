@@ -1,5 +1,5 @@
 import React from "react";
-import { Compass, Folder, Library, Search } from "lucide-react";
+import { Compass, Folder, Search } from "lucide-react";
 import { cn } from "@repo/ui";
 import type { CommandMode } from "./types";
 

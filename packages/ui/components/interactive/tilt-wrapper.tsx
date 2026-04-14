@@ -178,7 +178,7 @@ export function TiltWrapper({
       ref={containerRef} 
       data-cursor="explore"
       className={cn(
-        "group relative isolate w-full interactive-card touch-manipulation focus-within:outline-none md:cursor-none",
+        "group relative isolate w-full interactive-card rounded-2xl touch-manipulation focus-within:outline-none md:cursor-none",
         prefersReducedMotion ? "perspective-none" : "perspective-[1200px]",
         className
       )}
@@ -205,7 +205,7 @@ export function TiltWrapper({
     >
       <div
         className={cn(
-          "relative h-full w-full rounded-2xl p-[1.5px] [transform-style:preserve-3d]",
+          "relative h-full w-full rounded-[inherit] p-[1.5px] [transform-style:preserve-3d]",
           "transition-transform duration-[600ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
           !isInteractive && "duration-300"
         )}
@@ -252,7 +252,7 @@ export function TiltWrapper({
 
         <div 
             className={cn(
-                "relative z-10 h-full w-full rounded-[calc(1rem-1.5px)] overflow-hidden",
+                "relative z-10 h-full w-full rounded-[inherit] overflow-hidden",
                 "bg-card/90 transition-[border-color,box-shadow,background-color] duration-500 border border-primary/5 dark:border-white/5",
                 "group-focus-within:border-primary/20 group-focus-within:bg-card/95",
                 !isInteractive && isTouchPressed && "border-primary/20 shadow-glow-sm",

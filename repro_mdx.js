@@ -17,7 +17,7 @@ title: "Test"
 
 async function test() {
   try {
-    const result = await compile(mdxContent);
+    const _result = await compile(mdxContent);
     console.log("✅ Compiled successfully!");
   } catch (e) {
     console.error("❌ Compilation failed!");

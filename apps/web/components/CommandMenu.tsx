@@ -223,7 +223,10 @@ export function CommandMenu() {
 		const timeoutId = window.setTimeout(async () => {
 			setSearchLoading(true);
 			try {
-				const res = await fetch(`/api/search?query=${encodeURIComponent(deferredSearchQuery)}`, {
+				const currentPrefix = explorerPath.length > 1 ? explorerPath.join("/") : "";
+				const prefixParam = currentPrefix ? `&prefix=${encodeURIComponent(currentPrefix)}` : "";
+				
+				const res = await fetch(`/api/search?query=${encodeURIComponent(deferredSearchQuery)}${prefixParam}`, {
 					signal: controller.signal,
 				});
 				const data = await res.json();
@@ -392,7 +395,8 @@ export function CommandMenu() {
 					navigateToBlogPost(`/blog/${node.slug}`);
 				}
 			} else if (mode === "search") {
-				const results = searchResults.length > 0 ? searchResults : recentReading;
+				const isSearching = searchQuery.trim().length > 0;
+				const results = isSearching ? searchResults : recentReading;
 				const result = results[activeIndex];
 				if (result) {
 					navigateToBlogPost(result.url);

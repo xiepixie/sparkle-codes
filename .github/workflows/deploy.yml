@@ -86,8 +86,8 @@ jobs:
           set: |
             *.cache-from=type=gha
             *.cache-to=type=gha,mode=max
-            TAG=sha-${{ github.sha }}
         env:
+          TAG: sha-${{ github.sha }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NEXT_PUBLIC_WEB_URL: ${{ secrets.NEXT_PUBLIC_WEB_URL }}
           NEXT_PUBLIC_DOCS_URL: ${{ secrets.NEXT_PUBLIC_DOCS_URL }}
@@ -107,16 +107,27 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT }}
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
-            cd ~/projects/sparkle-codes
-            echo "🚚 Updating configuration..."
-            git fetch origin main
-            git reset --hard origin/main
+            # 1. 进入 1Panel 站点目录
+            cd /opt/1panel/apps/openresty/openresty/www/sites/sparkle.codes
+            
+            # 2. 更新配置 (如果该目录下有 git 仓库)
+            if [ -d ".git" ]; then
+              echo "🚚 Updating repository content..."
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+            
+            # 3. 登录 GHCR (确保 root 有权限拉取镜像)
+            # 注意：如果镜像设置了 Public，可跳过此步
+            # echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             echo "🐳 Pulling latest images..."
+            # 使用 TAG 环境变量确保拉取的是刚刚构建的那个 SHA 版本
+            # 也可以直接 pull latest (取决于你的 docker-compose 配置)
             docker compose pull
             
             echo "🔄 Swapping containers..."
-            docker compose up -d
+            docker compose up -d --remove-orphans
             
             echo "🧹 Cleaning up old images..."
             docker image prune -f

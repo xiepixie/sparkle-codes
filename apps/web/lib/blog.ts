@@ -1,5 +1,6 @@
 import {
 	getAllPostSummariesQuery,
+	getAllPostsForSearchQuery,
 	getPostBySlugQuery,
 	getPostsPageQuery,
 	hasUsableDatabaseUrl,
@@ -1064,4 +1065,26 @@ export async function searchBlogPostSummaries(
 		pageSize: limit,
 	});
 	return result.posts;
+}
+
+/**
+ * getAllPostsForLlm - Retrieves full content and metadata for all published posts.
+ * Primarily used by the /llms-full.txt endpoint for LLM context injection.
+ */
+export async function getAllPostsForLlm() {
+	"use cache";
+	cacheLife("hours");
+	cacheTag("posts", "post-full-content");
+
+	if (!hasUsableDatabaseUrl()) {
+		return [];
+	}
+
+	try {
+		const results = await getAllPostsForSearchQuery();
+		return results;
+	} catch (err) {
+		console.error("[DB ERROR] getAllPostsForLlm failed:", err);
+		return [];
+	}
 }

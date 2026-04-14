@@ -61,6 +61,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 		pointer: { x: -100, y: -100 },
 		ring: { x: -100, y: -100 },
 		ringSize: { w: 32, h: 32 },
+		aura: { x: -100, y: -100 },
 		isPressing: false,
 		started: false,
 		prevKind: "none" as CursorKind,
@@ -86,6 +87,11 @@ export function StarCursor({ pathname }: StarCursorProps) {
 
 	const updateTargetBounds = () => {
 		if (activeTarget.current && bounds.current.isActive) {
+			if (!activeTarget.current.isConnected) {
+				bounds.current.isActive = false;
+				activeTarget.current = null;
+				return;
+			}
 			const rect = activeTarget.current.getBoundingClientRect();
 			bounds.current = {
 				w: rect.width,
@@ -135,19 +141,19 @@ export function StarCursor({ pathname }: StarCursorProps) {
 						state.current.ringSize.h = 32;
 
 						// 静默隐藏：在切换瞬间对各层执行降维级隐藏，避免旧快照内出现光标残影
-						if (coreRef.current) {
-							coreRef.current.style.opacity = "0";
-						}
-						if (ringRef.current) {
-							ringRef.current.style.opacity = "0";
-						}
-						if (auraRef.current) {
-							auraRef.current.style.opacity = "0";
-						}
+
 					}
 					rafId.current = requestAnimationFrame(update);
 				}
 				return;
+			}
+
+			// INDUSTRIAL SYNC (决策型注释)
+			// 为什么：如果目标元素正在进行 Layout 动画（如 CommandMenu 的文件夹切换），
+			// 元素的边界在每一帧都会变化。通过在 RAF 循环中强制更新边界，
+			// 确保光标框选能“粘”在移动的按钮上，消除框选不稳和抖动。
+			if (bounds.current.isActive) {
+				updateTargetBounds();
 			}
 
 			const s = state.current;
@@ -158,7 +164,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			let targetY = s.pointer.y;
 			let targetW = 32;
 			let targetH = 32;
-			let ringLerp = 0.35;
+			let ringLerp = 0.5; // INDUSTRIAL UPGRADE: Slightly faster default tracking
 
 			if (s.kind === "text") {
 				targetW = 0;
@@ -172,12 +178,16 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			} else {
 				switch (strategy) {
 					case "frame-tight":
-						ringLerp = 0.45;
+						ringLerp = 0.55;
 						if (b.isActive) {
 							targetW = b.w + 12;
 							targetH = b.h + 12;
-							targetX = b.cx;
-							targetY = b.cy;
+							
+							// ELASTIC CENTER PROTOCOL (决策型注释)
+							// 为什么：如果光标点位绝对锁定在按钮中心，用户快速划过时会感到“被吸住”的严重卡滞感。
+							// 通过增加 15% 的弹性引力，让环在框选的同时随指针微动，提供丝滑的物理感。
+							targetX = b.cx + (s.pointer.x - b.cx) * 0.15;
+							targetY = b.cy + (s.pointer.y - b.cy) * 0.15;
 						} else {
 							targetW = 28;
 							targetH = 28;
@@ -185,25 +195,20 @@ export function StarCursor({ pathname }: StarCursorProps) {
 						break;
 					case "frame-soft":
 						if (s.kind === "explore") {
-							/**
-							 * AMBIENT EXPLORATION (决策型注释)
-							 * 为什么：对于 Mermaid / Math 等大型展示块，这种“氛围式探索”策略能避免
-							 * 物理框选带来的“巨大方框笼罩感”。光标保持在指针中心，但放大圆环
-							 * 以通过视觉张力传达“你正处于交互区”的反馈。
-							 */
 							targetW = 64;
 							targetH = 64;
 							targetX = s.pointer.x;
 							targetY = s.pointer.y;
-							ringLerp = 0.35;
+							ringLerp = 0.45;
 						} else {
 							// NAVIGATE (Links): Soft snap to the text element
-							ringLerp = 0.5;
+							ringLerp = 0.65;
 							if (b.isActive) {
 								targetW = b.w + 6;
 								targetH = b.h + 6;
-								targetX = b.cx;
-								targetY = b.cy;
+								// Elastic framing for links too
+								targetX = b.cx + (s.pointer.x - b.cx) * 0.12;
+								targetY = b.cy + (s.pointer.y - b.cy) * 0.12;
 							} else {
 								targetW = 32;
 								targetH = 32;
@@ -238,9 +243,16 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			// to avoid the 'gliding' effect from previous stale coordinates.
 			const wasHidden = s.prevHidden || getStrategy(s.prevKind) === "suppress";
 			const isVisible = !s.isHidden && strategy !== "suppress";
-			if (wasHidden && isVisible && !b.isActive) {
-				s.ring.x = s.pointer.x;
-				s.ring.y = s.pointer.y;
+			
+			// INDUSTRIAL FIX: Snap even if moving into a button (b.isActive)
+			// Why: If user moves from a text-suppress zone directly into a button, 
+			// we want the ring to snap to the button frame INSTANTLY rather than gliding from the old text position.
+			if (wasHidden && isVisible) {
+				s.ring.x = targetX;
+				s.ring.y = targetY;
+				// INDUSTRIAL REVEAL: Immediately sync size to prevent 'laggy growth' feel
+				s.ringSize.w = targetW;
+				s.ringSize.h = targetH;
 			}
 
 			// Kinematics: Lerp the ring towards expected targets
@@ -310,16 +322,11 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				const isAuraActive = !s.isHidden && strategy !== "suppress" && !b.isActive; 
 				
 				// INDUSTRIAL FIX: Idle Fading
-				// Why: If the browser stops sending mousemove events (e.g. during native scrollbar drag),
-				// the custom cursor "freezes". We detect this idle state and fade it out.
-				const timeSinceMove = Date.now() - s.lastMoveTime;
-				const isIdle = timeSinceMove > 1500;
-				
 				// Aura Physics (Implosion Protocol)
 				// Scaled down from 200px to 100px base in CSS. 
 				// We now implode to 0.7x for a 'suction' feel.
-				const aScale = isAuraActive && !isIdle ? (s.isPressing ? 0.7 : 1) : 0;
-				const aOpacity = isAuraActive && !isIdle ? (s.isPressing ? 1 : 0.8) : 0;
+				const aScale = isAuraActive ? (s.isPressing ? 0.7 : 1) : 0;
+				const aOpacity = isAuraActive ? (s.isPressing ? 1 : 0.8) : 0;
 				
 				// Aura Physics (Atmospheric Persistence)
 				// We allow the aura to follow the pointer directly to maintain the 'flashlight' feel,
@@ -327,7 +334,11 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				const auraX = s.pointer.x;
 				const auraY = s.pointer.y;
 				
-				auraRef.current.style.transform = `translate3d(${auraX}px, ${auraY}px, 0) scale(${aScale})`;
+				// Aura Lerping: faster for responsiveness
+				s.aura.x += (auraX - s.aura.x) * 0.6;
+				s.aura.y += (auraY - s.aura.y) * 0.6;
+				
+				auraRef.current.style.transform = `translate3d(${s.aura.x}px, ${s.aura.y}px, 0) scale(${aScale})`;
 				auraRef.current.style.opacity = String(aOpacity);
 				
 				if (auraRef.current.dataset.kind !== s.kind || auraRef.current.dataset.strategy !== strategy || auraRef.current.dataset.snapped !== String(b.isActive) || auraRef.current.dataset.hidden !== String(s.isHidden) || auraRef.current.dataset.pressing !== String(s.isPressing)) {
@@ -344,13 +355,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 					auraRef.current.className = auraClassName;
 				}
 
-				// Apply idle opacity to ring and core as well
-				if (ringRef.current) {
-					ringRef.current.style.opacity = isIdle ? "0" : "1";
-				}
-				if (coreRef.current) {
-					coreRef.current.style.opacity = isIdle ? "0" : "1";
-				}
+
 
 				// INDUSTRIAL SYNC: Signal the current interaction state to the document body
 				// This enables CSS to perfectly orchestrate native cursor suppression/restoration.
@@ -442,17 +447,26 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				
 				const isStructuralLink = isLink && bestTarget.classList.contains("no-dash");
 
-				if (target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
-					if (bestTarget !== target.closest('.math-block, .math-display, .math-inline')) {
+				if (target.closest('.mermaid, .mermaid-render-container, svg')) {
+					if (bestTarget) {
 						result = (isLink && !isStructuralLink) ? "navigate" : "action";
 					} else {
-						result = (isLink && !isStructuralLink) ? "navigate" : "none";
+						result = "none";
 					}
 				}
-				else if (target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence')) {
-					result = (bestTarget.classList.contains('code-copy-btn') || bestTarget.classList.contains('math-copy-option')) 
+				else if (target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
+					// 工业级修复：强制数学块开启 'text' 策略（suppress），确保选择精度并解决虚线框闪烁 jitter。
+					// 只有明确的交互按钮（如 code-copy-btn）才允许临时提升为 'action'。
+					result = (bestTarget && (bestTarget.classList.contains('code-copy-btn') || bestTarget.classList.contains('math-copy-btn') || bestTarget.classList.contains('math-copy-selector') || bestTarget.classList.contains('code-close-btn') || bestTarget.closest('button'))) 
 						? "action" 
 						: "text";
+				}
+				else if (target.closest('.starry-toast-card')) {
+					// Toasts get a rounded 'tag' frame for the whole card, 
+					// but internal buttons should remain 'action'.
+					result = (target.closest('button, [data-cursor="action"]'))
+						? "action"
+						: "tag";
 				}
 				else {
 					if (bestTarget.classList.contains('interactive-card')) {
@@ -463,17 +477,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				}
 			}
 			
-			// Protocol 3: Background Zone Definitions (Priority 1: Rendered Zones)
-			// Only apply internal zone logic if we haven't already identified a specific action/link target.
-			if (result === "none" && target.closest('.mermaid, .mermaid-render-container, svg, .math-inline, .math-block, .katex, .sparkle-math-rendered')) {
-				// In display zones, we prefer 'explore' (vibrant pointer-ring)
-				result = "explore";
-			}
-			// Priority 2: Text/Source Zones
-			else if (result === "none" && target.closest('pre, code, textarea, input[type="text"], iframe, .no-custom-cursor, [contenteditable], .mockup-code, .code-fence')) {
-				result = "text";
-			}
-
 			kindCache.current.set(target, result);
 			return result;
 		};
@@ -511,8 +514,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				const protocolTarget = target.closest('[data-cursor]') as HTMLElement | null;
 				const semanticTarget = target.closest('button, [role="button"], a, .interactive-card, .premium-link, .wiki-link, .interactive, .premium-tag, .tag-badge, [data-button="true"], [data-action="true"]') as HTMLElement | null;
 				
-				const protocolKindList = ["navigate", "action", "explore", "text", "tag", "disabled", "none"];
-
 				// We try to snap to the protocol target first, otherwise fallback to the semantic target
 				let frameTarget: HTMLElement | null = null;
 				
@@ -573,30 +574,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			}
 		};
 
-		const handleScroll = () => {
-			if (!state.current.started) {
-				return;
-			}
-			// During scroll, manually sync the active target bounds immediately 
-			// because the element literally moves across the screen.
-			updateTargetBounds();
-			
-			// Also softly check if a new element slipped under our static pointer
-			const hovered = document.elementFromPoint(
-				state.current.pointer.x,
-				state.current.pointer.y
-			) as HTMLElement | null;
-			
-			const newKind = getSemanticKind(hovered);
-			const strategy = getStrategy(newKind);
 
-			// Only update if it broke out of the target
-			if (strategy === "free" || strategy === "suppress") {
-				state.current.kind = newKind;
-				state.current.isContrast = checkContrast(hovered);
-				bounds.current.isActive = false;
-			}
-		};
 
 		window.addEventListener("mousemove", handleMouseMove, { passive: true });
 		document.addEventListener("mouseover", handleMouseOver, { passive: true });
@@ -604,8 +582,6 @@ export function StarCursor({ pathname }: StarCursorProps) {
 		window.addEventListener("mousedown", handleMouseDown, { passive: true });
 		window.addEventListener("mouseup", handleMouseUp, { passive: true });
 
-		// Capture scroll to update bounds and fallback targeting
-		window.addEventListener("scroll", handleScroll, { passive: true, capture: true });
         
 		const pointerQuery = window.matchMedia("(pointer: fine)");
 		pointerQuery.addEventListener("change", syncCapability);
@@ -631,7 +607,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			document.removeEventListener("mouseout", handleMouseOut);
 			window.removeEventListener("mousedown", handleMouseDown);
 			window.removeEventListener("mouseup", handleMouseUp);
-			window.removeEventListener("scroll", handleScroll, { capture: true });
+
 			pointerQuery.removeEventListener("change", syncCapability);
 			window.removeEventListener("pageshow", handlePageShow);
 			resizeObserver.disconnect();

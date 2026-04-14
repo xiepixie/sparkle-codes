@@ -29,8 +29,9 @@ export function CommandSurface({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
 				className={cn(
-					"command-menu-container overflow-hidden border border-border/40 bg-glass/80 p-0 shadow-2xl ring-1 ring-white/10 backdrop-blur-3xl transition-[background-color,border-color,transform,opacity,box-shadow] duration-500 dark:border-border/20 dark:ring-white/5",
-					"before:absolute before:-inset-[100px] before:-z-10 before:bg-[radial-gradient(circle_at_center,var(--primary)_0%,transparent_70%)] before:opacity-15 dark:before:opacity-10",
+					"command-menu-container overflow-hidden w-[95vw] sm:max-w-3xl lg:max-w-4xl border border-border/40 bg-background/88 p-0 shadow-[0_28px_90px_rgba(0,0,0,0.18)] ring-1 ring-white/10 backdrop-blur-3xl transition-[background-color,border-color,transform,opacity,box-shadow] duration-500 dark:border-border/20 dark:bg-background/82 dark:ring-white/5",
+					"before:absolute before:inset-x-0 before:top-0 before:h-40 before:bg-[radial-gradient(circle_at_top,rgba(var(--primary-rgb),0.16),transparent_72%)] before:opacity-100 before:content-['']",
+					"after:absolute after:inset-x-0 after:bottom-0 after:h-24 after:bg-[linear-gradient(to_top,rgba(255,255,255,0.035),transparent)] after:content-[''] dark:after:bg-[linear-gradient(to_top,rgba(255,255,255,0.025),transparent)]",
 					className,
 				)}
 			>
@@ -52,7 +53,7 @@ export function CommandSurfaceHeader({
 	return (
 		<div
 			className={cn(
-				"relative flex items-center gap-4 px-6 py-4.5 border-b border-border/10 dark:border-white/5",
+				"relative flex items-center gap-4 border-b border-border/10 px-6 py-5 dark:border-white/5",
 				className,
 			)}
 		>
@@ -68,7 +69,7 @@ export function CommandSurfaceBody({
 	children: ReactNode;
 	className?: string;
 }) {
-	return <div className={cn("relative", className)}>{children}</div>;
+	return <div className={cn("relative z-10", className)}>{children}</div>;
 }
 
 export function CommandSurfaceFooter({
@@ -81,7 +82,7 @@ export function CommandSurfaceFooter({
 	return (
 		<div
 			className={cn(
-				"flex h-14 items-center justify-between border-t border-border/10 bg-muted/20 px-6 py-2 transition-colors dark:border-white/5 dark:bg-black/10",
+				"flex min-h-16 items-center justify-between border-t border-border/10 bg-muted/10 px-6 py-3 transition-colors dark:border-white/5 dark:bg-white/[0.03]",
 				className,
 			)}
 		>
@@ -142,10 +143,12 @@ export function CommandEmptyState({
 	actions?: ReactNode;
 }) {
 	return (
-		<div className="flex flex-col items-center justify-center py-12 text-center">
-			<div className="mb-6 opacity-30">{icon}</div>
-			<h3 className="mb-1 text-lg font-medium text-foreground">{title}</h3>
-			<p className="mb-8 max-w-sm text-xs text-muted-foreground">
+		<div className="flex flex-col items-center justify-center px-6 py-16 text-center sm:px-10">
+			<div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-border/40 bg-background/70 shadow-sm">
+				<div className="opacity-50">{icon}</div>
+			</div>
+			<h3 className="mb-2 text-base font-semibold tracking-tight text-foreground">{title}</h3>
+			<p className="mb-8 max-w-sm text-sm leading-6 text-muted-foreground">
 				{description}
 			</p>
 			{actions}

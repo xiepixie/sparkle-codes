@@ -1,28 +1,14 @@
 "use client";
 
-import { cn } from "@repo/ui";
-import { normalizeSlug } from "@repo/utils";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-	Clock,
-	Compass,
-	FileText,
-	Hash,
-	Loader2,
-	Search,
-	X,
-} from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
-import {
+import React, {
 	useDeferredValue,
 	useEffect,
-	useMemo,
 	useRef,
 	useState,
-	useTransition,
 } from "react";
+import { usePathname, useRouter } from "next/navigation";
+
 import {
-	CommandEmptyState,
 	CommandSurface,
 	CommandSurfaceBody,
 	CommandSurfaceFooter,
@@ -31,58 +17,35 @@ import {
 import {
 	COMMAND_CENTER_EVENT,
 	COMMAND_CENTER_SYNC_EVENT,
-	type CommandCenterMode,
 	type CommandCenterReadingContext,
-	type CommandJumpSubMode,
 	type OpenCommandCenterPayload,
 	scrollToReadingSection,
 } from "@/lib/command-center";
 import { readFilteredHistory } from "@/lib/reading-history";
-import { AccessibleMarkdownSnippet as SearchMatch } from "./markdown-snippet";
+import type { ExplorerNode } from "@repo/database";
+import { cn } from "@repo/ui";
+import { normalizeSlug } from "@repo/utils";
+import { AnimatePresence, motion } from "framer-motion";
+import { Compass, Hash, Loader2, Search } from "lucide-react";
 
-type CommandMode = CommandCenterMode;
+// New Modular Sub-components
+import { BrowserPanel } from "./command-menu/BrowserPanel";
+import { JumpPanel } from "./command-menu/JumpPanel";
+import { SearchPanel } from "./command-menu/SearchPanel";
+import type { CommandMode, SearchResultItem } from "./command-menu/types";
 
-interface SearchResultItem {
-	id: string;
-	title: string;
-	description: string;
-	bodyPreview?: string;
-	url: string;
-	section?: string;
-	context?: string;
-	highlightedTitle?: string;
-	highlightedDescription?: string;
-	highlightedBodyPreview?: string;
-	highlightedContext?: string;
-}
-
-// SearchMatch is now imported as AccessibleMarkdownSnippet
-
+// Helper for search results
 function normalizeSearchResults(data: unknown): SearchResultItem[] {
 	if (!Array.isArray(data)) {
 		return [];
 	}
-
-	// Pre-filter and map in one pass for performance
 	return data.reduce<SearchResultItem[]>((acc, item, index) => {
 		if (!item || typeof item !== "object") {
 			return acc;
 		}
-
 		const candidate = item as Record<string, unknown>;
-		const title =
-			typeof candidate.title === "string"
-				? candidate.title
-				: typeof candidate.name === "string"
-					? candidate.name
-					: null;
-		const url =
-			typeof candidate.url === "string"
-				? candidate.url
-				: typeof candidate.href === "string"
-					? candidate.href
-					: null;
-
+		const title = typeof candidate.title === "string" ? candidate.title : (typeof candidate.name === "string" ? candidate.name : null);
+		const url = typeof candidate.url === "string" ? candidate.url : (typeof candidate.href === "string" ? candidate.href : null);
 		if (!title || !url) {
 			return acc;
 		}
@@ -90,20 +53,14 @@ function normalizeSearchResults(data: unknown): SearchResultItem[] {
 		acc.push({
 			id: typeof candidate.id === "string" ? candidate.id : `${url}-${index}`,
 			title,
-			description: String(
-				candidate.description || candidate.content || candidate.excerpt || "",
-			),
+			description: String(candidate.description || candidate.content || candidate.excerpt || ""),
 			bodyPreview: candidate.bodyPreview as string | undefined,
 			url,
 			section: candidate.section as string | undefined,
 			context: candidate.context as string | undefined,
 			highlightedTitle: candidate.highlightedTitle as string | undefined,
-			highlightedDescription: candidate.highlightedDescription as
-				| string
-				| undefined,
-			highlightedBodyPreview: candidate.highlightedBodyPreview as
-				| string
-				| undefined,
+			highlightedDescription: candidate.highlightedDescription as string | undefined,
+			highlightedBodyPreview: candidate.highlightedBodyPreview as string | undefined,
 			highlightedContext: candidate.highlightedContext as string | undefined,
 		});
 		return acc;
@@ -112,207 +69,175 @@ function normalizeSearchResults(data: unknown): SearchResultItem[] {
 
 export function CommandMenu() {
 	const [open, setOpen] = useState(false);
-	const [mode, setMode] = useState<CommandMode>("search");
+	const [mode, setMode] = useState<CommandMode>("browse");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
 	const [searchLoading, setSearchLoading] = useState(false);
-	const [readingContext, setReadingContext] =
-		useState<CommandCenterReadingContext | null>(null);
-	const [jumpSubMode, setJumpSubMode] = useState<CommandJumpSubMode | null>(
-		null,
-	);
-	const inputRef = useRef<HTMLInputElement>(null);
-	const deferredSearchQuery = useDeferredValue(searchQuery);
-	const [isNavigating, startNavTransition] = useTransition();
+	const [readingContext, setReadingContext] = useState<CommandCenterReadingContext | null>(null);
+	const [recentReading, setRecentReading] = useState<SearchResultItem[]>([]);
 	const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+	
+	// Explorer State
+	const [explorerPath, setExplorerPath] = useState<string[]>(["工作领域"]);
+	const [explorerNodes, setExplorerNodes] = useState<ExplorerNode[]>([]);
+	const [explorerLoading, setExplorerLoading] = useState(false);
+	const [explorerDirection, setExplorerDirection] = useState<1 | -1>(1);
+
+	// Interaction State
+	const [activeIndex, setActiveIndex] = useState(0);
+	const containerRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
 	const router = useRouter();
 	const pathname = usePathname();
 
-	// Snappy UX: Optimized input handler with mode detection
-	const onCommandInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const val = e.target.value;
+	const deferredSearchQuery = useDeferredValue(searchQuery);
 
-		// Total Synchronicity: searchQuery is the master state for visual input.
-		// We sync it down to other subsystems (Navigation, Search)
-		setSearchQuery(val);
-	};
-
-	// "油画" UX: Synchronization for Navigation arrival.
-	// [Logic Update]:
-	// - In SEARCH/JUMP mode: Close the menu immediately on arrival (Task completed).
+	// Reset scroll and index when mode or results change
 	useEffect(() => {
-		if (!pendingUrl) {
-			return;
+		setActiveIndex(0);
+		if (containerRef.current) {
+			containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
 		}
+	}, [mode, explorerPath, searchResults]);
 
-		const current = normalizeSlug(pathname);
-		const target = normalizeSlug(pendingUrl);
-
-		// Arrival check: URL matches destination
-		const hasArrived = current === target;
-
-		// Snappy Cleanup: Handle transition lifecycle
-		if (hasArrived || (!isNavigating && pendingUrl)) {
-			setOpen(false);
-			setPendingUrl(null);
-		}
-	}, [pathname, pendingUrl, isNavigating]);
-
+	// Initialize context and history
 	useEffect(() => {
-		const down = (e: KeyboardEvent) => {
-			const availableModes: CommandMode[] = readingContext
-				? ["search", "jump"]
-				: ["search"];
-
-			if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-				e.preventDefault();
-				setOpen((o) => !o);
-			}
-
-			if (open && e.key === "Tab") {
-				e.preventDefault();
-				setMode((current) => {
-					const currentIndex = availableModes.indexOf(current);
-					return availableModes[(currentIndex + 1) % availableModes.length];
-				});
-			}
-		};
-		document.addEventListener("keydown", down);
-		return () => document.removeEventListener("keydown", down);
-	}, [open, readingContext]);
-
-	useEffect(() => {
-		const handleCommandCenterOpen = (event: Event) => {
-			const customEvent = event as CustomEvent<{
-				mode?: CommandMode;
-				reading?: CommandCenterReadingContext | null;
-				jumpTo?: CommandJumpSubMode;
-			}>;
-
-			if (customEvent.detail?.reading !== undefined) {
-				setReadingContext(customEvent.detail.reading ?? null);
-			}
-
-			if (customEvent.detail?.jumpTo) {
-				setJumpSubMode(customEvent.detail.jumpTo);
-			} else {
-				setJumpSubMode(null);
-			}
-
+		const handleOpen = (e: Event) => {
+			const customEvent = e as CustomEvent<OpenCommandCenterPayload>;
 			if (customEvent.detail?.mode) {
 				setMode(customEvent.detail.mode);
-			} else if (customEvent.detail?.reading) {
-				setMode("jump");
 			}
-
 			setOpen(true);
 		};
 
-		const handleCommandCenterSync = (event: Event) => {
-			const customEvent = event as CustomEvent<OpenCommandCenterPayload>;
-			if (customEvent.detail?.reading !== undefined) {
-				setReadingContext(customEvent.detail.reading ?? null);
+		const handleSync = (e: Event) => {
+			const customEvent = e as CustomEvent<{ reading: CommandCenterReadingContext }>;
+			if (customEvent.detail?.reading) {
+				setReadingContext(customEvent.detail.reading);
 			}
 		};
 
-		window.addEventListener(
-			COMMAND_CENTER_EVENT,
-			handleCommandCenterOpen as EventListener,
-		);
-		window.addEventListener(
-			COMMAND_CENTER_SYNC_EVENT,
-			handleCommandCenterSync as EventListener,
-		);
-
-		// MUTE THE COLD START
-		// Send a discrete warmup request on mount.
-		// The component mounts when the layout renders (app boundary),
-		// so this wakes the API up immediately in the background
-		// eliminating Next.js API cold boots completely.
-		if (typeof window !== "undefined") {
-			fetch("/api/search?query=warmup", { priority: "low" }).catch(() => {});
-		}
-
+		window.addEventListener(COMMAND_CENTER_EVENT, handleOpen);
+		window.addEventListener(COMMAND_CENTER_SYNC_EVENT, handleSync);
+		
 		return () => {
-			window.removeEventListener(
-				COMMAND_CENTER_EVENT,
-				handleCommandCenterOpen as EventListener,
-			);
-			window.removeEventListener(
-				COMMAND_CENTER_SYNC_EVENT,
-				handleCommandCenterSync as EventListener,
-			);
+			window.removeEventListener(COMMAND_CENTER_EVENT, handleOpen);
+			window.removeEventListener(COMMAND_CENTER_SYNC_EVENT, handleSync);
 		};
 	}, []);
 
-	// Cleanup context when leaving blog posts
-	useEffect(() => {
-		if (!pathname.startsWith("/blog/")) {
-			setReadingContext(null);
-		}
-	}, [pathname]);
-
-	// A11Y & Performance: Defer focus to allow animation to settle
+	// Load history whenever open changes to true
 	useEffect(() => {
 		if (open) {
-			const timer = window.setTimeout(() => {
-				inputRef.current?.focus();
-			}, 150);
-			return () => window.clearTimeout(timer);
+			try {
+				const history = readFilteredHistory();
+				if (Array.isArray(history)) {
+					setRecentReading(history.map(h => ({
+						id: h.slug,
+						title: h.title,
+						description: "",
+						url: `/blog/${h.slug}`
+					})));
+				}
+			} catch (err) {
+				console.error("Failed to load reading history:", err);
+			}
 		}
 	}, [open]);
 
+	// Global Keyboard Shortcuts
 	useEffect(() => {
-		if (!open) {
+		const handleGlobalKeyDown = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+				e.preventDefault();
+				setOpen((prev) => !prev);
+			}
+		};
+
+		window.addEventListener("keydown", handleGlobalKeyDown);
+		return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+	}, []);
+
+	// Focus input on open
+	useEffect(() => {
+		if (open) {
+			setPendingUrl(null);
+			setTimeout(() => inputRef.current?.focus(), 50);
+		} else {
+			setSearchQuery("");
+			setMode("browse");
+		}
+	}, [open]);
+
+	const explorerCache = useRef<Record<string, ExplorerNode[]>>({});
+
+	// Fetch Explorer Nodes
+	useEffect(() => {
+		if (!open || mode !== "browse") {
 			return;
 		}
-		if (mode !== "jump" || !readingContext) {
-			// No cleanup needed here as searchQuery is shared.
-		}
-	}, [mode, open, readingContext]);
 
-	useEffect(() => {
-		if (mode !== "search") {
-			return;
-		}
-
-		const query = (deferredSearchQuery || "").trim();
-		if (!query) {
-			setSearchResults([]);
-			setSearchLoading(false);
+		const currentPath = explorerPath.join("/");
+		if (explorerCache.current[currentPath]) {
+			setExplorerNodes(explorerCache.current[currentPath]);
 			return;
 		}
 
 		const controller = new AbortController();
-		setSearchLoading(true);
-
-		const timeoutId = window.setTimeout(async () => {
+		const fetchExplorer = async () => {
+			setExplorerLoading(true);
 			try {
-				const response = await fetch(
-					`/api/search?query=${encodeURIComponent(query)}`,
-					{
-						signal: controller.signal,
-					},
-				);
+				const prefix = currentPath.endsWith("/") ? currentPath : `${currentPath}/`;
+				const depth = explorerPath.length;
 
-				const data = await response.json();
+				const res = await fetch(`/api/blog-folders?prefix=${encodeURIComponent(prefix)}&depth=${depth}`, { 
+					signal: controller.signal 
+				});
+				const data = await res.json();
+				const nodes = Array.isArray(data) ? data : [];
+				explorerCache.current[currentPath] = nodes;
+				setExplorerNodes(nodes);
+			} catch (err) {
+				if (!(err instanceof DOMException && err.name === "AbortError")) {
+					console.error("Explorer fetch failed:", err);
+				}
+			} finally {
+				setExplorerLoading(false);
+			}
+		};
+
+		fetchExplorer();
+		return () => controller.abort();
+	}, [open, mode, explorerPath]);
+
+	// Search logic
+	useEffect(() => {
+		if (!open || mode !== "search" || !deferredSearchQuery) {
+			if (!deferredSearchQuery) {
+				setSearchResults([]);
+			}
+			return;
+		}
+
+		const controller = new AbortController();
+		const timeoutId = window.setTimeout(async () => {
+			setSearchLoading(true);
+			try {
+				const res = await fetch(`/api/search?query=${encodeURIComponent(deferredSearchQuery)}`, {
+					signal: controller.signal,
+				});
+				const data = await res.json();
 				const results = normalizeSearchResults(data);
-
-				// Exclusion Guard: Prevent current page from showing up in search results.
-				// This ensures the user doesn't end up exploring what they are already reading.
+				
 				const currentPathKey = normalizeSlug(pathname);
-				const appContextKey = readingContext?.slug
-					? normalizeSlug(readingContext.slug)
-					: null;
+				const appContextKey = readingContext?.slug ? normalizeSlug(readingContext.slug) : null;
 
-				setSearchResults(
-					results.filter((item) => {
-						const itemKey = normalizeSlug(item.url);
-						return itemKey !== currentPathKey && itemKey !== appContextKey;
-					}),
-				);
-			} catch (error) {
-				if (!(error instanceof DOMException && error.name === "AbortError")) {
+				setSearchResults(results.filter((item) => {
+					const itemKey = normalizeSlug(item.url);
+					return itemKey !== currentPathKey && itemKey !== appContextKey;
+				}));
+			} catch (err) {
+				if (!(err instanceof DOMException && err.name === "AbortError")) {
 					setSearchResults([]);
 				}
 			} finally {
@@ -321,647 +246,377 @@ export function CommandMenu() {
 		}, 300);
 
 		return () => {
-			controller.abort();
 			window.clearTimeout(timeoutId);
+			controller.abort();
 		};
-	}, [deferredSearchQuery, mode, pathname, readingContext]);
+	}, [open, mode, deferredSearchQuery, pathname, readingContext]);
 
-	const handleSearchSuggestion = (text: string) => {
-		setSearchQuery(text);
-		setMode("search");
-		inputRef.current?.focus();
-	};
-
-	const filteredReadingSections = useMemo(() => {
-		const sections = readingContext?.sections ?? [];
-		const query = (searchQuery || "").trim().toLowerCase();
-
-		if (!query) {
-			return sections;
+	// Navigation Handlers
+	const navigateIntoFolder = (name: string) => {
+		if (explorerPath.length >= 8) {
+			return; 
 		}
-		return sections.filter((section) =>
-			section.title.toLowerCase().includes(query),
-		);
-	}, [searchQuery, readingContext]);
-
-	const filteredRecentReading = useMemo(() => {
-		// 1. Source: Always fetch fresh from local storage for consistency,
-		// ensuring exclusion works even if the parent context is slightly behind.
-		const source = readFilteredHistory(pathname);
-
-		// Explicitly determine current page slug from various possible sources
-		// to ensure exclusion works even if one context is slightly delayed.
-		const currentPathKey = normalizeSlug(pathname);
-		const appContextKey = normalizeSlug(readingContext?.slug);
-
-		const query = (searchQuery || "").trim().toLowerCase();
-
-		// Final defensive deduplication buffer
-		const seenSlugs = new Set<string>();
-
-		return source
-			.filter((entry) => {
-				const entryKey = normalizeSlug(entry.slug);
-
-				// Strict exclusion: current article should NEVER appear in history list
-				// We check against BOTH pathname and the provided reading context to be absolutely safe
-				// even if one of them is slightly behind or processed differently.
-				if (
-					entryKey === currentPathKey ||
-					(appContextKey && entryKey === appContextKey)
-				) {
-					return false;
-				}
-
-				// Deduplicate results
-				if (!entryKey || seenSlugs.has(entryKey)) {
-					return false;
-				}
-				seenSlugs.add(entryKey);
-
-				// Filter by search query if user is typing (Jump mode query)
-				if (!query) {
-					return true;
-				}
-				return entry.title.toLowerCase().normalize("NFC").includes(query);
-			})
-			.slice(0, mode === "search" ? 8 : 5);
-	}, [searchQuery, readingContext, pathname, mode]);
+		setExplorerDirection(1);
+		setExplorerPath([...explorerPath, name]);
+		setActiveIndex(0);
+	};
 
 	const navigateToBlogPost = (url: string) => {
-		if (pendingUrl) {
-			return;
-		}
-
-		const target = normalizeSlug(url);
-		const current = normalizeSlug(pathname);
-
-		// Snappy UX: If target is current page, just hide menu immediately
-		if (target === current) {
-			setOpen(false);
-			return;
-		}
-
 		setPendingUrl(url);
-		startNavTransition(() => {
-			router.push(url);
-		});
+		router.push(url);
+		setTimeout(() => setOpen(false), 600);
 	};
 
+	const handleReadingJump = (section: any) => {
+		if (!section?.id) {
+			return;
+		}
+		setOpen(false);
+		scrollToReadingSection(section.id);
+	};
+
+	const handleSearchSuggestion = (suggestion: string) => {
+		setSearchQuery(suggestion);
+		setMode("search");
+	};
+
+	const prefetchBlog = (slug: string) => {
+		router.prefetch(`/blog/${slug}`);
+	};
+
+	// Keyboard Protocol
+	useEffect(() => {
+		if (!open || pendingUrl){
+			return;
+		}
+
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.isComposing) { return; }
+			const explorerCount = (explorerNodes || []).length;
+			const searchCount = (searchResults || []).length;
+			const jumpSectionCount = (readingContext?.sections || []).length;
+			const recentCount = (recentReading || []).length;
+
+			const maxIdx = 
+				mode === "browse" ? explorerCount - 1 :
+				mode === "search" ? (searchCount > 0 ? searchCount - 1 : recentCount - 1) :
+				jumpSectionCount + recentCount - 1;
+
+			switch (e.key) {
+				case "ArrowDown": {
+					e.preventDefault();
+					setActiveIndex((prev) => {
+						return Math.min(prev + 1, maxIdx);
+					});
+					break;
+				}
+				case "ArrowUp": {
+					e.preventDefault();
+					setActiveIndex((prev) => {
+						return Math.max(prev - 1, 0);
+					});
+					break;
+				}
+				case "Tab": {
+					e.preventDefault();
+					const modes: CommandMode[] = ["browse", "search"];
+					if (readingContext) {
+						modes.push("jump");
+					}
+					setMode((prev) => {
+						const idx = modes.indexOf(prev);
+						const nextIdx = e.shiftKey ? (idx - 1 + modes.length) % modes.length : (idx + 1) % modes.length;
+						return modes[nextIdx];
+					});
+					break;
+				}
+				case "ArrowRight": {
+					if (mode === "browse") {
+						e.preventDefault();
+						const node = explorerNodes[activeIndex];
+						if (node?.type === "folder") {
+							navigateIntoFolder(node.name);
+						}
+					}
+					break;
+				}
+				case "ArrowLeft": {
+					if (mode === "browse") {
+						e.preventDefault();
+						if (explorerPath.length > 1) {
+							setExplorerDirection(-1);
+							setExplorerPath((prev) => {
+								return prev.slice(0, -1);
+							});
+							setActiveIndex(0);
+						}
+					}
+					break;
+				}
+				case "Enter": {
+					e.preventDefault();
+					handleSelect();
+					break;
+				}
+				case "Escape": {
+					setOpen(false);
+					break;
+				}
+				case "Backspace": {
+					if (!searchQuery) {
+						if (mode === "browse") {
+							if (explorerPath.length > 1) {
+								e.preventDefault();
+								setExplorerDirection(-1);
+								setExplorerPath((prev) => {
+									return prev.slice(0, -1);
+								});
+								setActiveIndex(0);
+							}
+						}
+					}
+					break;
+				}
+			}
+		};
+
+		const handleSelect = () => {
+			if (mode === "browse") {
+				const node = explorerNodes[activeIndex];
+				if (!node) {
+					return;
+				}
+				if (node.type === "folder") {
+					navigateIntoFolder(node.name);
+				} else if (node.slug) {
+					navigateToBlogPost(`/blog/${node.slug}`);
+				}
+			} else if (mode === "search") {
+				const results = searchResults.length > 0 ? searchResults : recentReading;
+				const result = results[activeIndex];
+				if (result) {
+					navigateToBlogPost(result.url);
+				}
+			} else if (mode === "jump") {
+				const sections = readingContext?.sections || [];
+				const sectionCount = sections.length;
+				if (activeIndex < sectionCount) {
+					handleReadingJump(sections[activeIndex]);
+				} else {
+					const historyItem = recentReading[activeIndex - sectionCount];
+					if (historyItem) {
+						navigateToBlogPost(historyItem.url);
+					}
+				}
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [open, mode, activeIndex, explorerNodes, searchResults, readingContext, recentReading, explorerPath, searchQuery, pendingUrl]);
+
+	const displayPath = explorerPath.slice(1);
+
 	return (
-		<CommandSurface
-			open={open}
-			onOpenChange={setOpen}
-			title="Blog Command Center"
-			description="Search blog posts or jump within the current article."
-			className="max-w-2xl"
-		>
-			<div>
-				<CommandSurfaceHeader className="group">
-					<div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-						<AnimatePresence mode="wait">
-							{mode === "jump" ? (
-								<motion.div
-									key="jump-icon"
-									initial={{ opacity: 0, scale: 0.8, rotate: -20 }}
-									animate={{ opacity: 1, scale: 1, rotate: 0 }}
-									exit={{ opacity: 0, scale: 0.8, rotate: 20 }}
-								>
-									<Compass className="h-5 w-5 text-primary" />
-								</motion.div>
-							) : (
-								<motion.div
-									key="search-icon"
-									initial={{ opacity: 0, scale: 0.8 }}
-									animate={{ opacity: 1, scale: 1 }}
-									exit={{ opacity: 0, scale: 0.8 }}
-								>
-									<Search
-										className={cn(
-											"h-5 w-5 text-muted-foreground/50 transition-colors group-focus-within:text-primary",
-											searchLoading && "opacity-0",
-										)}
-									/>
-								</motion.div>
-							)}
-						</AnimatePresence>
-						{searchLoading && mode === "search" && (
-							<Loader2 className="absolute h-5 w-5 text-primary animate-spin" />
+		<CommandSurface open={open} onOpenChange={setOpen} title="Structural Explorer" className="max-w-[calc(100vw-24px)]">
+			<CommandSurfaceHeader className="relative border-b border-border/10 bg-muted/[0.08] px-5 py-4 backdrop-blur-xl sm:px-7">
+				<div className="flex w-full items-start gap-4">
+					<div className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/8 transition-all duration-500">
+						<div className="absolute inset-1 rounded-[14px] bg-primary/[0.045]" />
+						{searchLoading || explorerLoading ? (
+							<Loader2 className="z-10 h-5 w-5 animate-spin text-primary" />
+						) : mode === "search" ? (
+							<Search className="z-10 h-5 w-5 text-primary" />
+						) : mode === "jump" ? (
+							<Compass className="z-10 h-5 w-5 text-primary" />
+						) : (
+							<div className="relative z-10 flex items-center justify-center">
+								<div className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_12px_rgba(var(--primary-rgb),0.6)] animate-pulse" />
+								<div className="absolute inset-0 h-2.5 w-2.5 rounded-full bg-primary/40 animate-ping" />
+							</div>
 						)}
 					</div>
 
-					<div className="relative flex flex-1 items-center gap-2 pr-10">
-						<input
-							ref={inputRef}
-							className="w-full bg-transparent text-xl outline-none placeholder:text-muted-foreground/20 font-light tracking-tight"
-							style={{
-								WebkitUserModify: "read-write-plaintext-only",
-								pointerEvents: "auto",
-								cursor: "text",
-							}}
-							placeholder={
-								mode === "jump"
-									? "Navigate article..."
-									: "Search blog knowledge..."
-							}
-							value={searchQuery}
-							onChange={onCommandInputChange}
-						/>
-						{searchQuery && (
+					<div className="min-w-0 flex-1">
+						<div className="mb-3 flex items-center justify-between gap-3">
+							<div className="min-w-0">
+								<p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground/55">
+									{mode === "browse" ? "Knowledge Explorer" : mode === "search" ? "Knowledge Search" : "Reading Jump"}
+								</p>
+								<p className="mt-1 truncate text-sm text-muted-foreground/75">
+									{mode === "browse"
+										? `Browsing ${displayPath.length ? displayPath.join(" / ") : "root directories"}`
+										: mode === "search"
+											? "Find notes, sections, and remembered reading paths."
+											: readingContext?.title || "Jump within the current reading flow."}
+								</p>
+							</div>
+							<div className="hidden shrink-0 items-center gap-2 rounded-xl border border-border/20 bg-background/50 px-2.5 py-1.5 text-[10px] font-bold tracking-[0.18em] text-muted-foreground/55 sm:flex">
+								<span>ESC</span>
+								<span className="opacity-40">CLOSE</span>
+							</div>
+						</div>
+
+						<div className="flex items-center gap-3 rounded-2xl border border-border/30 bg-background/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors focus-within:border-primary/30 focus-within:bg-background/82">
+							<Search className="h-4 w-4 shrink-0 text-muted-foreground/45" />
+							<input
+								ref={inputRef}
+								value={searchQuery}
+								onChange={(e) => {
+									setSearchQuery(e.target.value);
+									if (mode !== "search" && e.target.value) {
+										setMode("search");
+									}
+								}}
+								placeholder={
+									mode === "browse" ? "Search directory, note, or folder..." :
+									mode === "search" ? "Search across the knowledge base..." :
+									"Type to find a section or recent page..."
+								}
+								className="w-full bg-transparent pr-2 text-[17px] font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground/35 sm:text-[18px]"
+							/>
+							{searchQuery ? (
+								<span className="hidden rounded-lg border border-border/20 bg-muted/20 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/55 sm:inline-flex">
+									Live
+								</span>
+							) : null}
+						</div>
+					</div>
+				</div>
+			</CommandSurfaceHeader>
+
+			<CommandSurfaceBody className="h-[62vh] overflow-hidden py-0">
+				<div ref={containerRef} className="h-full overflow-y-auto no-scrollbar">
+					<div className="mx-auto w-full max-w-4xl px-5 pb-6 pt-5 sm:px-7">
+						<AnimatePresence mode="wait">
+							<motion.div
+								key={mode}
+								initial={{ opacity: 0, y: 8 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{ opacity: 0, y: -8 }}
+								transition={{ duration: 0.15, ease: "easeOut" }}
+								className="will-change-transform"
+							>
+								{mode === "browse" && (
+									<BrowserPanel 
+										explorerPath={displayPath}
+										explorerNodes={explorerNodes}
+										explorerLoading={explorerLoading}
+										explorerDirection={explorerDirection}
+										activeIndex={activeIndex}
+										setActiveIndex={setActiveIndex}
+										navigateIntoFolder={navigateIntoFolder}
+										navigateToBlogPost={navigateToBlogPost}
+										setExplorerPath={(p) => setExplorerPath(["工作领域", ...p])}
+										setExplorerDirection={setExplorerDirection}
+										prefetchBlog={prefetchBlog}
+										pendingUrl={pendingUrl}
+									/>
+								)}
+								
+								{mode === "search" && (
+									<SearchPanel 
+										searchResults={searchResults}
+										searchLoading={searchLoading}
+										activeIndex={activeIndex}
+										setActiveIndex={setActiveIndex}
+										navigateToBlogPost={navigateToBlogPost}
+										recentReading={recentReading}
+										searchQuery={searchQuery}
+										pendingUrl={pendingUrl}
+										handleSearchSuggestion={handleSearchSuggestion}
+									/>
+								)}
+
+								{mode === "jump" && (
+									<JumpPanel 
+										readingContext={readingContext}
+										filteredRecentReading={recentReading.filter(h => h.url !== `/blog/${readingContext?.slug}`)}
+										activeIndex={activeIndex}
+										setActiveIndex={setActiveIndex}
+										handleReadingJump={handleReadingJump}
+										navigateToBlogPost={navigateToBlogPost}
+										pendingUrl={pendingUrl}
+									/>
+								)}
+							</motion.div>
+						</AnimatePresence>
+					</div>
+				</div>
+			</CommandSurfaceBody>
+
+			<CommandSurfaceFooter className="flex items-center justify-between gap-4 border-t border-border/10 bg-muted/[0.08] px-4 py-3 sm:px-6">
+				<div className="hidden flex-1 items-center gap-4 text-[10px] font-bold tracking-[0.16em] text-muted-foreground/45 md:flex">
+					<div className="flex items-center gap-1.5">
+						<kbd className="rounded-md border border-border/20 bg-background/60 px-1.5 py-1 font-sans">⌘</kbd>
+						<kbd className="rounded-md border border-border/20 bg-background/60 px-1.5 py-1 font-sans">K</kbd>
+						<span>TOGGLE</span>
+					</div>
+					<div className="flex items-center gap-1.5">
+						<kbd className="rounded-md border border-border/20 bg-background/60 px-1.5 py-1 font-sans">↑</kbd>
+						<kbd className="rounded-md border border-border/20 bg-background/60 px-1.5 py-1 font-sans">↓</kbd>
+						<span>MOVE</span>
+					</div>
+					<div className="flex items-center gap-1.5">
+						<kbd className="rounded-md border border-border/20 bg-background/60 px-1.5 py-1 font-sans">↵</kbd>
+						<span>OPEN</span>
+					</div>
+				</div>
+
+				<div className="relative flex shrink-0 gap-1 rounded-2xl border border-border/20 bg-background/55 p-1">
+					<motion.div
+						layoutId="nav-pill"
+						className="absolute inset-y-1 z-0 rounded-[12px] border border-primary/20 bg-primary/12 shadow-[0_0_18px_rgba(var(--primary-rgb),0.10)]"
+						initial={false}
+						transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
+						style={{
+							left: mode === "browse" ? "4px" : mode === "search" ? "94px" : "184px",
+							width: "86px",
+						}}
+					/>
+
+					{[
+						{ id: "browse", label: "BROWSE", icon: Hash },
+						{ id: "search", label: "SEARCH", icon: Search },
+						{ id: "jump", label: "JUMP", icon: Compass, disabled: !readingContext },
+					].map((tab) => {
+						const Icon = tab.icon;
+						const isActive = mode === tab.id;
+						return (
 							<button
 								type="button"
+								key={tab.id}
+								disabled={tab.disabled}
 								onClick={() => {
-									setSearchQuery("");
-									inputRef.current?.focus();
+									setMode(tab.id as CommandMode);
+									setActiveIndex(0);
 								}}
-								className="absolute right-0 h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground/30 hover:text-primary hover:bg-primary/5 transition-all opacity-0 group-focus-within:opacity-100"
+								className={cn(
+									"relative z-10 flex w-[86px] items-center justify-center gap-1.5 rounded-[12px] py-2 transition-colors duration-300",
+									isActive ? "text-primary" : "text-muted-foreground/45 hover:text-foreground/70",
+									tab.disabled && "opacity-20 cursor-not-allowed"
+								)}
 							>
-								<X size={14} />
+								<Icon className={cn("shrink-0 transition-transform duration-300", isActive ? "scale-110" : "scale-100")} size={12} />
+								<span className="text-[10px] font-black tracking-[0.16em] uppercase">{tab.label}</span>
 							</button>
-						)}
-					</div>
+						);
+					})}
+				</div>
 
-					<div className="flex h-full shrink-0 items-center justify-center gap-3">
-						<div
-							className={cn(
-								"flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black tracking-widest transition-all duration-500",
-								mode === "jump"
-									? "border-primary/20 bg-primary/5 text-primary"
-									: "border-muted-foreground/10 bg-muted/20 text-muted-foreground/60",
-							)}
-						>
-							{mode === "jump" ? "JUMP" : "SEARCH"}
+				<div className="flex flex-1 justify-end">
+					<div className="hidden items-center gap-4 text-[10px] font-bold tracking-[0.16em] text-muted-foreground/45 md:flex">
+						<div className="flex items-center gap-1.5">
+							<span>CYCLE</span>
+							<kbd className="rounded-md border border-border/20 bg-background/60 px-1.5 py-1 font-sans text-[9px]">TAB</kbd>
+						</div>
+						<div className="flex items-center gap-1.5">
+							<kbd className="rounded-md border border-border/20 bg-background/60 px-1.5 py-1 font-sans text-[11px]">←</kbd>
+							<span>BACK</span>
 						</div>
 					</div>
-
-					{/* Snappy Animated Search Loader */}
-					<div
-						className={cn(
-							"absolute bottom-0 left-0 right-0 h-[1px] transition-opacity duration-500",
-							searchLoading && mode === "search" ? "opacity-100" : "opacity-0",
-						)}
-					>
-						<div className="h-full w-full animate-search-loader bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-					</div>
-				</CommandSurfaceHeader>
-
-				<CommandSurfaceBody
-					className={cn(
-						"relative overflow-hidden transition-[height,max-height,min-height] duration-500 ease-in-out",
-						"h-[50vh] min-h-[400px] max-h-[500px] overflow-y-auto",
-					)}
-				>
-					<div className={cn("h-full w-full px-6 py-4 space-y-4")}>
-						{mode === "search" && (deferredSearchQuery || "").trim() ? (
-							searchResults.length > 0 ? (
-								<div className="space-y-2 pb-4">
-									{searchResults.map((result) => (
-										<button
-											key={result.id}
-											type="button"
-											disabled={!!pendingUrl}
-											onClick={() => navigateToBlogPost(result.url)}
-											className={cn(
-												"block w-full rounded-2xl border border-border/40 bg-muted/15 p-4 text-left transition-[background-color,border-color,transform,opacity]",
-												"hover:border-primary/30 hover:bg-primary/[0.06] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
-												pendingUrl === result.url
-													? "scale-[0.98] border-primary ring-1 ring-primary/20 bg-primary/[0.08]"
-													: pendingUrl
-														? "opacity-40 grayscale-[0.5] blur-[0.5px]"
-														: "active:scale-[0.99]",
-											)}
-										>
-											<div className="flex flex-col gap-1">
-												{/* 1. Filename (Slug) - The primary identifier, most prominent */}
-												<SearchMatch
-													className={cn(
-														"block text-[15px] font-black tracking-tight text-foreground transition-colors group-hover:text-primary leading-tight",
-														pendingUrl === result.url && "text-primary",
-													)}
-													text={result.highlightedContext}
-													fallback={result.context || ""}
-													query={searchQuery}
-												/>
-
-												{/* 2. Page Title / Section Heading - Highly visible but distinct from filename */}
-												{result.title !== result.context && (
-													<div className="flex items-center gap-2 text-foreground/85">
-														<SearchMatch
-															className="text-[13px] font-bold tracking-tight"
-															text={result.highlightedTitle}
-															fallback={result.title}
-															query={searchQuery}
-														/>
-													</div>
-												)}
-
-												{/* 3. Content Preview (Grey) - Muted context */}
-												{result.description ? (
-													<SearchMatch
-														className="mt-1 line-clamp-2 block text-[12px] leading-relaxed text-muted-foreground/50 font-sans font-normal"
-														text={result.highlightedDescription}
-														fallback={result.description}
-														query={searchQuery}
-													/>
-												) : null}
-											</div>
-										</button>
-									))}
-								</div>
-							) : (
-								<div className="space-y-4">
-									<CommandEmptyState
-										icon={
-											<Search className="h-10 w-10 text-muted-foreground" />
-										}
-										title="No matching blog posts yet"
-										description="Try a broader keyword, a slug fragment, or a concept from the article body."
-									/>
-								</div>
-							)
-						) : mode === "jump" ? (
-							readingContext ? (
-								<>
-									{jumpSubMode === "history" ? (
-										<div className="space-y-6">
-											{filteredRecentReading.length > 0 && (
-												<div className="space-y-3">
-													<div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-														Recent Reading
-													</div>
-													<div className="space-y-2">
-														{filteredRecentReading.map((entry) => {
-															const targetUrl = entry.sectionSlug
-																? `/blog/${entry.slug}#${entry.sectionSlug}`
-																: `/blog/${entry.slug}`;
-
-															return (
-																<button
-																	key={entry.slug}
-																	type="button"
-																	disabled={!!pendingUrl}
-																	onClick={() => navigateToBlogPost(targetUrl)}
-																	className={cn(
-																		"group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity]",
-																		"hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
-																		pendingUrl === targetUrl
-																			? "scale-[0.98] border-primary/40 bg-primary/10"
-																			: pendingUrl
-																				? "opacity-40 grayscale-[0.5] blur-[0.5px]"
-																				: "active:scale-[0.99]",
-																	)}
-																>
-																	{pendingUrl === targetUrl ? (
-																		<Loader2 className="h-4 w-4 animate-spin text-primary" />
-																	) : (
-																		<Clock className="h-4 w-4 text-primary/80 transition-transform group-hover:rotate-6 dark:text-primary/70" />
-																	)}
-																	<div className="flex flex-col min-w-0">
-																		<span
-																			className={cn(
-																				"truncate text-sm font-medium transition-colors",
-																				pendingUrl === targetUrl
-																					? "text-primary font-semibold"
-																					: "text-foreground/85 group-hover:text-foreground",
-																			)}
-																		>
-																			{pendingUrl === targetUrl
-																				? "Entering post..."
-																				: entry.title}
-																		</span>
-																		{entry.sectionTitle && (
-																			<span className="truncate text-[11px] text-muted-foreground/60 flex items-center gap-1.5 overflow-hidden">
-																				<Hash className="h-2.5 w-2.5 shrink-0" />
-																				{entry.sectionTitle}
-																			</span>
-																		)}
-																	</div>
-																</button>
-															);
-														})}
-													</div>
-												</div>
-											)}
-
-											{filteredReadingSections.length > 0 && (
-												<div className="space-y-3">
-													<div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-														Sections
-													</div>
-													<div className="space-y-2">
-														{filteredReadingSections.map((section) => (
-															<button
-																key={section.id}
-																type="button"
-																onClick={() => {
-																	setOpen(false);
-																	scrollToReadingSection(section.id);
-																}}
-																className="group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity] hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5"
-															>
-																<span className="font-mono text-[11px] font-bold text-primary/80 transition-transform group-hover:scale-125 dark:text-primary/70">
-																	{"#".repeat(Math.max(1, section.level))}
-																</span>
-																<SearchMatch
-																	className="min-w-0 truncate text-sm font-medium text-foreground/85 transition-colors group-hover:text-foreground"
-																	text={section.renderedTitle}
-																	fallback={section.title}
-																	query={searchQuery}
-																/>
-															</button>
-														))}
-													</div>
-												</div>
-											)}
-										</div>
-									) : (
-										<div className="space-y-6">
-											{/* Default order: Sections first */}
-											{filteredReadingSections.length > 0 && (
-												<div className="space-y-3">
-													<div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-														Sections
-													</div>
-													<div className="space-y-2">
-														{filteredReadingSections.map((section) => (
-															<button
-																key={section.id}
-																type="button"
-																onClick={() => {
-																	setOpen(false);
-																	scrollToReadingSection(section.id);
-																}}
-																className="group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity] hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5"
-															>
-																<span className="font-mono text-[11px] font-bold text-primary/80 transition-transform group-hover:scale-125 dark:text-primary/70">
-																	{"#".repeat(Math.max(1, section.level))}
-																</span>
-																<SearchMatch
-																	className="min-w-0 truncate text-sm font-medium text-foreground/85 transition-colors group-hover:text-foreground"
-																	text={section.renderedTitle}
-																	fallback={section.title}
-																	query={searchQuery}
-																/>
-															</button>
-														))}
-													</div>
-												</div>
-											)}
-
-											{filteredRecentReading.length > 0 && (
-												<div className="space-y-3">
-													<div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-														Recent Reading
-													</div>
-													<div className="space-y-2">
-														{filteredRecentReading.map((entry) => {
-															const targetUrl = entry.sectionSlug
-																? `/blog/${entry.slug}#${entry.sectionSlug}`
-																: `/blog/${entry.slug}`;
-
-															return (
-																<button
-																	key={entry.slug}
-																	type="button"
-																	disabled={!!pendingUrl}
-																	onClick={() => navigateToBlogPost(targetUrl)}
-																	className={cn(
-																		"group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity]",
-																		"hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
-																		pendingUrl === targetUrl
-																			? "scale-[0.98] border-primary/40 bg-primary/10"
-																			: pendingUrl
-																				? "opacity-40 grayscale-[0.5] blur-[0.5px]"
-																				: "active:scale-[0.99]",
-																	)}
-																>
-																	{pendingUrl === targetUrl ? (
-																		<Loader2 className="h-4 w-4 animate-spin text-primary" />
-																	) : (
-																		<Clock className="h-4 w-4 text-primary/80 transition-transform group-hover:rotate-6 dark:text-primary/70" />
-																	)}
-																	<div className="flex flex-col min-w-0">
-																		<span
-																			className={cn(
-																				"truncate text-sm font-medium transition-colors",
-																				pendingUrl === targetUrl
-																					? "text-primary font-semibold"
-																					: "text-foreground/85 group-hover:text-foreground",
-																			)}
-																		>
-																			{pendingUrl === targetUrl
-																				? "Entering post..."
-																				: entry.title}
-																		</span>
-																		{entry.sectionTitle && (
-																			<span className="truncate text-[11px] text-muted-foreground/60 flex items-center gap-1.5 overflow-hidden">
-																				<Hash className="h-2.5 w-2.5 shrink-0" />
-																				{entry.sectionTitle}
-																			</span>
-																		)}
-																	</div>
-																</button>
-															);
-														})}
-													</div>
-												</div>
-											)}
-										</div>
-									)}
-
-									{filteredReadingSections.length === 0 &&
-									filteredRecentReading.length === 0 ? (
-										<CommandEmptyState
-											icon={
-												<Compass className="h-10 w-10 text-muted-foreground" />
-											}
-											title="Nothing matches that jump query"
-											description="Try a section keyword, a heading fragment, or another recent article title."
-										/>
-									) : null}
-								</>
-							) : (
-								<CommandEmptyState
-									icon={<Compass className="h-10 w-10 text-muted-foreground" />}
-									title="Reading jump is unavailable here"
-									description="Open this mode from an article page to jump across sections or switch between recent posts."
-								/>
-							)
-						) : mode === "search" ? (
-							<div className="space-y-6 pb-4">
-								{filteredRecentReading.length > 0 && (
-									<div className="space-y-3">
-										<div className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 dark:text-muted-foreground/50">
-											Recent Reading
-										</div>
-										<div className="space-y-2">
-											{filteredRecentReading.map((entry) => {
-												const targetUrl = entry.sectionSlug
-													? `/blog/${entry.slug}#${entry.sectionSlug}`
-													: `/blog/${entry.slug}`;
-
-												return (
-													<button
-														key={entry.slug}
-														type="button"
-														disabled={!!pendingUrl}
-														onClick={() => navigateToBlogPost(targetUrl)}
-														className={cn(
-															"group flex w-full items-center gap-3 rounded-2xl border border-border/40 bg-muted/15 px-4 py-3 text-left transition-[background-color,border-color,transform,opacity]",
-															"hover:border-primary/35 hover:bg-primary/[0.08] dark:border-border/10 dark:bg-muted/10 dark:hover:border-primary/20 dark:hover:bg-primary/5",
-															pendingUrl === targetUrl
-																? "scale-[0.98] border-primary/40 bg-primary/10"
-																: pendingUrl
-																	? "opacity-40 grayscale-[0.5] blur-[0.5px]"
-																	: "active:scale-[0.99]",
-														)}
-													>
-														{pendingUrl === targetUrl ? (
-															<Loader2 className="h-4 w-4 animate-spin text-primary" />
-														) : (
-															<Clock className="h-4 w-4 text-primary/80 transition-transform group-hover:rotate-6 dark:text-primary/70" />
-														)}
-														<div className="flex flex-col min-w-0">
-															<span
-																className={cn(
-																	"truncate text-sm font-medium transition-colors",
-																	pendingUrl === targetUrl
-																		? "text-primary font-semibold"
-																		: "text-foreground/85 group-hover:text-foreground",
-																)}
-															>
-																{pendingUrl === targetUrl
-																	? "Entering post..."
-																	: entry.title}
-															</span>
-															{entry.sectionTitle && (
-																<span className="truncate text-[11px] text-muted-foreground/60 flex items-center gap-1.5 overflow-hidden">
-																	<Hash className="h-2.5 w-2.5 shrink-0" />
-																	{entry.sectionTitle}
-																</span>
-															)}
-														</div>
-													</button>
-												);
-											})}
-										</div>
-									</div>
-								)}
-
-								{filteredRecentReading.length === 0 ? (
-									<CommandEmptyState
-										icon={<Clock className="h-10 w-10 text-primary/40" />}
-										title="Begin your search"
-										description="Use the same blog search logic here as on the blog index."
-										actions={
-											<div className="flex max-w-md flex-wrap justify-center gap-2">
-												{["pytest", "AI", "playwright", "RAG"].map(
-													(suggestion) => (
-														<button
-															key={suggestion}
-															type="button"
-															onClick={() => handleSearchSuggestion(suggestion)}
-															className="rounded-full border border-border/40 bg-muted/20 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-														>
-															{suggestion}
-														</button>
-													),
-												)}
-											</div>
-										}
-									/>
-								) : (
-									<div className="mt-8 flex flex-col items-center gap-3 border-t border-border/10 pt-6 opacity-60">
-										<span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-											Try searching for
-										</span>
-										<div className="flex max-w-md flex-wrap justify-center gap-2">
-											{["性能", "MDX", "项目", "测试"].map((suggestion) => (
-												<button
-													key={suggestion}
-													type="button"
-													onClick={() => handleSearchSuggestion(suggestion)}
-													className="rounded-full border border-border/40 bg-muted/20 px-3 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-												>
-													{suggestion}
-												</button>
-											))}
-										</div>
-									</div>
-								)}
-							</div>
-						) : null}
-					</div>
-				</CommandSurfaceBody>
-
-				<CommandSurfaceFooter className="flex items-center px-6 border-t-0 bg-transparent py-4">
-					<div className="flex-1 hidden md:block" /> {/* Left balance spacer */}
-					<div className="flex p-1.5 rounded-full bg-muted/20 border border-border/10 backdrop-blur-md relative overflow-hidden">
-						{/* Sliding Pill Background */}
-						<motion.div
-							layoutId="nav-pill"
-							className="absolute inset-y-1 bg-primary/10 border border-primary/20 rounded-full"
-							initial={false}
-							transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
-							style={{
-								left: mode === "search" ? "4px" : "108px",
-								width: mode === "search" ? "100px" : "80px",
-							}}
-						/>
-
-						{[
-							{ id: "search", label: "SEARCH", icon: Search },
-							{ id: "jump", label: "JUMP", icon: Compass },
-						].map((tab) => {
-							const Icon = tab.icon;
-							const isActive = mode === tab.id;
-							return (
-								<button
-									type="button"
-									key={tab.id}
-									onClick={() => setMode(tab.id as CommandMode)}
-									className={cn(
-										"relative px-4 py-1.5 rounded-full flex items-center gap-2 transition-colors duration-300 z-10",
-										isActive
-											? "text-primary"
-											: "text-muted-foreground/40 hover:text-muted-foreground/60",
-									)}
-								>
-									<Icon size={12} />
-									<span className="text-[10px] font-black tracking-widest">
-										{tab.label}
-									</span>
-								</button>
-							);
-						})}
-					</div>
-					<div className="flex-1 flex justify-end">
-						<div className="flex items-center gap-2 text-[9px] font-black tracking-widest text-muted-foreground/20 uppercase pointer-events-none hidden sm:flex">
-							<AnimatePresence mode="wait">
-								<motion.div
-									key={mode}
-									initial={{ opacity: 0, y: 5 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0, y: -5 }}
-									className="flex items-center gap-2"
-								>
-									{mode === "jump" ? (
-										<>
-											<FileText size={10} />
-											<span>NAV MODE</span>
-										</>
-									) : (
-										<>
-											<Hash size={10} />
-											<span>GLOBAL</span>
-										</>
-									)}
-								</motion.div>
-							</AnimatePresence>
-						</div>
-					</div>
-				</CommandSurfaceFooter>
-			</div>
+				</div>
+			</CommandSurfaceFooter>
 		</CommandSurface>
 	);
 }

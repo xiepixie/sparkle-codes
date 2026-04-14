@@ -1,13 +1,19 @@
+/** biome-ignore-all lint/a11y/useSemanticElements: as buttons*/
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { cn, toast } from "@repo/ui";
 import { normalizeSlug } from "@repo/utils";
-import { cn } from "@repo/ui";
-import { AnimatePresence, motion } from "framer-motion";
-import { Bot, FileText, RefreshCw, Sparkles, X, Zap } from "lucide-react";
+import {
+	AnimatePresence,
+	animate,
+	motion,
+	useDragControls,
+	useMotionValue,
+} from "framer-motion";
+import { FileText, RefreshCw, Sparkles, X, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./ChatPanel";
 
 export function FloatingChatWidget() {
@@ -15,14 +21,90 @@ export function FloatingChatWidget() {
 	const [readingContext, setReadingContext] = useState<any>(null);
 	const [mounted, setMounted] = useState(false);
 	const widgetRef = useRef<HTMLDivElement>(null);
-	const [dimensions, setDimensions] = useState({ width: 450, height: 640 });
+	const dimRef = useRef<HTMLDivElement>(null);
+	const [dimensions, setDimensions] = useState({ width: 450, height: 720 });
 	const [isResizing, setIsResizing] = useState(false);
+	const [isPurging, setIsPurging] = useState(false);
+	const [toggleSide, setToggleSide] = useState<"left" | "right">("right");
+	const isDraggingRef = useRef(false);
+	const [isWindowDragging, setIsWindowDragging] = useState(false);
+	const dragControls = useDragControls();
 
-	// Block body selection during resize
+	// Independent coordinate tracking to prevent animation snaps & lag
+	const badgeX = useMotionValue(0);
+	const windowX = useMotionValue(0);
+	const windowY = useMotionValue(0);
+	const windowWidth = useMotionValue(450);
+	const windowHeight = useMotionValue(720);
+
+	const [savedWindowPos, setSavedWindowPos] = useState<{x: number, y: number} | null>(null);
+
+	const saveConfig = useCallback((newCfg: any) => {
+		try {
+			const existing = JSON.parse(
+				localStorage.getItem("sparkle:chat-widget-config") || "{}",
+			);
+			localStorage.setItem(
+				"sparkle:chat-widget-config",
+				JSON.stringify({ ...existing, ...newCfg }),
+			);
+		} catch {
+			// Silently fail if storage is unavailable
+		}
+	}, []);
+
+	useEffect(() => {
+		setMounted(true);
+		try {
+			const cfg = JSON.parse(
+				localStorage.getItem("sparkle:chat-widget-config") || "{}",
+			);
+			if (cfg.dimensions) {
+				setDimensions(cfg.dimensions);
+				windowWidth.set(cfg.dimensions.width);
+				windowHeight.set(cfg.dimensions.height);
+			}
+			if (cfg.toggleSide) {
+				setToggleSide(cfg.toggleSide);
+				badgeX.set(
+					cfg.toggleSide === "left" ? -(window.innerWidth - 64 - 48) : 0,
+				);
+			}
+			if (cfg.windowX !== undefined && cfg.windowY !== undefined) {
+				setSavedWindowPos({ x: cfg.windowX, y: cfg.windowY });
+			}
+		} catch {
+			// Ignore malformed config
+		}
+	}, [windowWidth, windowHeight, badgeX]);
+
+	// Responsive re-anchoring for the badge
+	useEffect(() => {
+		const handleResize = () => {
+			if (!isOpen) {
+				const bTargetX =
+					toggleSide === "left" ? -(window.innerWidth - 64 - 48) : 0;
+				badgeX.set(bTargetX);
+			}
+		};
+
+		window.addEventListener("resize", handleResize);
+		return () => window.removeEventListener("resize", handleResize);
+	}, [isOpen, toggleSide, badgeX]);
+
+	// On mount/open, initialize the positional anchor based on current screen side preference
+	useEffect(() => {
+		if (isOpen) {
+			windowX.set(savedWindowPos ? savedWindowPos.x : (toggleSide === "left" ? -(window.innerWidth - dimensions.width - 64) : 0));
+			windowY.set(savedWindowPos ? savedWindowPos.y : 0);
+		}
+	}, [isOpen, savedWindowPos, toggleSide, dimensions.width, windowX, windowY]);
+
+	// Block body selection during resize and enable smooth transitions
 	useEffect(() => {
 		if (isResizing) {
 			document.body.style.userSelect = "none";
-			document.body.style.cursor = "nw-resize";
+			document.body.style.cursor = "nwse-resize";
 		} else {
 			document.body.style.userSelect = "";
 			document.body.style.cursor = "";
@@ -33,17 +115,12 @@ export function FloatingChatWidget() {
 		};
 	}, [isResizing]);
 
-	useEffect(() => {
-		setMounted(true);
-	}, []);
 
 	// Persist session state even when collapsed
 	const chat = useChat({
 		id: "sparkle-floating-chat",
 		experimental_throttle: 50,
 	});
-
-	const { isLoading } = chat as any;
 
 	// Shortcut: Cmd+Shift+L to toggle chat
 	useEffect(() => {
@@ -82,22 +159,29 @@ export function FloatingChatWidget() {
 			);
 	}, []);
 
-	const router = useRouter();
-
-	if (!mounted) {
-		return null;
-	}
-
-	const handleLinkClick = (url: string) => {
-		// 1. Instant Same-Page Anchor Detection
-		if (url.startsWith("#")) {
-			window.dispatchEvent(
-				new CustomEvent("sparkle:scroll-to-fragment", {
-					detail: { fragment: url.slice(1) },
-				}),
-			);
-			return;
+	// --- 3. Optimized Decision Layer: Context Memoization ---
+	// Why: ChatPanel is a heavy React.memo component. If we pass a new object literal
+	// on every FloatingChatWidget render, we break the memoization and trigger 
+	// a full reconciliation of the message list (300ms+ on large histories).
+	const memoizedContext = React.useMemo(() => {
+		if (!readingContext) {
+			return undefined;
 		}
+		return { title: readingContext.title, slug: readingContext.slug };
+	}, [readingContext?.title, readingContext?.slug]);
+
+	const router = useRouter();
+	const handleLinkClick = useCallback(
+		(url: string) => {
+			// 1. Instant Same-Page Anchor Detection
+			if (url.startsWith("#")) {
+				window.dispatchEvent(
+					new CustomEvent("sparkle:scroll-to-fragment", {
+						detail: { fragment: url.slice(1) },
+					}),
+				);
+				return;
+			}
 
 		// 2. Protocol/External Check
 		if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -130,66 +214,179 @@ export function FloatingChatWidget() {
 		// 4. Cross-page navigation (ensure absolute path)
 		const destination = url.startsWith("/") ? url : `/blog/${url}`;
 		router.push(destination);
-	};
+	}, [readingContext?.slug, router]);
+
+	if (!mounted) {
+		return null;
+	}
 
 	return (
 		<>
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{!isOpen && (
 					<motion.button
 						key="fab"
-						initial={{ scale: 0, opacity: 0, y: 20 }}
-						animate={{ scale: 1, opacity: 1, y: 0 }}
-						exit={{ scale: 0, opacity: 0, y: 20 }}
-						whileHover={{ scale: 1.1, y: -2 }}
-						whileTap={{ scale: 0.9 }}
-						onClick={() => setIsOpen(true)}
-						className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--primary-rgb),0.4)] transition-all hover:scale-110 active:scale-95 group"
+						drag
+						dragConstraints={{ 
+							left: -(window.innerWidth - 64 - 48), 
+							right: 0, // Stay within right margin
+							top: -(window.innerHeight - 64 - 48),
+							bottom: 0 
+						}}
+						dragElastic={0.1}
+						dragMomentum={false}
+						onDragStart={() => {
+							isDraggingRef.current = true;
+						}}
+						onDragEnd={(_, info) => {
+							setTimeout(() => {
+								isDraggingRef.current = false;
+							}, 100);
+
+							const thresholdX = window.innerWidth / 2;
+							const isLeft = info.point.x < thresholdX;
+							setToggleSide(isLeft ? "left" : "right");
+							
+							const targetX = isLeft 
+								? -(window.innerWidth - 64 - 48) 
+								: 0; 
+							
+							// Spring physical bounce manually to bypass React render loop
+							animate(badgeX, targetX, { type: "spring", stiffness: 400, damping: 30 });
+							saveConfig({ toggleSide: isLeft ? "left" : "right" });
+						}}
+						initial={{ scale: 0, opacity: 0 }}
+						animate={{ 
+							scale: 1, 
+							opacity: 1, 
+						}}
+						style={{ x: badgeX }}
+						transition={{ 
+							type: "spring", 
+							stiffness: 400, 
+							damping: 30
+						}}
+						exit={{ scale: 0, opacity: 0 }}
+						whileHover={{ 
+							scale: 1.05, 
+						}}
+						whileTap={{ scale: 0.9, cursor: "grabbing" }}
+						onTap={() => {
+							if (!isDraggingRef.current) {
+								setIsOpen(true);
+							}
+						}}
+						className={cn(
+							"fixed bottom-[32px] right-[32px] z-[100] flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_12px_40px_rgba(var(--primary-rgb),0.3)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-md transition-shadow group cursor-grab border border-white/10",
+						)}
 						aria-label="Open Sparkle AI Assistant"
 					>
+						<div className="absolute inset-0 rounded-full bg-gradient-to-tr from-foreground/5 to-transparent pointer-events-none" />
 						<Sparkles
 							size={22}
-							className="relative z-10 animate-in zoom-in-50 duration-500"
+							className="relative z-10 animate-in zoom-in-50 duration-700"
+							strokeWidth={1.5}
 						/>
 
-						{/* Context Active Indicator */}
-						{readingContext && (
-							<div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-background flex items-center justify-center animate-pulse">
-								<Zap size={8} className="fill-white text-white" />
-							</div>
-						)}
+						{/* Premium status indicator */}
+						<div className="absolute -bottom-1 -right-1 flex gap-0.5">
+							{readingContext && (
+								<motion.div 
+									initial={{ scale: 0 }}
+									animate={{ scale: 1 }}
+									className="w-4 h-4 bg-foreground text-background rounded-full border border-background flex items-center justify-center shadow-sm"
+								>
+									<Zap size={8} fill="currentColor" />
+								</motion.div>
+							)}
+						</div>
 					</motion.button>
 				)}
 			</AnimatePresence>
 
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{isOpen && (
 					<motion.div
-						key="chat-window"
-						ref={widgetRef}
+						key="chat-window-wrapper"
+						className="fixed bottom-8 right-8 z-50 pointer-events-none"
 						initial={{ opacity: 0, y: 20, scale: 0.95 }}
 						animate={{ opacity: 1, y: 0, scale: 1 }}
-						exit={{ opacity: 0, y: 20, scale: 0.95 }}
-						transition={{ type: "spring", stiffness: 300, damping: 30 }}
-						className={cn(
-							"fixed bottom-6 right-6 z-50 flex flex-col overflow-hidden rounded-[1.5rem] border border-border/20 bg-background/95 shadow-2xl backdrop-blur-xl transition-shadow",
-							isResizing && "select-none shadow-[0_0_40px_rgba(var(--primary-rgb),0.1)] ring-1 ring-primary/20",
-						)}
-						style={{ 
-							width: `${dimensions.width}px`, 
-							height: `${dimensions.height}px`,
-							maxWidth: "calc(100vw - 3rem)",
-							maxHeight: "85vh" 
-						}}
+						exit={{ opacity: 0, y: 20, scale: 0.95, transition: { duration: 0.2 } }}
+						transition={{ type: "spring", stiffness: 350, damping: 30 }}
 					>
-						{/* Resize Handle (Top-Left) */}
-						{/* biome-ignore lint/a11y/noStaticElementInteractions: specialized drag zone */}
+						<motion.div
+							ref={widgetRef}
+							drag
+							dragControls={dragControls}
+							dragListener={false}
+							dragMomentum={false}
+							onDragStart={() => setIsWindowDragging(true)}
+							onDragEnd={(_, info) => {
+								setIsWindowDragging(false);
+								const thresholdX = window.innerWidth / 2;
+								const isLeft = info.point.x < thresholdX;
+								setToggleSide(isLeft ? "left" : "right");
+								
+								// Snap the badge position behind the scenes
+								const bTargetX = isLeft ? -(window.innerWidth - 64 - 48) : 0;
+								badgeX.set(bTargetX);
+
+								const finalX = windowX.get();
+								const finalY = windowY.get();
+								setSavedWindowPos({ x: finalX, y: finalY });
+								saveConfig({ 
+									toggleSide: isLeft ? "left" : "right",
+									windowX: finalX,
+									windowY: finalY
+								});
+							}}
+							className={cn(
+								"flex flex-col overflow-hidden rounded-[1.5rem] border border-border/20 bg-background/95 shadow-[0_32px_80px_rgba(0,0,0,0.2)] dark:shadow-[0_32px_80px_rgba(0,0,0,0.6)] backdrop-blur-3xl transition-shadow",
+								(isResizing || isWindowDragging) && "select-none shadow-[0_0_40px_rgba(var(--primary-rgb),0.2)] ring-1 ring-primary/30",
+							)}
+							style={{ 
+								width: windowWidth, 
+								height: windowHeight,
+								maxWidth: "calc(100vw - 3rem)",
+								maxHeight: "85vh",
+								x: windowX,
+								y: windowY,
+								pointerEvents: "auto",
+							}}
+						>
+						{/* Resize Dimension Indicator */}
+						<AnimatePresence>
+							{isResizing && (
+								<motion.div
+									initial={{ opacity: 0, scale: 0.9 }}
+									animate={{ opacity: 1, scale: 1 }}
+									exit={{ opacity: 0, scale: 0.9 }}
+									transition={{ duration: 0.1 }} 
+									className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none"
+								>
+									<div 
+										ref={dimRef}
+										className="px-3 py-1.5 rounded-full bg-primary/95 text-primary-foreground text-[10px] font-black tabular-nums shadow-2xl backdrop-blur-md border border-white/20 select-none"
+									>
+										{Math.round(dimensions.width)} × {Math.round(dimensions.height)}
+									</div>
+								</motion.div>
+							)}
+						</AnimatePresence>
+
+						{/* --- Resize Handles --- */}
+						
+						{/* 1. Top-Left Handle (Standard) */}
 						<div
-							className="absolute top-0 left-0 w-12 h-12 cursor-nw-resize z-30 group/resize outline-none select-none"
+							role="button"
+							tabIndex={-1}
+							aria-label="Resize from top left"
+							className={cn(
+								"absolute top-0 left-0 w-8 h-8 cursor-nw-resize z-40 group/resize-tl transition-opacity rounded-tl-3xl",
+								isResizing ? "opacity-100" : "opacity-0 hover:opacity-100"
+							)}
 							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									toast.info("Use mouse to drag and resize.");
-								}
+								if (e.key === "Enter" || e.key === " ") { e.preventDefault(); }
 							}}
 							onMouseDown={(e) => {
 								e.preventDefault();
@@ -201,15 +398,34 @@ export function FloatingChatWidget() {
 								const startHeight = dimensions.height;
 
 								const onMouseMove = (moveEvent: MouseEvent) => {
-									const deltaX = startX - moveEvent.clientX; // Left drag increases width
-									const deltaY = startY - moveEvent.clientY; // Top drag increases height
-									setDimensions({
-										width: Math.min(1000, Math.max(380, startWidth + deltaX)),
-										height: Math.min(900, Math.max(400, startHeight + deltaY)),
-									});
+									const deltaX = startX - moveEvent.clientX; 
+									const deltaY = startY - moveEvent.clientY; 
+									
+									const newWidth = Math.min(
+										window.innerWidth - 32,
+										Math.max(280, startWidth + deltaX),
+									);
+									const newHeight = Math.min(
+										window.innerHeight - 32,
+										Math.max(300, startHeight + deltaY),
+									);
+
+									// Fully deferred to Framer Motion batched loop
+									windowWidth.set(newWidth);
+									windowHeight.set(newHeight);
+
+									if (dimRef.current) {
+										dimRef.current.textContent = `${Math.round(newWidth)} × ${Math.round(newHeight)}`;
+									}
 								};
 
 								const onMouseUp = () => {
+									const currentWidth = windowWidth.get();
+									const currentHeight = windowHeight.get();
+									const newDim = { width: currentWidth, height: currentHeight };
+									setDimensions(newDim);
+									saveConfig({ dimensions: newDim });
+
 									setIsResizing(false);
 									document.removeEventListener("mousemove", onMouseMove);
 									document.removeEventListener("mouseup", onMouseUp);
@@ -218,112 +434,146 @@ export function FloatingChatWidget() {
 								document.addEventListener("mousemove", onMouseMove);
 								document.addEventListener("mouseup", onMouseUp);
 							}}
-						/>
+						>
+							<div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-primary/40 rounded-tl-[2px]" />
+						</div>
 
-						{/* Premium Integrated Header */}
-						<div className="flex items-center justify-between px-6 py-4 border-b border-border/10 bg-muted/20 backdrop-blur-md">
-							<div className="flex items-center gap-3">
-								<div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 shadow-glow-sm">
-									<Bot
-										size={16}
-										className={cn("text-primary", isLoading && "animate-pulse")}
-									/>
+						{/* 2. Top-Right Handle (As requested) */}
+						<div
+							role="button"
+							tabIndex={-1}
+							aria-label="Resize height from top right"
+							className={cn(
+								"absolute top-0 right-0 w-8 h-8 cursor-ne-resize z-40 group/resize-tr transition-opacity rounded-tr-3xl",
+								isResizing ? "opacity-100" : "opacity-0 hover:opacity-100"
+							)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") { e.preventDefault(); }
+							}}
+							onMouseDown={(e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								setIsResizing(true);
+								const startX = e.clientX;
+								const startY = e.clientY;
+								const startWidth = dimensions.width;
+								const startHeight = dimensions.height;
+								const startXOffset = windowX.get(); // Essential for compensating left edge Shift
+
+								const onMouseMove = (moveEvent: MouseEvent) => {
+									const deltaX = moveEvent.clientX - startX; 
+									const deltaY = startY - moveEvent.clientY; 
+									
+									const newWidth = Math.min(
+										window.innerWidth - 32,
+										Math.max(280, startWidth + deltaX),
+									);
+									const newHeight = Math.min(
+										window.innerHeight - 32,
+										Math.max(300, startHeight + deltaY),
+									);
+
+									// Anchor compensation: Because the CSS base is right-8, changing width moves the left edge.
+									// To keep left edge fixed when scaling Right edge, we must shift the entire window right by deltaWidth.
+									const deltaWidth = newWidth - startWidth;
+									
+									// ALL motion values batched into a single rAF cycle -> Zero Layout Tearing
+									windowWidth.set(newWidth);
+									windowHeight.set(newHeight);
+									windowX.set(startXOffset + deltaWidth);
+
+									if (dimRef.current) {
+										dimRef.current.textContent = `${Math.round(newWidth)} × ${Math.round(newHeight)}`;
+									}
+								};
+
+								const onMouseUp = () => {
+									const currentWidth = windowWidth.get();
+									const currentHeight = windowHeight.get();
+									const newDim = { width: currentWidth, height: currentHeight };
+									
+									setDimensions(newDim);
+									const finalX = windowX.get();
+									setSavedWindowPos(prev => prev ? { ...prev, x: finalX } : { x: finalX, y: windowY.get() });
+									saveConfig({ dimensions: newDim, windowX: finalX });
+
+									setIsResizing(false);
+									document.removeEventListener("mousemove", onMouseMove);
+									document.removeEventListener("mouseup", onMouseUp);
+								};
+
+								document.addEventListener("mousemove", onMouseMove);
+								document.addEventListener("mouseup", onMouseUp);
+							}}
+						>
+							<div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-primary/40 rounded-tr-[2px]" />
+						</div>
+
+						{/* Premium Integrated Header - ACTS AS DRAG HANDLE */}
+						<div
+							onPointerDown={(event) => dragControls.start(event)}
+							className="flex items-center justify-between px-6 py-4 border-b border-border/10 bg-muted/20 backdrop-blur-md cursor-move active:cursor-grabbing select-none"
+						>
+								<div className="relative">
+									<div className={cn(
+										"flex h-8 w-8 items-center justify-center rounded-xl bg-foreground text-background shadow-lg transition-all duration-500",
+										(chat.status === 'submitted' || chat.status === 'streaming') && "animate-pulse shadow-glow-sm scale-110"
+									)}>
+										<Sparkles size={16} fill="currentColor" />
+									</div>
+									{(chat.status === 'submitted' || chat.status === 'streaming') && (
+										<div className="absolute -inset-1 rounded-xl border border-primary/40 animate-ping opacity-50 pointer-events-none" />
+									)}
 								</div>
 								<div className="flex flex-col">
-									<span className="text-xs font-black uppercase tracking-widest text-foreground/80">
-										Expert AI
-									</span>
-									<span className="text-[10px] text-muted-foreground/50 font-bold flex items-center gap-1.5">
-										{readingContext ? (
-											<>
-												<FileText size={10} />
-												Contextualized to reading
-											</>
-										) : (
-											"General Knowledge Bridge"
+									<div className="flex items-center gap-2">
+										<span className="text-[10px] text-muted-foreground/50 font-bold flex items-center gap-1.5 whitespace-nowrap">
+											{readingContext ? (
+												<>
+													<FileText size={10} />
+													Contextualized to reading
+												</>
+											) : (
+												"General Knowledge Bridge"
+											)}
+										</span>
+										{(chat.status === 'submitted' || chat.status === 'streaming') && (
+											<div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 animate-in fade-in zoom-in duration-300">
+												<div className="w-1 h-1 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+												<div className="w-1 h-1 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+												<div className="w-1 h-1 rounded-full bg-primary animate-bounce" />
+												<span className="text-[8px] font-black uppercase tracking-tighter text-primary/80">Thinking</span>
+											</div>
 										)}
-									</span>
+									</div>
 								</div>
-							</div>
 							<div className="flex items-center gap-2">
 								{chat.messages.length > 0 && (
 									<button
 										type="button"
 										onClick={() => {
-											toast.custom((t) => (
-												<div 
-													className="flex w-[min(calc(100vw-3rem),340px)] flex-col gap-3 rounded-2xl border border-red-500/20 bg-background/95 p-4 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden group/toast animate-in slide-in-from-bottom-2 fade-in duration-500"
-												>
-													{/* Premium Top Edge Highlight */}
-													<div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
-													
-													{/* Pulsing Ember Background */}
-													<div className="absolute -right-10 -top-10 w-32 h-32 bg-red-500/5 blur-[40px] rounded-full pointer-events-none" />
-													
-													<div className="flex items-start justify-between gap-4 relative z-10">
-														<div className="flex items-center gap-3.5">
-															<div className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 shadow-inner">
-																<RefreshCw size={20} className="animate-spin-slow" />
-																<div className="absolute inset-0 rounded-xl bg-red-500/5 animate-pulse" />
-															</div>
-															<div className="flex flex-col">
-																<span className="text-[13px] font-black text-foreground tracking-tight uppercase italic mb-0.5">
-																	Reset Memory?
-																</span>
-																<span className="text-[11px] font-medium text-muted-foreground/70 leading-tight">
-																	All conversation context will be permanently purged.
-																</span>
-															</div>
-														</div>
-														<button 
-															type="button"
-															data-action="true"
-															onClick={() => toast.dismiss(t)}
-															className="text-muted-foreground/30 hover:text-foreground transition-colors p-1 rounded-md hover:bg-muted/50"
-														>
-															<X size={14} />
-														</button>
-													</div>
-
-													<div className="flex items-center justify-end gap-2.5 mt-2 relative z-10 w-full">
-														<button
-															type="button"
-															data-action="true"
-															onClick={() => toast.dismiss(t)}
-															className="px-3.5 py-1.5 text-[11px] font-bold text-muted-foreground/60 hover:text-foreground rounded-lg transition-all active:scale-95 uppercase tracking-widest"
-														>
-															Abort
-														</button>
-														<button
-															type="button"
-															data-action="true"
-															data-button="true"
-															onClick={() => {
-																toast.dismiss(t);
+											// INDUSTRIAL UPGRADE: Use React 19 startTransition to ensure
+											// the toast logic doesn't block immediate UI feedback (active:scale).
+											React.startTransition(() => {
+												toast.warning("Reset Memory?", {
+													description: "All conversation context will be permanently purged.",
+													duration: 8000,
+													action: {
+														label: "Confirm Wipe",
+														onClick: () => {
+															setIsPurging(true);
+															setTimeout(() => {
 																chat.setMessages([]);
 																localStorage.removeItem("sparkle_chat_history");
+																setIsPurging(false);
 																toast.success("Memory Purged", {
-																	description: "AI is now in a blank state.",
-																	icon: <Zap size={14} className="text-emerald-500 fill-current" />
+																	description: "AI is now in a blank state."
 																});
-															}}
-															className="flex items-center gap-2 px-5 py-2 text-[11px] font-black italic uppercase tracking-wider text-white bg-red-500 hover:bg-red-400 rounded-lg shadow-[0_10px_20px_-5px_rgba(239,68,68,0.4)] hover:shadow-[0_15px_25px_-5px_rgba(239,68,68,0.6)] transition-all active:scale-95"
-														>
-															Confirm Wipe
-														</button>
-													</div>
-
-													{/* Auto-dismiss Life-line */}
-													<div className="absolute bottom-0 left-0 h-[2px] bg-red-500/20 w-full overflow-hidden">
-														<motion.div 
-															initial={{ x: "-100%" }}
-															animate={{ x: "0%" }}
-															transition={{ duration: 10, ease: "linear" }}
-															className="h-full bg-red-500" 
-														/>
-													</div>
-												</div>
-											), { duration: 10000, unstyled: true });
+															}, 800);
+														}
+													}
+												});
+											});
 										}}
 										className="flex items-center justify-center h-8 px-3 rounded-lg hover:bg-red-500/10 text-muted-foreground/40 hover:text-red-500/80 transition-all text-[9px] font-black uppercase tracking-widest gap-2 bg-foreground/[0.02] border border-transparent hover:border-red-500/20"
 										title="Reset AI Context"
@@ -346,13 +596,11 @@ export function FloatingChatWidget() {
 							chat={chat}
 							hideInput={false}
 							showHeader={false}
+							isPurging={isPurging}
 							onLinkClick={handleLinkClick}
-							context={
-								readingContext
-									? { title: readingContext.title, slug: readingContext.slug }
-									: undefined
-							}
+							context={memoizedContext}
 						/>
+						</motion.div>
 					</motion.div>
 				)}
 			</AnimatePresence>

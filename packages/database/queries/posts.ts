@@ -17,6 +17,17 @@ export interface QueryPostSummariesOptions {
   tags?: string[];
 }
 
+export interface ExplorerNode {
+  id: string;          // file cuid or path hash/key
+  name: string;        // display name
+  type: 'folder' | 'file';
+  slug?: string;       // only for files
+  vaultPath: string;   // full physical path
+  displayPath: string; // breadcrumb path
+  hasChildren: boolean;
+  postCount?: number;
+}
+
 function normalizeTags(tags?: string[]) {
   return [...new Set((tags || []).map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
 }
@@ -358,4 +369,74 @@ export async function searchPostSectionsQuery(query: string, limit = 20) {
     )
     .orderBy(sql`section_rank desc`, desc(documents.createdAt))
     .limit(limit);
+}
+/**
+ * getExplorerNodesQuery - specialized query for Directory Explorer.
+ * Implements lazily-loaded cascading panels by calculating nodes at a specific depth.
+ */
+export async function getExplorerNodesQuery(prefix = '工作领域/', depth = 1) {
+  // 1. Calculate the 'split part' index.
+  // Root '工作领域' is index 1.
+  // PARA modules (项目, 归档 etc) are index 2 (depth 1).
+  // Sub-folders are index 3 (depth 2) and so on.
+  const partIndex = depth + 1;
+  const prefixPattern = prefix.endsWith('/') ? prefix : `${prefix}/`;
+
+  // We use a raw SQL query with sub-selects or distinct case-logic 
+  // to correctly identify folders vs files at the target depth.
+  const rawResults = await db.execute(sql`
+    WITH RawNodes AS (
+      SELECT 
+        split_part("vaultPath", '/', ${partIndex}) as node_name,
+        "vaultPath",
+        "slug",
+        "title",
+        "isPublished",
+        "id" as doc_id
+      FROM documents
+      WHERE "vaultPath" LIKE ${`${prefixPattern}%`}
+        AND "area" = 'WORK'
+        AND "isPublished" = true
+    ),
+    AggregatedNodes AS (
+      SELECT 
+        node_name,
+        CASE 
+          WHEN node_name LIKE '%.md' THEN 'file'
+          ELSE 'folder'
+        END as node_type,
+        COUNT(*) as doc_count,
+        MAX(doc_id) as first_id,
+        MAX(slug) as first_slug,
+        MAX(title) as first_title
+      FROM RawNodes
+      WHERE node_name IS NOT NULL AND node_name != ''
+      GROUP BY node_name, node_type
+    )
+    SELECT 
+      node_name,
+      node_type,
+      doc_count,
+      first_slug,
+      first_title,
+      first_id
+    FROM AggregatedNodes
+    ORDER BY node_type DESC, node_name ASC
+  `);
+
+  return rawResults.rows.map((row: any) => {
+    const isFile = row.node_type === 'file';
+    const name = isFile ? row.node_name.replace(/\.md$/, '') : row.node_name;
+    
+    return {
+      id: isFile ? row.first_id : `${prefix}${row.node_name}`,
+      name: isFile ? (row.first_title || name) : name,
+      type: row.node_type as 'folder' | 'file',
+      slug: isFile ? row.first_slug : undefined,
+      vaultPath: isFile ? `${prefix}${row.node_name}` : `${prefix}${row.node_name}/`,
+      displayPath: `${prefix.replace('工作领域/', '')}${row.node_name}`,
+      hasChildren: !isFile,
+      postCount: row.doc_count
+    } as ExplorerNode;
+  });
 }

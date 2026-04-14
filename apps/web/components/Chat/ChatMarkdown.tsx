@@ -8,19 +8,24 @@ import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useMemo } from "react";
-import { toast } from "sonner";
+import { toast } from "@repo/ui";
 
 /**
- * Lightweight Markdown renderer for streaming AI chat responses.
- *
- * Design Decisions:
- * - Zero external dependencies (no react-markdown, no remark).
- * - Handles the subset of Markdown that LLMs actually produce:
- *   headings, bold, italic, inline code, fenced code blocks,
- *   ordered/unordered lists, links, horizontal rules, blockquotes.
- * - Streaming-safe: works correctly with partially-arrived text.
- * - Does NOT use dangerouslySetInnerHTML — all output is React nodes.
+ * INDUSTRIAL CONSTANTS: Pre-compiled regexes to avoid redundant allocation 
+ * in recursive render loops (crucial for streaming performance).
  */
+const INLINE_REGEX =
+	/(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[+((?:[^[\]]|\[[^\]]*\])*)\]+\(([^)]+)\)\]*|\[(\d+)\]|\[\[([^\]\(\)]+)\]\]|\$([^$]+?)\$|((?:^|\n)\s*[-*+]\s+)|(<br\s*\/?>))/gi;
+
+const HR_REGEX = /^\s*([-*_])\1\1+\s*$/;
+const FENCED_CODE_REGEX = /^\s*```\s*(\w*)/;
+const MATH_BLOCK_HEADER_REGEX = /^\s*\$\$\s*$/;
+const HEADING_REGEX = /^\s*(#{1,6})\s+(.+)/;
+const QUOTE_REGEX = /^\s*>\s?(.*)/;
+const LIST_ITEM_REGEX = /^\s*([-+*]|\d+\.)\s+(.*)/;
+const TABLE_ROW_REGEX = /^\s*\|(.+)\|/;
+const TABLE_SEPARATOR_REGEX = /^\s*\|[\s-:|]+\|\s*$/;
+const INTERNAL_LINK_REGEX = /^(https?:\/\/)?(sparkle\.codes|example\.com|localhost(:\d+)?)/;
 
 interface Citation {
 	id: number;
@@ -51,7 +56,7 @@ function MathBlock({ content }: { content: string }) {
 
 	return (
 		<div
-			className="math-block w-full overflow-x-auto my-4 py-2"
+			className="math-block w-full overflow-x-auto my-4 py-2 scrollbar-thin scrollbar-thumb-foreground/10 hover:scrollbar-thumb-foreground/20 scrollbar-track-transparent"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: KaTeX output is safe here
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
@@ -88,11 +93,12 @@ function renderInline(
 	onLinkClick?: (url: string) => void,
 ): React.ReactNode[] {
 	const nodes: React.ReactNode[] = [];
-	// Matches: **bold**, *italic*, `code`, [text](url), [n] citation, [[wikilink]], $math$, list bullet, <br>
-	const inlineRegex =
-		/(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[+((?:[^[\]]|\[[^\]]*\])*)\]+\(([^)]+)\)\]*|\[(\d+)\]|\[\[([^\]\(\)]+)\]\]|\$([^$]+?)\$|((?:^|(?<=<br\s*\/?>))\s*[-*+]\s+)|(<br\s*\/?>))/gi;
 	let lastIndex = 0;
-	let match: RegExpExecArray | null = inlineRegex.exec(text);
+	// INDUSTRIAL UPGRADE: Create a local copy of the regex to prevent infinite loops
+	// during recursion. Shared global regexes with the /g flag maintain state (lastIndex),
+	// which causes nested calls to corrupt the outer loop's iteration.
+	const localRegex = new RegExp(INLINE_REGEX);
+	let match: RegExpExecArray | null = localRegex.exec(text);
 
 	while (match !== null) {
 		// --- Text before match ---
@@ -124,7 +130,7 @@ function renderInline(
 			const isInternal = rawHref.startsWith("/") || 
 				rawHref.startsWith("blog/") || 
 				rawHref.startsWith("docs/") ||
-				/^(https?:\/\/)?(sparkle\.codes|example\.com|localhost(:\d+)?)/.test(rawHref);
+				INTERNAL_LINK_REGEX.test(rawHref);
 			
 			let href = rawHref;
 			if (isInternal) {
@@ -332,8 +338,8 @@ function renderInline(
 			nodes.push(<br key={key} />);
 		}
 
-		lastIndex = inlineRegex.lastIndex;
-		match = inlineRegex.exec(text);
+		lastIndex = localRegex.lastIndex;
+		match = localRegex.exec(text);
 	}
 
 	if (lastIndex < text.length) {
@@ -368,7 +374,7 @@ function parseMarkdown(
 		const line = lines[i];
 
 		// 1. Horizontal Rules
-		if (line.match(/^\s*([-*_])\1\1+\s*$/)) {
+		if (HR_REGEX.test(line)) {
 			elements.push(
 				<hr key={`hr-${i}`} className="my-10 h-0.5 border-0 bg-gradient-to-r from-transparent via-border/80 to-transparent" />,
 			);
@@ -377,7 +383,7 @@ function parseMarkdown(
 		}
 
 		// 2. Fenced Code Blocks
-		const codeMatch = line.match(/^\s*```\s*(\w*)/);
+		const codeMatch = line.match(FENCED_CODE_REGEX);
 		if (codeMatch) {
 			const lang = codeMatch[1] || "text";
 			const codeLines: string[] = [];
@@ -412,7 +418,14 @@ function parseMarkdown(
 							Copy
 						</button>
 					</div>
-					<pre className="p-4 overflow-x-auto text-[13px] leading-relaxed bg-transparent">
+					<pre
+						className="p-4 overflow-x-auto text-[13px] leading-relaxed bg-transparent scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 scrollbar-track-transparent"
+						/* Why color-scheme: dark — The code block has a forced dark bg (#0d1117).
+						 * Without this, the browser paints the native overlay scrollbar using the page's
+						 * light-mode color scheme, producing a white thumb on a dark background.
+						 * This forces the OS-level scrollbar to render in dark mode regardless of page theme. */
+						style={{ colorScheme: "dark" }}
+					>
 						<code className="font-mono text-zinc-200 bg-transparent border-none p-0">
 							{codeContent}
 						</code>
@@ -423,7 +436,7 @@ function parseMarkdown(
 		}
 
 		// 2.5. Math Blocks ($$ ... $$)
-		const mathBlockHeaderMatch = line.trim().match(/^\s*\$\$\s*$/);
+		const mathBlockHeaderMatch = line.match(MATH_BLOCK_HEADER_REGEX);
 		if (mathBlockHeaderMatch || line.trim().startsWith("$$")) {
 			const mathLines: string[] = [];
 			const startLine = i;
@@ -445,7 +458,7 @@ function parseMarkdown(
 		}
 
 		// 3. Headings
-		const headingMatch = line.match(/^\s*(#{1,6})\s+(.+)/);
+		const headingMatch = line.match(HEADING_REGEX);
 		if (headingMatch) {
 			const level = headingMatch[1].length;
 			const Tag = `h${level}` as keyof React.JSX.IntrinsicElements;
@@ -465,11 +478,11 @@ function parseMarkdown(
 		}
 
 		// 4. Blockquotes
-		const quoteMatch = line.match(/^\s*>\s?(.*)/);
+		const quoteMatch = line.match(QUOTE_REGEX);
 		if (quoteMatch) {
 			const quoteLines: string[] = [];
 			while (i < lines.length) {
-				const currentQuoteMatch = lines[i].match(/^\s*>\s?(.*)/);
+				const currentQuoteMatch = lines[i].match(QUOTE_REGEX);
 				if (!currentQuoteMatch && lines[i].trim() !== "") {
 					break;
 				}
@@ -491,14 +504,14 @@ function parseMarkdown(
 		}
 
 		// 5. Lists
-		const listMatch = line.match(/^\s*([-+*]|\d+\.)\s+(.*)/);
+		const listMatch = line.match(LIST_ITEM_REGEX);
 		if (listMatch) {
 			const listType = /^\d/.test(listMatch[1]) ? "ol" : "ul";
 			const items: React.ReactNode[] = [];
 			const indent = line.search(/\S/);
-
+	
 			while (i < lines.length) {
-				const listItemMatch = lines[i].match(/^\s*([-+*]|\d+\.)\s+(.*)/);
+				const listItemMatch = lines[i].match(LIST_ITEM_REGEX);
 				if (!listItemMatch) {
 					break;
 				}
@@ -521,15 +534,15 @@ function parseMarkdown(
 		}
 
 		// 5. Tables
-		const tableMatch = line.match(/^\s*\|(.+)\|/);
+		const tableMatch = line.match(TABLE_ROW_REGEX);
 		if (tableMatch) {
 			const tableRows: string[][] = [];
 			let hasSeparator = false;
-
-			while (i < lines.length && lines[i].match(/^\s*\|(.+)\|/)) {
+	
+			while (i < lines.length && lines[i].match(TABLE_ROW_REGEX)) {
 				const rowLine = lines[i].trim();
 				// Check for separator line: |---| or | :--- |
-				if (rowLine.match(/^\s*\|[\s-:|]+\|\s*$/)) {
+				if (TABLE_SEPARATOR_REGEX.test(rowLine)) {
 					hasSeparator = true;
 					i++;
 					continue;
@@ -621,7 +634,7 @@ export function ChatMarkdown({
 	return (
 		<div
 			className={cn(
-				"markdown-body !max-w-full !m-0 !text-left break-words overflow-x-auto",
+				"markdown-body !max-w-full !m-0 !text-left break-words overflow-x-auto scrollbar-thin scrollbar-thumb-foreground/10 hover:scrollbar-thumb-foreground/20 scrollbar-track-transparent",
 				// Custom overrides for chat context:
 				// - Disable italics for blockquotes (looks cleaner in chat)
 				"[&_blockquote]:font-normal [&_blockquote]:italic-none [&_blockquote]:not-italic",

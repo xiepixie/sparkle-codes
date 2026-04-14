@@ -1,7 +1,5 @@
 "use client";
 
-import { generateContentHash } from "@repo/utils";
-import "katex/dist/katex.min.css";
 import React, {
 	useCallback,
 	useEffect,
@@ -9,7 +7,8 @@ import React, {
 	useMemo,
 	useRef,
 } from "react";
-import { toast } from "sonner";
+import "katex/dist/katex.min.css";
+import { generateContentHash } from "@repo/utils";
 import "./markdown.css";
 
 // --- CONSTANTS & HELPERS ---
@@ -114,6 +113,27 @@ function copyToClipboard(text: string): Promise<boolean> {
 		.writeText(text)
 		.then(() => true)
 		.catch(() => false);
+}
+
+/**
+ * DECOUPLED NOTIFICATION HUB (决策型注释)
+ * 为什么：MarkdownRenderer 作为一个核心解析包，不应硬依赖于 Web 特有的 UI Toast 实例。
+ * 通过自定义事件 app-notify 派发消息，由 ClientProviders 进行捕获并桥接到 @repo/ui/toast。
+ * 这样做实现了包的解耦，并允许在不同环境下（如 Docs 或 Web）灵活调整通知实现。
+ */
+function dispatchNotify(detail: {
+	message: string;
+	level?: "success" | "error" | "info" | "warning";
+	description?: string;
+}) {
+	if (typeof window === "undefined") {
+		return;
+	}
+	window.dispatchEvent(
+		new CustomEvent("app-notify", {
+			detail,
+		}),
+	);
 }
 
 // --- MATH HYDRATION ---
@@ -526,6 +546,11 @@ async function renderMathElement(el: HTMLElement) {
 		el.classList.add("is-rendered");
 	} catch (err) {
 		console.error("KaTeX error:", err);
+		dispatchNotify({
+			message: "Mathematics Rendering Error",
+			level: "error",
+			description: "The LaTeX syntax in this block appears to be invalid.",
+		});
 	} finally {
 		delete el.dataset.renderingMath;
 	}
@@ -626,6 +651,11 @@ async function hydrateMermaid(el: HTMLElement, isDark: boolean, force = false) {
 		el.dataset.mermaidContent = content;
 	} catch (err) {
 		console.error("Mermaid error:", err);
+		dispatchNotify({
+			message: "Diagram Rendering Error",
+			level: "error",
+			description: "Failed to render the Mermaid diagram. Please check the syntax.",
+		});
 	}
 }
 
@@ -817,6 +847,28 @@ function hydrateCodeBlocks(el: HTMLElement) {
 	el.dataset.codeHydrated = "true";
 }
 
+function hydrateLinks(root: HTMLElement) {
+	root.querySelectorAll("a").forEach((a) => {
+		const href = a.getAttribute("href");
+		if (!href) {
+			return;
+		}
+
+		// Robust Internal Detection: check for leading slash, blog/docs prefixes, or project-specific domains
+		const isInternal =
+			href.startsWith("/") ||
+			href.startsWith("#") ||
+			href.startsWith("mailto:") ||
+			href.startsWith("tel:") ||
+			href.startsWith(window.location.origin);
+
+		if (!isInternal && href.startsWith("http")) {
+			a.setAttribute("target", "_blank");
+			a.setAttribute("rel", "noopener noreferrer");
+		}
+	});
+}
+
 // --- COMPONENT PROPS ---
 
 export interface MarkdownRendererProps {
@@ -927,6 +979,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 						if (root.matches(".wiki-embed[data-embed-kind='image']")) {
 							hydrateImageEmbed(root);
 						}
+
+						// Hydrate Links (External target Fix)
+						hydrateLinks(root);
 					},
 					{ timeout: 2000 },
 				);
@@ -1113,6 +1168,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 							onWikiLinkClick(linkTarget, href || undefined);
 							return;
 						}
+					} else if (href?.startsWith("http")) {
+						// For external links, ensure consistent target="_blank" behavior 
+						// even if hydration hasn't completed or if the element was updated.
+						wikiLink.setAttribute("target", "_blank");
+						wikiLink.setAttribute("rel", "noopener noreferrer");
 					}
 					// For external links, we let the default browser behavior (<a> tag) handle it.
 				}
@@ -1173,12 +1233,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 						let label = "LaTeX";
 						const wrapType = mathCopyBtn.dataset.wrap;
 						
-						if (wrapType === "$$") { finalTex = `$$\n${tex}\n$$`; label = "$$"; }
-						else if (wrapType === "\\[") { finalTex = `\\[\n${tex}\n\\]`; label = "\\["; }
-						else if (wrapType === "raw") { finalTex = tex; label = "RAW"; }
+						if (wrapType === "$$") { finalTex = `$$\n${tex}\n$$`; label = "$$ ... $$"; }
+						else if (wrapType === "\\[") { finalTex = `\\[\n${tex}\n\\]`; label = "\\[ ... \\]"; }
+						else if (wrapType === "raw") { finalTex = tex; label = "RAW TEXT"; }
 						
 						copyToClipboard(finalTex).then(() => {
-							toast.success(`Copied as ${label}`);
+							dispatchNotify({
+								message: `Copied as ${label}`,
+								level: "success",
+								description: "The formula is now in your clipboard.",
+							});
 							
 							// Handle visual feedback
 							const container = mathCopyBtn.closest(".code-fence-container, .group\\/code");
@@ -1218,7 +1282,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 
 						if (text) {
 							copyToClipboard(text).then(() => {
-								toast.success("Code copied");
+								dispatchNotify({
+									message: "Code block copied",
+									level: "success",
+									description: "Snippet has been saved to your clipboard.",
+								});
 								container.classList.add("is-copied");
 								setTimeout(() => container.classList.remove("is-copied"), 2000);
 							});
@@ -1246,11 +1314,20 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 					const filename = imgActionBtn.dataset.filename;
 
 					if (imgActionBtn.classList.contains("copy-img-btn") && url) {
-						copyToClipboard(url).then(() => toast.success("Image URL copied"));
+						copyToClipboard(url).then(() => dispatchNotify({
+							message: "Image link copied",
+							level: "success",
+							description: "The asset URL has been saved to your clipboard.",
+						}));
 					} else if (
 						imgActionBtn.classList.contains("download-img-btn") &&
 						url
 					) {
+						dispatchNotify({
+							message: "Starting download",
+							level: "info",
+							description: filename || "The image is being saved.",
+						});
 						const a = document.createElement("a");
 						a.href = url;
 						a.download = filename || "downloaded-image.png";
@@ -1295,7 +1372,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
 							// Inline Math: Quick copy with $ wrapping AND Toggle Source
 							const finalTex = `$${tex}$`;
 							copyToClipboard(finalTex).then(() => {
-								toast.success("Copied as $ ... $");
+								dispatchNotify({
+									message: "Copied as $ ... $",
+									level: "success",
+									description: "Inline LaTeX formula is ready for use.",
+								});
 							});
 							toggleMathSource(mathEl);
 						} else {

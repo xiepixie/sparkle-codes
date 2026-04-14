@@ -28,8 +28,8 @@ export * from "./components/table";
 export * from "./components/tabs";
 export * from "./components/Tag";
 export * from "./components/textarea";
+export * from "./components/starry-toast";
 export * from "./components/theme-cookie-sync";
-export * from "./components/toast";
 export * from "./components/tooltip";
 export * from "./lib";
 

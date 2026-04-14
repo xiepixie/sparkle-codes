@@ -13,7 +13,8 @@ import {
 	slugifyPath,
 } from "@repo/utils";
 import DOMPurify from "dompurify";
-import { ArrowRight, FileText, Loader2 } from "lucide-react";
+import { Skeleton } from "@repo/ui/components/skeleton";
+import { ArrowRight, FileText, Loader2, Unlink, HelpCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -80,9 +81,9 @@ function extractFragmentFromDOM(
 			}
 
 			const headingHtml = prevHeading
-				? `<div class="preview-context-heading -mx-6 px-6 pointer-events-none sticky top-0 bg-background/80 backdrop-blur-lg z-20 shadow-sm py-2.5 border-b border-primary/5 flex items-center gap-2.5 mb-4 mb-2">
-           <div class="w-1 h-3.5 bg-primary/40 rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.3)]"></div>
-           <div class="flex-1 min-w-0 [&_*]:!m-0 [&_*]:!text-sm [&_*]:!font-bold [&_*]:!text-muted-foreground [&_*]:truncate [&_*]:!leading-tight">
+				? `<div class="preview-context-heading -mx-5 px-5 pointer-events-none sticky top-0 bg-background/95 backdrop-blur-xl z-20 shadow-sm py-2 border-b border-primary/10 flex items-center gap-2 mb-2">
+           <div class="w-1 h-3 bg-primary/60 rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.4)]"></div>
+           <div class="flex-1 min-w-0 [&_*]:!m-0 [&_*]:!text-[0.8rem] [&_*]:!font-bold [&_*]:!text-foreground/80 [&_*]:truncate [&_*]:!leading-tight">
              ${prevHeading.outerHTML}
            </div>
          </div>`
@@ -98,8 +99,8 @@ function extractFragmentFromDOM(
 
 			return `
         ${headingHtml}
-        <div class="wiki-block-highlight highlight-target my-1 relative border-l-2 border-primary/20 pl-4 py-1.5 -ml-1 transition-colors hover:border-primary/40" data-block-id="${targetEl.id}">
-           <div class="relative z-10 [&_*:first-child]:!mt-0 [&_*:last-child]:!mb-0">${contentHtml}</div>
+        <div class="wiki-block-highlight highlight-target my-0.5 relative border-l-2 border-primary/20 pl-4 py-1.5 -ml-1 transition-colors hover:border-primary/40" data-block-id="${targetEl.id}">
+           <div class="relative z-10 [&_*:first-child]:!mt-0 [&_*:last-child]:!mb-0 text-[0.875rem] leading-[1.6]">${contentHtml}</div>
         </div>`;
 		}
 		return null;
@@ -131,7 +132,7 @@ function extractFragmentFromDOM(
 	}
 
 	// Fallback: return the element itself wrapped in a highlight container
-	return `<div class="highlight-target bg-primary/[0.04] p-5 rounded-[var(--radius-lg)] border border-primary/10 shadow-sm leading-relaxed [&_*:first-child]:!mt-0 [&_*:last-child]:!mb-0">${targetEl.outerHTML}</div>`;
+	return `<div class="highlight-target bg-primary/[0.03] p-3 rounded-[var(--radius-md)] border border-primary/10 shadow-sm leading-relaxed [&_*:first-child]:!mt-0 [&_*:last-child]:!mb-0">${targetEl.outerHTML}</div>`;
 }
 
 export function WikiLinkPreviewManager({
@@ -533,87 +534,86 @@ export function WikiLinkPreviewManager({
 		return null;
 	}
 
-	const content = (
-		// biome-ignore lint/a11y/noStaticElementInteractions: Hover card wrapping element doesn't need focus
-		<div
-			ref={cardRef}
-			className={cn(
-				"absolute z-[100] transition-[transform,opacity] duration-300 ease-out transform-gpu",
-				isCalculated
-					? "opacity-100 scale-100"
-					: "opacity-0 scale-95 pointer-events-none",
-			)}
-			style={{ top: `${cardPos.top}px`, left: `${cardPos.left}px` }}
-			onMouseEnter={handleCardMouseEnter}
-			onMouseLeave={handleCardMouseLeave}
-		>
-			<Card className="w-[min(480px,90vw)] max-w-[480px] shadow-[var(--shadow-ambient)] dark:shadow-none border border-border/80 bg-background/95 dark:bg-card/95 backdrop-blur-2xl overflow-hidden ring-1 ring-white/10 dark:ring-white/5 relative rounded-[var(--radius-xl)]">
-				<div className="absolute inset-0 rounded-[var(--radius-xl)] pointer-events-none shadow-[var(--shadow-inner-glow)]" />
-
-				{isLoading ? (
-					<div className="p-8 flex flex-col items-center justify-center gap-4">
-						<div className="relative">
-							<div className="absolute inset-0 bg-primary/20 blur-xl rounded-full mix-blend-screen animate-pulse" />
-							<Loader2 className="w-8 h-8 text-primary animate-spin relative z-10" />
-						</div>
-						<p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest animate-pulse font-mono flex items-center gap-2">
-							<span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
-							Resolving context
-						</p>
-					</div>
-				) : previewData === "error" ? (
-					<div className="p-8 flex flex-col items-center justify-center text-center gap-3">
-						<div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center text-destructive/80 mb-1 ring-1 ring-destructive/20 border border-destructive/20 shadow-glow">
-							<span className="text-xl font-bold">!</span>
-						</div>
-						<p className="text-base text-foreground font-semibold">
-							Link Broken
-						</p>
-						<p className="text-sm text-muted-foreground/80 max-w-[200px]">
-							The target document couldn't be loaded or doesn't exist.
-						</p>
-					</div>
-				) : previewData ? (
-					<>
-						<div
-							className={`absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-primary/60 via-primary/40 to-transparent ${placement === "top" ? "top-auto bottom-0" : ""}`}
-						/>
-						<CardHeader className="p-6 pb-3">
-							<div className="flex justify-between items-start mb-2 gap-4">
-								<div className="flex gap-2 items-center flex-wrap">
-									{previewData.area && (
-										<Badge className="text-[10px] uppercase font-bold tracking-wider text-primary border-primary/20 bg-primary/5 px-2 py-0.5 rounded-sm shadow-sm ring-1 ring-primary/10">
-											{previewData.area}
-										</Badge>
-									)}
-									{(!previewData.status || previewData.status === "draft") && (
-										<Badge className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground border-border/40 bg-muted/20 px-2 py-0.5 rounded-sm shadow-sm">
-											Draft
-										</Badge>
-									)}
-								</div>
-								<button
-									type="button"
-									className="text-primary/40 hover:text-primary transition-[color,transform] cursor-pointer hover:scale-110 active:scale-95 group/open-btn"
-									data-cursor="action"
-									data-magnet="true"
-									onClick={(e) => {
-										e.preventDefault();
-										e.stopPropagation();
-										handleNavigate(
-											hoveredLink?.slug || "",
-											resolveTargetUrl() || undefined,
-										);
-									}}
-									aria-label="Open document"
-								>
-									<ArrowRight className="w-5 h-5 transition-transform group-hover/open-btn:translate-x-0.5" />
-								</button>
+	const renderContent = () => {
+		if (isLoading) {
+			return (
+				<>
+					<CardHeader className="p-5 pb-3">
+						<div className="flex justify-between items-start mb-2 gap-4">
+							<div className="flex gap-2 items-center">
+								<Skeleton className="h-4 w-14 rounded-sm bg-primary/5" />
+								<Skeleton className="h-4 w-10 rounded-sm bg-muted/10" />
 							</div>
+							<Skeleton className="w-4 h-4 rounded-full bg-muted/10" />
+						</div>
+						<div className="space-y-2 mt-1">
+							<Skeleton className="h-7 w-[80%] rounded-md bg-muted/10 animate-pulse" />
+							<Skeleton className="h-7 w-[35%] rounded-md bg-muted/10 animate-pulse" />
+						</div>
+					</CardHeader>
+					<CardContent className="p-5 pt-0 space-y-3">
+						<div className="space-y-1.5">
+							{[1, 2, 3].map((i) => (
+								<Skeleton
+									key={i}
+									className="h-3.5 w-full rounded bg-muted/10"
+									style={{ width: `${100 - i * 15}%`, opacity: 1 - i * 0.2 }}
+								/>
+							))}
+						</div>
+						<div className="flex gap-2 pt-1">
+							{[1, 2].map((i) => (
+								<Skeleton key={i} className="h-4.5 w-12 rounded bg-muted/10" />
+							))}
+						</div>
+					</CardContent>
+				</>
+			);
+		}
 
-							<CardTitle
-								className="text-2xl font-black leading-tight text-foreground transition-colors hover:text-primary mt-1 mb-2 group inline-block tracking-tight cursor-pointer"
-								data-cursor="navigate"
+		if (previewData === "error") {
+			return (
+				<div className="p-8 flex flex-col items-center justify-center text-center gap-3.5 min-h-[180px]">
+					<div className="w-12 h-12 rounded-xl bg-destructive/5 flex items-center justify-center text-destructive/40 ring-1 ring-destructive/10 border border-destructive/10 shadow-glow-sm transition-transform hover:scale-110 duration-500">
+						<Unlink className="w-6 h-6" />
+					</div>
+					<div className="space-y-1">
+						<p className="text-base text-foreground font-bold tracking-tight">
+							Connection Lost
+						</p>
+						<p className="text-xs text-muted-foreground/70 max-w-[220px] leading-relaxed">
+							Target document unreachable or missing from vault.
+						</p>
+					</div>
+				</div>
+			);
+		}
+
+		if (previewData) {
+			return (
+				<>
+					<div
+						className={`absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-primary/50 via-primary/30 to-transparent ${placement === "top" ? "top-auto bottom-0" : ""}`}
+					/>
+					<CardHeader className="p-5 pb-3">
+						<div className="flex justify-between items-start mb-2 gap-4">
+							<div className="flex gap-1.5 items-center flex-wrap">
+								{previewData.area && (
+									<Badge className="text-[10px] uppercase font-bold tracking-[0.05em] text-primary border-primary/20 bg-primary/5 px-1.5 py-0 rounded-sm shadow-none ring-1 ring-primary/10 transition-colors hover:bg-primary/10">
+										{previewData.area}
+									</Badge>
+								)}
+								{(!previewData.status || previewData.status === "draft") && (
+									<Badge className="text-[10px] uppercase font-bold tracking-[0.05em] text-muted-foreground/70 border-border/40 bg-muted/20 px-1.5 py-0 rounded-sm shadow-none">
+										DRAFT
+									</Badge>
+								)}
+							</div>
+							<button
+								type="button"
+								className="text-primary/40 hover:text-primary transition-all cursor-pointer hover:scale-110 active:scale-90 group/open-btn relative p-1 -m-1"
+								data-cursor="action"
+								data-magnet="true"
 								onClick={(e) => {
 									e.preventDefault();
 									e.stopPropagation();
@@ -622,115 +622,160 @@ export function WikiLinkPreviewManager({
 										resolveTargetUrl() || undefined,
 									);
 								}}
+								aria-label="Open document"
 							>
-								<div className="flex flex-col drop-shadow-sm">
-									<MarkdownSnippet
-										content={previewData.title || ""}
-										hitKind="title"
-										className="group-hover:text-primary transition-colors"
-									/>
-									<span className="block h-[2px] w-0 bg-primary/40 transition-[width] duration-300 group-hover:w-full mt-1.5 rounded-full" />
-								</div>
-							</CardTitle>
-						</CardHeader>
-						<CardContent className="p-6 pt-0">
-							{/* biome-ignore lint: Accessibility handled via hover card interaction */}
-							<div
-								className="prose prose-sm prose-starry dark:prose-invert starry-night-theme markdown-body wiki-link-preview-content max-w-none text-foreground leading-relaxed overflow-x-hidden overflow-y-auto max-h-[45vh] min-h-[120px] relative scrollbar-thin scrollbar-thumb-primary/20 hover:scrollbar-thumb-primary/40 pr-1.5"
-								onClick={(e) => {
-									// Catch wiki-link clicks inside the preview to prevent page reloads
-									const target = e.target as HTMLElement;
-									const link = target.closest("a") as HTMLAnchorElement;
-									if (link) {
-										const isWikiLink =
-											link.classList.contains("wiki-link") ||
-											link.hasAttribute("data-page");
-										const isBlogLink = link
-											.getAttribute("href")
-											?.startsWith("/blog/");
+								<div className="absolute inset-0 bg-primary/0 group-hover/open-btn:bg-primary/5 rounded-full transition-colors" />
+								<ArrowRight className="w-4.5 h-4.5 transition-transform group-hover/open-btn:translate-x-0.5 relative z-10" />
+							</button>
+						</div>
 
-										if (isWikiLink || isBlogLink) {
-											e.preventDefault();
-											e.stopPropagation();
-											let targetHref = link.getAttribute("href") || "";
+						<CardTitle
+							className="text-[1.25rem] font-black leading-tight text-foreground transition-colors hover:text-primary mt-0 mb-0.5 group inline-block tracking-tight cursor-pointer"
+							data-cursor="navigate"
+							onClick={(e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								handleNavigate(
+									hoveredLink?.slug || "",
+									resolveTargetUrl() || undefined,
+								);
+							}}
+						>
+							<div className="flex flex-col">
+								<MarkdownSnippet
+									content={previewData.title || ""}
+									hitKind="title"
+									className="group-hover:text-primary transition-colors"
+								/>
+								<span className="block h-[1.5px] w-0 bg-primary/40 transition-[width] duration-500 ease-out group-hover:w-full mt-1 rounded-full" />
+							</div>
+						</CardTitle>
+					</CardHeader>
+					<CardContent className="p-5 pt-0">
+						{/* biome-ignore lint: Accessibility handled via hover card interaction */}
+						<div
+							className="prose prose-sm prose-starry dark:prose-invert starry-night-theme markdown-body wiki-link-preview-content max-w-none text-[0.85rem] text-foreground/85 leading-[1.6] overflow-x-hidden overflow-y-auto max-h-[42vh] relative scrollbar-thin scrollbar-thumb-primary/20 hover:scrollbar-thumb-primary/40 pr-3 -mr-1 [&_p]:my-2 last:[&_p]:mb-0 [&_hr]:my-4 first:[&_hr]:mt-0"
+							onClick={(e) => {
+								// Catch wiki-link clicks inside the preview to prevent page reloads
+								const target = e.target as HTMLElement;
+								const link = target.closest("a") as HTMLAnchorElement;
+								if (link) {
+									const isWikiLink =
+										link.classList.contains("wiki-link") ||
+										link.hasAttribute("data-page");
+									const isBlogLink = link
+										.getAttribute("href")
+										?.startsWith("/blog/");
 
-											// If it's a wiki link in the preview, handle it properly with unified protocol
-											if (isWikiLink) {
-												// We extract the pure fragment and dataset and let the canonical logic handle it
-												targetHref = resolveTargetUrl(); // Re-use the card's strict resolution logic for embedded links
-											}
+									if (isWikiLink || isBlogLink) {
+										e.preventDefault();
+										e.stopPropagation();
+										let targetHref = link.getAttribute("href") || "";
 
-											if (targetHref) {
-												const directSlug = decodeURIComponent(
-													link.dataset.target || targetHref,
-												);
-												handleNavigate(directSlug, targetHref);
-											}
+										// If it's a wiki link in the preview, handle it properly with unified protocol
+										if (isWikiLink) {
+											// We extract the pure fragment and dataset and let the canonical logic handle it
+											targetHref = resolveTargetUrl(); // Re-use the card's strict resolution logic for embedded links
+										}
+
+										if (targetHref) {
+											const directSlug = decodeURIComponent(
+												link.dataset.target || targetHref,
+											);
+											handleNavigate(directSlug, targetHref);
 										}
 									}
-								}}
-							>
-								{previewData.htmlContent ? (
-									<div
-										className="relative z-10"
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: Sanitized backend output (Phase 7)
-										dangerouslySetInnerHTML={{
-											__html:
-												typeof window !== "undefined"
-													? DOMPurify.sanitize(previewData.htmlContent)
-													: previewData.htmlContent,
-										}}
-									/>
-								) : (
-									<MarkdownSnippet
-										content={previewData.description || ""}
-										className="text-sm block"
-									/>
-								)}
-								{!previewData.htmlContent &&
-									(!previewData.description ||
-										previewData.description === "No context available.") && (
-										<span className="italic opacity-60 flex items-center gap-2 mt-2">
-											<FileText className="w-4 h-4" /> No content snippet
-											available.
-										</span>
-									)}
-							</div>
-
-							{previewData.tags && previewData.tags.length > 0 && (
-								<div className="flex flex-wrap gap-2 pt-4 mt-2">
-									{previewData.tags.slice(0, 4).map((tag: string) => (
-										<span
-											key={tag}
-											className="text-[10px] font-medium text-foreground/70 bg-secondary/50 border border-border/50 rounded px-2 py-0.5 transition-[color,border-color] hover:text-primary hover:border-primary/30 cursor-pointer"
-											data-cursor="tag"
-											data-magnet="true"
-										>
-											#{tag}
-										</span>
-									))}
-									{previewData.tags.length > 4 && (
-										<span className="text-[10px] font-medium text-muted-foreground/60 bg-transparent px-2 py-0.5">
-											+{previewData.tags.length - 4}
-										</span>
-									)}
-								</div>
+								}
+							}}
+						>
+							{previewData.htmlContent ? (
+								<div
+									className="relative z-10"
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: Sanitized backend output (Phase 7)
+									dangerouslySetInnerHTML={{
+										__html:
+											typeof window !== "undefined"
+												? DOMPurify.sanitize(previewData.htmlContent)
+												: previewData.htmlContent,
+									}}
+								/>
+							) : (
+								<MarkdownSnippet
+									content={previewData.description || ""}
+									className="text-sm block opacity-80"
+								/>
 							)}
-						</CardContent>
-					</>
-				) : (
-					<div className="p-8 flex flex-col items-center justify-center text-center gap-3">
-						<div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground/40 text-xl font-bold mb-1 ring-1 ring-border shadow-[var(--shadow-inner-glow)]">
-							?
+							{!previewData.htmlContent &&
+								(!previewData.description ||
+									previewData.description === "No context available.") && (
+									<span className="italic opacity-50 flex items-center gap-2 mt-3 text-[0.8rem] font-medium py-2 px-3 bg-muted/10 rounded-md border border-border/20">
+										<FileText className="w-3.5 h-3.5 text-muted-foreground/50" />{" "}
+										No previewable content available for this entry.
+									</span>
+								)}
 						</div>
-						<p className="text-base text-foreground font-semibold">
-							Unknown Link
-						</p>
-						<p className="text-sm text-muted-foreground/70">
-							This document hasn't been created yet.
-						</p>
-					</div>
-				)}
+
+						{previewData.tags && previewData.tags.length > 0 && (
+							<div className="flex flex-wrap gap-1.5 pt-3 mt-2 border-t border-border/40">
+								{previewData.tags.slice(0, 4).map((tag: string) => (
+									<span
+										key={tag}
+										className="text-[9px] font-bold uppercase tracking-wider text-foreground/50 bg-secondary/20 border border-border/30 rounded-[2px] px-2 py-0.5 transition-all hover:text-primary hover:border-primary/40 hover:bg-primary/5 cursor-pointer"
+										data-cursor="tag"
+										data-magnet="true"
+									>
+										#{tag}
+									</span>
+								))}
+								{previewData.tags.length > 4 && (
+									<span className="text-[9px] font-black tracking-widest text-muted-foreground/30 bg-transparent px-1 py-0.5 uppercase scale-90">
+										+{previewData.tags.length - 4}
+									</span>
+								)}
+							</div>
+						)}
+					</CardContent>
+				</>
+			);
+		}
+
+		return (
+			<div className="p-8 flex flex-col items-center justify-center text-center gap-3.5 min-h-[180px]">
+				<div className="w-12 h-12 rounded-full bg-muted/20 flex items-center justify-center text-muted-foreground/30 text-xl font-black mb-0.5 ring-1 ring-border/40 shadow-inner">
+					<HelpCircle className="w-6 h-6" />
+				</div>
+				<div className="space-y-1">
+					<p className="text-base text-foreground font-bold tracking-tight">
+						Unknown Path
+					</p>
+					<p className="text-xs text-muted-foreground/70 max-w-[220px] leading-relaxed">
+						Placeholder or document not yet initialized.
+					</p>
+				</div>
+			</div>
+		);
+	};
+
+	const content = (
+		// biome-ignore lint/a11y/noStaticElementInteractions: Hover card wrapping element doesn't need focus
+		<div
+			ref={cardRef}
+			className={cn(
+				"absolute z-[100] transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1.0)] transform-gpu",
+				isCalculated
+					? "opacity-100 scale-100 translate-y-0"
+					: "opacity-0 scale-[0.96] translate-y-1 pointer-events-none",
+			)}
+			style={{
+				top: `${cardPos.top}px`,
+				left: `${cardPos.left}px`,
+			}}
+			onMouseEnter={handleCardMouseEnter}
+			onMouseLeave={handleCardMouseLeave}
+		>
+			<Card className="w-[min(540px,94vw)] max-w-[540px] shadow-glow dark:shadow-none border border-border/80 bg-background/95 dark:bg-card/95 backdrop-blur-3xl overflow-hidden ring-1 ring-white/20 dark:ring-white/5 relative rounded-[var(--radius-xl)]">
+				<div className="absolute inset-0 rounded-[var(--radius-xl)] pointer-events-none shadow-[var(--shadow-inner-glow)] bg-gradient-to-br from-primary/[0.02] via-transparent to-transparent" />
+				{renderContent()}
 			</Card>
 		</div>
 	);

@@ -1,39 +1,29 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
+
+const MOCK_WEEKS = [
+	[1, 2, 1, 0, 0, 0, 0],
+	[0, 0, 1, 2, 1, 0, 0],
+	[0, 1, 0, 0, 0, 1, 2],
+	[1, 3, 2, 1, 0, 0, 1],
+	[0, 0, 1, 0, 2, 1, 0],
+	[0, 1, 2, 1, 0, 0, 0],
+	[1, 2, 4, 3, 2, 1, 0],
+	[0, 1, 0, 1, 2, 1, 0],
+	[0, 0, 1, 2, 1, 0, 1],
+	[1, 3, 2, 1, 0, 1, 2],
+	[0, 1, 0, 1, 0, 0, 1],
+	[1, 2, 1, 3, 2, 1, 2],
+	[0, 1, 2, 1, 1, 0, 1],
+	[2, 4, 3, 1, 2, 3, 1],
+];
 
 export function GithubActivity() {
-	const [weeks, setWeeks] = useState<number[][]>([]);
-
-	useEffect(() => {
-		// Generate mock GitHub contribution data on the client to avoid Next.js 15 pre-render errors
-		const data = Array.from({ length: 14 }).map(() =>
-			Array.from({ length: 7 }).map(() => Math.floor(Math.random() * 5)),
-		);
-		setWeeks(data);
-	}, []);
-
-	// Initial skeleton while generating random state
-	if (weeks.length === 0) {
-		return (
-			<div className="flex flex-col h-full justify-between animate-pulse opacity-50">
-				<div className="flex gap-1.5 overflow-hidden">
-					{Array.from({ length: 14 }).map((_, i) => (
-						<div key={i} className="flex flex-col gap-1.5 flex-1">
-							{Array.from({ length: 7 }).map((_, j) => (
-								<div
-									key={j}
-									className="w-full aspect-square rounded-[2px] bg-primary/10"
-								/>
-							))}
-						</div>
-					))}
-				</div>
-			</div>
-		);
-	}
+	const [weeks] = useState<number[][]>(MOCK_WEEKS);
 
 	return (
+
 		<div className="flex flex-col h-full justify-between">
 			<div className="flex gap-1.5 overflow-hidden">
 				{weeks.map((week, weekIndex) => (

@@ -1,9 +1,10 @@
 "use client";
 
-import { ThemeProvider, useTheme } from "next-themes";
-import { type ReactNode, useEffect } from "react";
-import { Toaster, toast } from "sonner";
 import { config } from "@/config";
+import { StarryBackground, StarCursor, StarryToaster, ThemeCookieSync, toast } from "@repo/ui";
+import { ThemeProvider } from "next-themes";
+import { usePathname } from "next/navigation";
+import { type ReactNode, useEffect } from "react";
 
 // Suppress React 19 "Encountered a script tag" warning from next-themes
 if (typeof window !== "undefined") {
@@ -23,9 +24,6 @@ interface ClientProvidersProps {
 	children: ReactNode;
 	initialTheme?: string;
 }
-
-import { StarCursor, StarryBackground, ThemeCookieSync } from "@repo/ui";
-import { usePathname } from "next/navigation";
 
 /**
  * ClientProviders - Final Hardened Version.
@@ -54,23 +52,27 @@ export function ClientProviders({
  * InternalProviders - Nested under ThemeProvider to access theme context correctly.
  */
 function InternalProviders({ children }: { children: ReactNode }) {
-	const { resolvedTheme } = useTheme();
 	const pathname = usePathname();
 
-	// ✅ P0: Bridge MarkdownRenderer notifications to Sonner
+	// ✅ P0: Bridge MarkdownRenderer notifications to @repo/ui toast
 	useEffect(() => {
 		const handleNotify = (e: any) => {
-			const { message, level, i18nKey, i18nParams } = e.detail || {};
+			const { message, level, i18nKey, i18nParams, description } = e.detail || {};
 			const displayMessage = message || i18nKey || "Notification";
+			const displayDescription = description || i18nParams?.description || (i18nParams ? JSON.stringify(i18nParams) : undefined);
+
+			const options = {
+				description: displayDescription,
+			};
 
 			if (level === "error") {
-				toast.error(displayMessage, {
-					description: i18nParams ? JSON.stringify(i18nParams) : undefined,
-				});
+				toast.error(displayMessage, options);
+			} else if (level === "warning") {
+				toast.warning(displayMessage, options);
+			} else if (level === "info") {
+				toast.info(displayMessage, options);
 			} else {
-				toast.success(displayMessage, {
-					description: i18nParams ? JSON.stringify(i18nParams) : undefined,
-				});
+				toast.success(displayMessage, options);
 			}
 		};
 
@@ -84,16 +86,7 @@ function InternalProviders({ children }: { children: ReactNode }) {
 			<StarryBackground />
 			<StarCursor pathname={pathname} />
 			{children}
-			<Toaster
-				theme={resolvedTheme === "dark" ? "dark" : "light"}
-				position="top-right"
-				richColors
-				closeButton
-				toastOptions={{
-					duration: 4000,
-					className: "starry-toast",
-				}}
-			/>
+			<StarryToaster />
 		</>
 	);
 }

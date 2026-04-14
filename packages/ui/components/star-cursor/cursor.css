@@ -50,8 +50,8 @@
     margin-top: -3px;
     margin-left: -3px;
     border-radius: 50%;
-    /* INDUSTRIAL DEFAULT: Visible even if theme class fails */
-    background: var(--primary, #513bb2);
+    /* INDUSTRIAL DEFAULT: High-contrast purple for light mode */
+    background: #513bb2 !important; 
     z-index: 10001;
     pointer-events: none;
     transform: translateZ(0);
@@ -68,8 +68,8 @@
 }
 
 /* 
-   THE STARFIRE CORE (Robust Spikes)
-   Centering spikes as children of the core.
+    THE STARFIRE CORE (Robust Spikes)
+    Centering spikes as children of the core.
 */
 .cursor-core::before,
 .cursor-core::after {
@@ -77,31 +77,12 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    background: currentColor; /* Inherits from core background */
+    background: var(--primary); /* Standardize on primary variable for light mode */
     transform: translate(-50%, -50%);
     pointer-events: none;
     z-index: 20;
-    opacity: 0;
+    opacity: 0.15; /* Subtle presence in light mode */
     transition: opacity 0.3s ease, width 0.3s ease, height 0.3s ease;
-}
-
-.dark .cursor-core::before,
-.dark .cursor-core::after {
-    opacity: 0.85;
-    background: #fff;
-    box-shadow: 0 0 8px var(--primary);
-}
-
-/* Horizontal spike */
-.cursor-core::before { 
-    width: 20px; 
-    height: 1.5px; 
-}
-
-/* Vertical spike */
-.cursor-core::after { 
-    width: 1.5px; 
-    height: 20px; 
 }
 
 .dark .cursor-core {
@@ -115,6 +96,25 @@
        Using brightness/opacity for breathing instead.
     */
     animation: star-sparkle 4s ease-in-out infinite;
+}
+
+.dark .cursor-core::before,
+.dark .cursor-core::after {
+    opacity: 0.85;
+    background: #fff;
+    box-shadow: 0 0 8px var(--primary);
+}
+
+/* Horizontal spike */
+.cursor-core::before { 
+    width: 20px !important; 
+    height: 1.5px !important; 
+}
+
+/* Vertical spike */
+.cursor-core::after { 
+    width: 1.5px !important; 
+    height: 20px !important; 
 }
 
 @keyframes star-sparkle {
@@ -141,8 +141,8 @@
     opacity: 1;
     
     transition: 
-        border-color 0.2s ease,
-        border-radius 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+        border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+        border-radius 0.4s cubic-bezier(0.16, 1, 0.3, 1),
         opacity 0.2s ease,
         border-style 0.3s ease;
 }
@@ -153,7 +153,9 @@
 
 .cursor-ring.strategy-suppress,
 .cursor-ring.is-hidden {
-    opacity: 0;
+    opacity: 0 !important;
+    pointer-events: none;
+    transition: none !important; /* INDUSTRIAL FIX: Immediate suppression kills entering/exiting jitter */
 }
 
 /* Interactive States: Circular in quiet, Rectangular in action (Only when snapped) */
@@ -273,10 +275,16 @@ body.custom-cursor-active [contenteditable] {
 */
 .theme-transitioning .cursor-ring,
 .theme-transitioning .cursor-core,
-.theme-transitioning .cursor-aura {
+.theme-transitioning .cursor-ring.strategy-suppress {
     opacity: 0 !important;
-    transition: none !important;
-    animation: none !important;
+    transform: scale(0.1) !important;
+    transition: none !important; /* INDUSTRIAL FIX: Kill transition to prevent jitter/flicker artifacts */
+}
+
+/* Nova Overlay Integration (Starry Night Theme Reveal) */
+.nova-overlay {
+    pointer-events: none;
+    z-index: 1000;
 }
 
 

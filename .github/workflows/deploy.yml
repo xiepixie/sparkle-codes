@@ -1,5 +1,6 @@
 name: 🚀 Sparkle Production Pipeline
 
+# Validates on PRs; builds, pushes, and deploys on pushes to main.
 on:
   push:
     branches: ["main"]

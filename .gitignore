@@ -50,3 +50,5 @@ Thumbs.db
 # Rust/Cargo Build Artifacts
 target/
 .cargo-target/
+packages/sentinel/logs/
+packages/sentinel/logs/sentinel.log.2026-04-14

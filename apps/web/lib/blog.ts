@@ -86,6 +86,7 @@ export interface BlogPost {
 	status: "draft" | "published" | "archived";
 	metadata: PostMetadata;
 	path: string;
+	updatedAt: string;
 	body: {
 		code: string;
 		html: string;
@@ -110,6 +111,7 @@ export interface BlogPostSummary {
 	readingTime: string;
 	path: string;
 	status: "draft" | "published" | "archived";
+	updatedAt: string;
 	highlightedTitle?: string;
 	highlightedDescription?: string;
 	highlightedBodyPreview?: string;
@@ -703,6 +705,7 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
 		isPublished: doc.isPublished,
 		status,
 		metadata,
+		updatedAt: doc.updatedAt.toISOString(),
 		body: {
 			code: "",
 			html: enhancedBodyHtml,
@@ -749,6 +752,7 @@ function mapDocumentToSummary(doc: any): BlogPostSummary {
 		readingTime: metadata.readingTime || calculatedReadingTime,
 		path: doc.slug,
 		status,
+		updatedAt: doc.updatedAt.toISOString(),
 	};
 }
 

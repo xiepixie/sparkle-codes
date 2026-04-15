@@ -109,29 +109,33 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
             # 1. 进入 1Panel 站点目录
-            cd /opt/1panel/apps/openresty/openresty/www/sites/sparkle.codes
+            export TARGET_DIR="/opt/1panel/apps/openresty/openresty/www/sites/sparkle.codes"
+            cd $TARGET_DIR
             
-            # 2. 更新配置 (如果该目录下有 git 仓库)
+            # 2. 修复 Git 安全目录问题
+            git config --global --add safe.directory $TARGET_DIR
+            
+            # 3. 更新配置 (如果该目录下有 git 仓库)
             if [ -d ".git" ]; then
               echo "🚚 Updating repository content..."
               git fetch origin main
               git reset --hard origin/main
             fi
             
-            # 3. 登录 GHCR (确保 root 有权限拉取镜像)
-            # 注意：如果镜像设置了 Public，可跳过此步
-            # echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
             echo "🐳 Pulling latest images..."
-            # 使用 TAG 环境变量确保拉取的是刚刚构建的那个 SHA 版本
-            # 也可以直接 pull latest (取决于你的 docker-compose 配置)
-            docker compose pull
+            # 如果依然报错，我们尝试显式使用 sudo (前提是该用户在 sudoers 里且无需密码)
+            if ! docker compose pull; then
+              echo "⚠️ Docker permission denied, trying with sudo..."
+              sudo docker compose pull
+            fi
             
             echo "🔄 Swapping containers..."
-            docker compose up -d --remove-orphans
+            if ! docker compose up -d --remove-orphans; then
+              sudo docker compose up -d --remove-orphans
+            fi
             
             echo "🧹 Cleaning up old images..."
-            docker image prune -f
+            sudo docker image prune -f
             
             echo "✅ Deployment status:"
-            docker compose ps
+            sudo docker compose ps

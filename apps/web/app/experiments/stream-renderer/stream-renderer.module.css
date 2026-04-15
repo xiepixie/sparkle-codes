@@ -1,0 +1,134 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.segment {
+  width: 100%;
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  will-change: height, opacity, transform;
+}
+
+.segmentEnter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.segmentActive {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 占位符样式 (Cover Stage) */
+.placeholder {
+  position: relative;
+  width: 100%;
+  min-height: 100px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  display: flex;
+  flex-direction: column;
+  animation: pulse 2s infinite ease-in-out;
+}
+
+.placeholderCode {
+  background: #0d1117;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.placeholderMath {
+  background: var(--primary-muted);
+  border-color: var(--primary-border);
+}
+
+.placeholderReact {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(59, 130, 246, 0.08));
+  border-color: rgba(139, 92, 246, 0.25);
+}
+
+.header {
+  height: 36px;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.shimmerContent {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.line {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+.badge {
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #a1a1aa;
+}
+
+.statusText {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  color: var(--primary);
+  opacity: 0.4;
+  text-align: center;
+  padding: 8px 0;
+}
+
+@keyframes shimmer {
+  100% {
+    left: 200%;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.renderedCode {
+  margin: 0 !important;
+}

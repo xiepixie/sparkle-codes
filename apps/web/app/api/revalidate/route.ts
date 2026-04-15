@@ -7,7 +7,17 @@ import { NextResponse } from "next/server";
  * Used by Sentinel or manual maintenance to purge the Next.js cache
  * when the database content changes.
  *
- * Usage: GET /api/revalidate?tag=posts
+ * Authentication:
+ *   Requires a `secret` query parameter matching `process.env.REVALIDATE_SECRET`.
+ *   If REVALIDATE_SECRET is not set, the endpoint is open (development convenience).
+ *   Mismatched secrets return 401.
+ *
+ * Usage:
+ *   GET /api/revalidate?tag=posts&secret=<REVALIDATE_SECRET>
+ *
+ * Sentinel triggers this automatically after WORK-area content syncs.
+ * Multiple REVALIDATE_URL entries (comma-separated) allow Sentinel to
+ * invalidate both local and production caches in a single sync cycle.
  */
 export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url);

@@ -47,9 +47,20 @@ cd sparkle-codes
 Copy the production environment template and fill in your secrets:
 ```bash
 cp .env.production.example .env.production
-# Edit your secrets (Neon DB, R2, etc.)
+# Edit your secrets (Neon DB, R2, Revalidation, etc.)
 nano .env.production
 ```
+
+#### Cache Invalidation (`REVALIDATE_SECRET`)
+
+The `REVALIDATE_SECRET` environment variable secures the on-demand cache revalidation endpoint (`/api/revalidate`). When Sentinel syncs content from Obsidian to the database, it calls this endpoint to purge the Next.js cache so that new or updated posts appear immediately.
+
+| Variable | Required | Description |
+| :--- | :--- | :--- |
+| `REVALIDATE_SECRET` | Yes | Shared secret between Sentinel and the web app. Must match in both environments. |
+| `REVALIDATE_URL` | Local only | Comma-separated revalidation endpoint URLs (e.g., `http://localhost:3000/api/revalidate,https://sparkle.codes/api/revalidate`). Used by Sentinel to trigger cache purges after sync. |
+
+> **Important:** The `REVALIDATE_SECRET` value in `.env.production` must be identical to the one configured for Sentinel. If they do not match, revalidation requests will be rejected with a `401` response.
 
 ### 3. Deploy in 1Panel
 1.  **Create Compose Orchestration**:

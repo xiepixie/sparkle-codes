@@ -192,6 +192,7 @@ app/
 ├── api/
 │   ├── blog-search/                # Specialized blog search endpoint
 │   ├── chat/                       # AI chat endpoint (Vercel AI SDK)
+│   ├── revalidate/                 # On-demand cache invalidation (secured by REVALIDATE_SECRET)
 │   └── search/                     # Global metadata search endpoint
 ├── layout.tsx                      # Root layout with NavBar and CommandMenu
 └── globals.css                     # SLC @layer implementation
@@ -208,9 +209,10 @@ app/
 Maximize static rendering and cacheable fetch requests. For Next.js 15/16+:
 
 1. **'use cache' Directive**: Use the standard `'use cache'` directive for data-fetching. Pair with `cacheLife` for TTL management. The pre-rendered HTML from the database should be the primary cache target.
-2. **Dynamic Hydration**: Since bulky WASM parsers have been removed from the frontend for SEO, use the React renderer's dynamic hydration (e.g., `MathRenderHub`) to process terminal elements like KaTeX.
-3. **Database Search Boundaries**: High-frequency interactive search should perform SQL-level filtering on metadata fields (`title`, `description`, `slug`) rather than scanning large text blobs.
-4. **API Pre-Warming**: Implement low-priority background fetches (`priority: low`) on client-side layout mounts to resolve Serverless cold starts and initialize module-level caches before user interaction.
+2. **On-Demand Revalidation**: The `/api/revalidate` endpoint accepts `GET ?tag=<tag>&secret=<REVALIDATE_SECRET>` to purge specific cache tags. Sentinel calls this automatically after WORK-area syncs. The `REVALIDATE_SECRET` env var must be set in both the web app and Sentinel environments and must match; mismatched secrets result in a `401` rejection. See `apps/web/app/api/revalidate/route.ts` for implementation.
+3. **Dynamic Hydration**: Since bulky WASM parsers have been removed from the frontend for SEO, use the React renderer's dynamic hydration (e.g., `MathRenderHub`) to process terminal elements like KaTeX.
+4. **Database Search Boundaries**: High-frequency interactive search should perform SQL-level filtering on metadata fields (`title`, `description`, `slug`) rather than scanning large text blobs.
+5. **API Pre-Warming**: Implement low-priority background fetches (`priority: low`) on client-side layout mounts to resolve Serverless cold starts and initialize module-level caches before user interaction.
 
 ---
 

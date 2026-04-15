@@ -7,23 +7,33 @@ import { NextResponse } from "next/server";
  * Used by Sentinel or manual maintenance to purge the Next.js cache
  * when the database content changes.
  *
- * Usage: GET /api/revalidate?tag=posts
+ * Security: Accepts secret via Authorization header (preferred) or query param (legacy).
+ * Usage: GET /api/revalidate?tag=posts  (with Authorization: Bearer <secret>)
  */
 export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url);
 	const tag = searchParams.get("tag");
 
-	// Accept secret from header (preferred) or query param (legacy fallback).
-	// Why header-first: query params leak into access logs, CDN logs, and Referrer headers.
-	const secret =
-		request.headers.get("x-revalidate-secret") || searchParams.get("secret");
-
-	// Fail-closed: reject if REVALIDATE_SECRET is not configured or does not match.
-	// Why: the previous "fail-open" pattern silently skipped auth when the env var was unset,
-	// allowing unauthenticated cache purges.
+	// Security: REVALIDATE_SECRET must be configured; reject all requests if missing.
+	// Why: Without this guard, any unauthenticated request could purge the cache.
 	const serverSecret = process.env.REVALIDATE_SECRET;
-	if (!serverSecret || secret !== serverSecret) {
-		return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+	if (!serverSecret) {
+		return NextResponse.json(
+			{ message: "Revalidation endpoint is not configured" },
+			{ status: 503 },
+		);
+	}
+
+	// Accept secret from Authorization header (preferred) or query param (legacy/Sentinel compat).
+	// Why: Query-param secrets leak into access logs and browser history.
+	const authHeader = request.headers.get("authorization");
+	const headerSecret = authHeader?.startsWith("Bearer ")
+		? authHeader.slice(7)
+		: null;
+	const secret = headerSecret || searchParams.get("secret");
+
+	if (secret !== serverSecret) {
+		return NextResponse.json({ message: "Invalid secret" }, { status: 401 });
 	}
 
 	if (!tag) {
@@ -44,7 +54,7 @@ export async function GET(request: Request) {
 			now: Date.now(),
 		});
 	} catch (err) {
-		console.error("[revalidate] Revalidation failed:", err);
+		console.error("[Revalidate] Failed:", err);
 		return NextResponse.json(
 			{ message: "Revalidation failed" },
 			{ status: 500 },

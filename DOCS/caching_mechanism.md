@@ -52,7 +52,38 @@ Currently, the Markdown code highlighters (`shiki`) run off a C++ regular expres
 1. **Current Pattern**: Module-level persistence. We declare a `highlighterPromise` singleton outside of the render hot-path. 
 2. **The Ideal Goal (Ahead-of-Time Generation)**: Ultimately, the best practice is completely eliminating WASM processing at request-time. Code blocks and Markdown should ideally be compiled strictly during CI/CD Build-time, moving the heavy-lifting off the runtime nodes entirely.
 
-## 4. Payload Compression over Wire
+## 4. On-Demand Cache Revalidation (`/api/revalidate`)
+
+Beyond static caching and pre-warming, the system supports **on-demand cache invalidation** triggered by the Sentinel sync daemon.
+
+### Flow
+
+```text
+Sentinel (Rust) detects file change
+  → syncs content to Neon Postgres
+  → calls GET /api/revalidate?tag=posts&secret=<REVALIDATE_SECRET>
+  → Next.js purges the "posts" cache tag via revalidateTag()
+  → subsequent requests serve fresh data
+```
+
+### Security
+
+The endpoint is protected by a shared secret (`REVALIDATE_SECRET`). The web app compares the `secret` query parameter against `process.env.REVALIDATE_SECRET`. If they do not match, the request is rejected with `401 Invalid secret`.
+
+### Environment Variables
+
+| Variable | Consumed by | Description |
+| :--- | :--- | :--- |
+| `REVALIDATE_SECRET` | Web app (`route.ts`) + Sentinel (`config.rs`) | Shared token that authenticates revalidation requests. Must be identical in both runtimes. |
+| `REVALIDATE_URL` | Sentinel only | Comma-separated endpoint URLs (e.g., `http://localhost:3000/api/revalidate,https://sparkle.codes/api/revalidate`). Sentinel iterates over each URL after a WORK-area sync. |
+
+### Multi-Environment Support
+
+`REVALIDATE_URL` accepts multiple comma-separated URLs, allowing Sentinel to invalidate caches on both the local dev server and the production deployment in a single sync cycle.
+
+---
+
+## 5. Payload Compression over Wire
 
 By moving search queries to strictly metadata tables rather than returning `html`, `content`, or raw markdown bodies to the front end, we significantly reduce the JSON package being transferred from the edge proxy to the client application.
 

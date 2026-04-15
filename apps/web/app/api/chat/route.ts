@@ -193,8 +193,9 @@ export async function POST(req: Request) {
 			},
 		});
 	} catch (error: unknown) {
-		// Log the real error server-side; never leak internal details to the client.
-		console.error("[API] Chat API error:", error);
+		// Security: Log the real error server-side but return a generic message to the client.
+		// Why: error.message can contain DB connection strings, API keys, or stack traces.
+		console.error("❌ [API] Critical Chat API Crash:", error);
 		return new Response(
 			JSON.stringify({
 				error: "An internal error occurred. Please try again later.",

@@ -1,12 +1,36 @@
 import crypto from "node:crypto";
-import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { askQuestion } from "@repo/ai";
+import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 
 export const maxDuration = 60;
 
+const MAX_MESSAGES = 50;
+const MAX_PROMPT_LENGTH = 4000;
+
 export async function POST(req: Request) {
 	try {
-		const { messages } = await req.json();
+		const body = await req.json();
+		const messages = body?.messages;
+
+		// Basic input validation to prevent abuse and resource exhaustion.
+		if (!Array.isArray(messages) || messages.length === 0) {
+			return new Response(
+				JSON.stringify({
+					error: "Invalid request: messages array is required.",
+				}),
+				{ status: 400, headers: { "Content-Type": "application/json" } },
+			);
+		}
+
+		if (messages.length > MAX_MESSAGES) {
+			return new Response(
+				JSON.stringify({
+					error: `Too many messages. Maximum is ${MAX_MESSAGES}.`,
+				}),
+				{ status: 400, headers: { "Content-Type": "application/json" } },
+			);
+		}
+
 		const lastMsg = messages[messages.length - 1];
 
 		// Polymorphic content extraction:
@@ -30,14 +54,26 @@ export async function POST(req: Request) {
 			if (typeof rawContent === "string") {
 				lastMessage = rawContent;
 			} else if (Array.isArray(rawContent)) {
-				lastMessage = rawContent.map((part: any) => ("text" in part ? part.text : "")).join("");
+				lastMessage = rawContent
+					.map((part: any) => ("text" in part ? part.text : ""))
+					.join("");
 			}
 		}
 
-		console.info(`[KV] Extracted prompt: "${lastMessage.substring(0, 60)}..." (${lastMessage.length} chars)`);
+		// Reject excessively long prompts to limit LLM cost and KV storage abuse.
+		if (lastMessage.length > MAX_PROMPT_LENGTH) {
+			return new Response(
+				JSON.stringify({
+					error: `Prompt too long. Maximum is ${MAX_PROMPT_LENGTH} characters.`,
+				}),
+				{ status: 400, headers: { "Content-Type": "application/json" } },
+			);
+		}
 
 		if (!lastMessage || lastMessage.trim().length === 0) {
-			console.log("⚠️ [API] Empty prompt, bypassing cache layer.");
+			if (process.env.NODE_ENV === "development") {
+				console.log("[API] Empty prompt, bypassing cache layer.");
+			}
 			return await askQuestion(messages);
 		}
 
@@ -56,8 +92,14 @@ export async function POST(req: Request) {
 		const accountId = process.env.CF_ACCOUNT_ID;
 		const token = process.env.CF_AI_TOKEN;
 
-		console.info(`[KV] Checking Hash: ${promptHash.substring(0, 8)} | Target: "${normalizedPrompt}"`);
-		console.info(`[KV] Config Status: kvId=${!!kvId}, accountId=${!!accountId}, token=${!!token}`);
+		if (process.env.NODE_ENV === "development") {
+			console.info(
+				`[KV] Checking Hash: ${promptHash.substring(0, 8)} | Target: "${normalizedPrompt}"`,
+			);
+			console.info(
+				`[KV] Config Status: kvId=${!!kvId}, accountId=${!!accountId}, token=${!!token}`,
+			);
+		}
 
 		// 2. [MANUAL OVERRIDE] Check for explicit shortcuts (FAQ)
 		// Why: This allows constant-time, zero-cost responses for high-frequency questions
@@ -66,31 +108,31 @@ export async function POST(req: Request) {
 			try {
 				const manualKey = `manual:${normalizedPrompt}`;
 				const manualUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/${encodeURIComponent(manualKey)}`;
-				
+
 				const manualResponse = await fetch(manualUrl, {
 					headers: { Authorization: `Bearer ${token}` },
 				});
 
 				if (manualResponse.ok) {
 					const manualText = await manualResponse.text();
-					console.log(`\n${"=".repeat(50)}`);
-					console.log(`🌟 [KV SHORTCUT] HIT! (Key: ${manualKey})`);
-					console.log("⚡️ Serving curated manual response.");
-					console.log(`${"=".repeat(50)}\n`);
-					
+
 					const textId = `manual-${promptHash.substring(0, 8)}`;
 					return createUIMessageStreamResponse({
 						stream: createUIMessageStream({
 							execute({ writer }) {
 								writer.write({ type: "text-start", id: textId });
-								writer.write({ type: "text-delta", id: textId, delta: manualText });
+								writer.write({
+									type: "text-delta",
+									id: textId,
+									delta: manualText,
+								});
 								writer.write({ type: "text-end", id: textId });
 							},
 						}),
 					});
 				}
 			} catch (manualError) {
-				console.error("⚠️ [KV SHORTCUT] Check failed:", manualError);
+				console.error("[KV SHORTCUT] Check failed:", manualError);
 			}
 		}
 
@@ -104,11 +146,7 @@ export async function POST(req: Request) {
 
 				if (cachedResponse.ok) {
 					const cachedText = await cachedResponse.text();
-					console.log(`\n${"=".repeat(50)}`);
-					console.log(`🎯 [KV CACHE] HIT! (Hash: ${promptHash.substring(0, 8)})`);
-					console.log("⚡️ Bypassing LLM generation. Serving from Cloudflare Edge.");
-					console.log(`${"=".repeat(50)}\n`);
-					
+
 					// Return cached text as a proper AI SDK v5 UI Message Stream
 					// Why: useChat expects SSE-based UIMessageStream, not raw data stream protocol.
 					// Using the official createUIMessageStreamResponse ensures correct parsing.
@@ -117,24 +155,24 @@ export async function POST(req: Request) {
 						stream: createUIMessageStream({
 							execute({ writer }) {
 								writer.write({ type: "text-start", id: textId });
-								writer.write({ type: "text-delta", id: textId, delta: cachedText });
+								writer.write({
+									type: "text-delta",
+									id: textId,
+									delta: cachedText,
+								});
 								writer.write({ type: "text-end", id: textId });
 							},
 						}),
 					});
 				}
 			} catch (cacheError) {
-				console.error("⚠️ [KV CACHE] Check failed:", cacheError);
+				console.error("[KV CACHE] Check failed:", cacheError);
 			}
 		}
-
-		// biome-ignore lint/style/noUnusedTemplateLiteral: dynamic hash
-		console.log(`[KV CACHE] MISS! Calling LLM...`);
 
 		// 3. [MISS] Execute RAG + Generation and hook the finish event to save to KV
 		return await askQuestion(messages, {
 			onFinish: (fullText: string) => {
-				console.log(`🎬 [onFinish] Triggered. Text length: ${fullText.length} chars.`);
 				if (kvId && accountId && token) {
 					fetch(
 						`https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/${promptHash}`,
@@ -145,17 +183,21 @@ export async function POST(req: Request) {
 								"Content-Type": "text/plain",
 							},
 							body: fullText,
-						}
-					).then(() => console.log(`💾 [KV CACHE] Successfully saved for: ${promptHash.substring(0, 8)}`))
-					.catch(e => console.error("⚠️ [KV] Save failed:", e));
+						},
+					)
+						.then(() => {
+							/* KV cache saved */
+						})
+						.catch((e) => console.error("[KV] Save failed:", e));
 				}
-			}
+			},
 		});
-	} catch (error: any) {
-		console.error("❌ [API] Critical Chat API Crash:", error);
+	} catch (error: unknown) {
+		// Log the real error server-side; never leak internal details to the client.
+		console.error("[API] Chat API error:", error);
 		return new Response(
 			JSON.stringify({
-				error: error.message || "Critical internal server error",
+				error: "An internal error occurred. Please try again later.",
 			}),
 			{
 				status: 500,

@@ -12,9 +12,15 @@ function parseTags(searchParams: URLSearchParams) {
 export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url);
 	const query = searchParams.get("query") || "";
-	const page = Number.parseInt(searchParams.get("page") || "1", 10);
-	const pageSize = Number.parseInt(searchParams.get("pageSize") || "5", 10);
+	const rawPage = Number.parseInt(searchParams.get("page") || "1", 10);
+	const rawPageSize = Number.parseInt(searchParams.get("pageSize") || "5", 10);
 	const tags = parseTags(searchParams);
+
+	// Clamp at API boundary as defense-in-depth against abusive queries.
+	const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
+	const pageSize = Number.isFinite(rawPageSize)
+		? Math.max(1, Math.min(50, rawPageSize))
+		: 5;
 
 	try {
 		const results = await queryBlogPostFeed({

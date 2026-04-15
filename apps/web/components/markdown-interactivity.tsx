@@ -2,6 +2,7 @@
 
 import { isSameWikiPage, normalizeSlug, parseWikiLink } from "@repo/utils";
 import { MarkdownRenderer } from "@v2/markdown-parser";
+import DOMPurify from "dompurify";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -87,10 +88,7 @@ function resolveClientWikiNavigation(
 	const fragment = linkInfo.fragment || "";
 
 	// Primary check: data-target path vs current slug
-	let isSamePage = isSameWikiPage(
-		targetUrl,
-		normalizeSlug(currentSlug || ""),
-	);
+	let isSamePage = isSameWikiPage(targetUrl, normalizeSlug(currentSlug || ""));
 
 	// Secondary check: href path vs current slug
 	// Why: data-target carries the Obsidian vault filename (e.g. "博客测试2"),
@@ -151,7 +149,7 @@ function scrollToFragment(fragment: string) {
 
 	window.scrollTo({
 		top: offsetPosition,
-		behavior: "smooth"
+		behavior: "smooth",
 	});
 
 	// Update browser URL without jumping back to top (native hash navigation is avoided)
@@ -201,8 +199,11 @@ export function MarkdownInteractivity({
 		};
 
 		window.addEventListener("hashchange", handleHashChange);
-		window.addEventListener("sparkle:scroll-to-fragment", handleCustomScroll as EventListener);
-		
+		window.addEventListener(
+			"sparkle:scroll-to-fragment",
+			handleCustomScroll as EventListener,
+		);
+
 		// Initial check on mount/content change
 		if (window.location.hash) {
 			const timer = setTimeout(() => {
@@ -211,13 +212,19 @@ export function MarkdownInteractivity({
 			return () => {
 				clearTimeout(timer);
 				window.removeEventListener("hashchange", handleHashChange);
-				window.removeEventListener("sparkle:scroll-to-fragment", handleCustomScroll as EventListener);
+				window.removeEventListener(
+					"sparkle:scroll-to-fragment",
+					handleCustomScroll as EventListener,
+				);
 			};
 		}
 
 		return () => {
 			window.removeEventListener("hashchange", handleHashChange);
-			window.removeEventListener("sparkle:scroll-to-fragment", handleCustomScroll as EventListener);
+			window.removeEventListener(
+				"sparkle:scroll-to-fragment",
+				handleCustomScroll as EventListener,
+			);
 		};
 	}, [html]);
 
@@ -322,9 +329,9 @@ export function MarkdownInteractivity({
 							) : (
 								<div
 									className="mermaid-mobile-preview min-h-full min-w-max"
-									// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaidSvg is sanitized by mermaid.render or handled internally as a safe SVG
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: Sanitized with DOMPurify before rendering
 									dangerouslySetInnerHTML={{
-										__html: preview.htmlContent || "",
+										__html: DOMPurify.sanitize(preview.htmlContent || ""),
 									}}
 								/>
 							)}

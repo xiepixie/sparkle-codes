@@ -19,7 +19,7 @@
         "ts-node": "^10.9.2",
         "turbo": "^2.7.2",
         "typescript": "^6.0.2",
-        "vite": "^8.0.3"
+        "vite": "^8.0.8"
     },
     "packageManager": "pnpm@10.33.0",
     "dependencies": {
@@ -27,7 +27,7 @@
         "@types/crypto-js": "^4.2.2",
         "crypto-js": "^4.2.0",
         "dotenv": "^17.4.0",
-        "drizzle-orm": "^0.44.7",
+        "drizzle-orm": "^0.45.2",
         "fast-glob": "^3.3.3",
         "fs-extra": "^11.3.4",
         "gray-matter": "^4.0.3",

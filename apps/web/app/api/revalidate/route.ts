@@ -7,26 +7,32 @@ import { NextResponse } from "next/server";
  * Used by Sentinel or manual maintenance to purge the Next.js cache
  * when the database content changes.
  *
- * Authentication:
- *   Requires a `secret` query parameter matching `process.env.REVALIDATE_SECRET`.
- *   If REVALIDATE_SECRET is not set, the endpoint is open (development convenience).
- *   Mismatched secrets return 401.
- *
- * Usage:
- *   GET /api/revalidate?tag=posts&secret=<REVALIDATE_SECRET>
- *
- * Sentinel triggers this automatically after WORK-area content syncs.
- * Multiple REVALIDATE_URL entries (comma-separated) allow Sentinel to
- * invalidate both local and production caches in a single sync cycle.
+ * Security: Accepts secret via Authorization header (preferred) or query param (legacy).
+ * Usage: GET /api/revalidate?tag=posts  (with Authorization: Bearer <secret>)
  */
 export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url);
 	const tag = searchParams.get("tag");
-	const secret = searchParams.get("secret");
 
-	// Validate secret if configured in environment
+	// Security: REVALIDATE_SECRET must be configured; reject all requests if missing.
+	// Why: Without this guard, any unauthenticated request could purge the cache.
 	const serverSecret = process.env.REVALIDATE_SECRET;
-	if (serverSecret && secret !== serverSecret) {
+	if (!serverSecret) {
+		return NextResponse.json(
+			{ message: "Revalidation endpoint is not configured" },
+			{ status: 503 },
+		);
+	}
+
+	// Accept secret from Authorization header (preferred) or query param (legacy/Sentinel compat).
+	// Why: Query-param secrets leak into access logs and browser history.
+	const authHeader = request.headers.get("authorization");
+	const headerSecret = authHeader?.startsWith("Bearer ")
+		? authHeader.slice(7)
+		: null;
+	const secret = headerSecret || searchParams.get("secret");
+
+	if (secret !== serverSecret) {
 		return NextResponse.json({ message: "Invalid secret" }, { status: 401 });
 	}
 
@@ -48,11 +54,9 @@ export async function GET(request: Request) {
 			now: Date.now(),
 		});
 	} catch (err) {
+		console.error("[Revalidate] Failed:", err);
 		return NextResponse.json(
-			{
-				message: "Revalidation failed",
-				error: err instanceof Error ? err.message : String(err),
-			},
+			{ message: "Revalidation failed" },
 			{ status: 500 },
 		);
 	}

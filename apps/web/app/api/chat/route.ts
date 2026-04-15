@@ -6,7 +6,18 @@ export const maxDuration = 60;
 
 export async function POST(req: Request) {
 	try {
-		const { messages } = await req.json();
+		const body = await req.json();
+		const messages = body?.messages;
+
+		// Security: Validate that messages is a non-empty array before processing.
+		// Why: Without validation, malformed payloads cause cryptic runtime errors
+		// whose messages could leak internal details to the client.
+		if (!Array.isArray(messages) || messages.length === 0) {
+			return new Response(
+				JSON.stringify({ error: "Invalid request: messages array is required" }),
+				{ status: 400, headers: { "Content-Type": "application/json" } },
+			);
+		}
 		const lastMsg = messages[messages.length - 1];
 
 		// Polymorphic content extraction:
@@ -151,11 +162,13 @@ export async function POST(req: Request) {
 				}
 			}
 		});
-	} catch (error: any) {
+	} catch (error: unknown) {
+		// Security: Log the real error server-side but return a generic message to the client.
+		// Why: error.message can contain DB connection strings, API keys, or stack traces.
 		console.error("❌ [API] Critical Chat API Crash:", error);
 		return new Response(
 			JSON.stringify({
-				error: error.message || "Critical internal server error",
+				error: "An internal error occurred. Please try again later.",
 			}),
 			{
 				status: 500,

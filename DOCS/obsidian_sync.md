@@ -36,7 +36,15 @@ SYNC_PUBLIC_ASSET_DEST="/Users/xpx/projects/sparkle-codes/apps/web/public/obsidi
 
 # Database
 DATABASE_URL="postgres://..."
+
+# Cache Revalidation
+# Sentinel calls these URLs after syncing WORK-area content to purge the Next.js cache.
+# Multiple URLs can be comma-separated for multi-environment invalidation.
+REVALIDATE_SECRET="YOUR_REVALIDATE_SECRET"
+REVALIDATE_URL="http://localhost:3000/api/revalidate,https://sparkle.codes/api/revalidate"
 ```
+
+> **Note:** `REVALIDATE_SECRET` must match the value set in the web app's environment (`.env.local` or `.env.production`). If the secrets diverge, Sentinel's revalidation requests will be rejected with `401`.
 
 ---
 

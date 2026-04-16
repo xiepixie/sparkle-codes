@@ -51,6 +51,7 @@ export const SearchPanel = React.memo(({
 								<button
 									key={result.id}
 									type="button"
+									data-index={idx}
 									disabled={!!pendingUrl}
 									onClick={() => navigateToBlogPost(result.url)}
 									onMouseEnter={() => setActiveIndex(idx)}
@@ -149,6 +150,7 @@ export const SearchPanel = React.memo(({
 									<button
 										key={result.id}
 										type="button"
+										data-index={idx}
 										disabled={!!pendingUrl}
 									onClick={() => navigateToBlogPost(result.url)}
 									onMouseEnter={() => setActiveIndex(idx)}

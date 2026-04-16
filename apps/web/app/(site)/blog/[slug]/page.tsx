@@ -62,6 +62,7 @@ export default async function PostPage({ params }: PostPageProps) {
 			<ReadingHeader
 				key={post.slug}
 				slug={post.slug}
+				vaultPath={post.vaultPath}
 				title={post.displayTitle || post.title}
 				suggestedPosts={suggestedPosts}
 			/>

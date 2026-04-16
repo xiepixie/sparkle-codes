@@ -91,10 +91,7 @@ export const BrowserPanel = React.memo(({
 						initial="enter"
 						animate="center"
 						exit="exit"
-						style={{
-							willChange: "transform, opacity",
-							backfaceVisibility: "hidden",
-						}}
+						style={{ willChange: "transform, opacity" }}
 						className={cn(
 							"space-y-2.5",
 							"exit:pointer-events-none",
@@ -109,6 +106,7 @@ export const BrowserPanel = React.memo(({
 									<button
 										key={node.id}
 										type="button"
+										data-index={idx}
 										disabled={!!pendingUrl}
 										onClick={() => {
 											if (node.type === "folder") {
@@ -124,7 +122,7 @@ export const BrowserPanel = React.memo(({
 											}
 										}}
 										className={cn(
-											"group flex w-full items-center gap-4 rounded-3xl border px-4 py-3.5 text-left transition-all duration-300",
+											"group flex w-full items-center gap-4 rounded-3xl border px-4 py-3.5 text-left transition-[border-color,background-color,box-shadow] duration-300",
 											idx === activeIndex
 												? "border-primary/35 bg-primary/[0.045] shadow-[0_12px_30px_rgba(var(--primary-rgb),0.08)]"
 												: "border-border/30 bg-background/55 text-foreground/85 hover:border-border/50 hover:bg-background/70",

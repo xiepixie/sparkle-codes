@@ -206,8 +206,10 @@ export function TiltWrapper({
       <div
         className={cn(
           "relative h-full w-full rounded-[inherit] p-[1.5px] [transform-style:preserve-3d]",
-          "transition-transform duration-[600ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
-          !isInteractive && "duration-300"
+          // INDUSTRIAL OPTIMIZATION: Disable CSS transition when JS kinetic loop is active
+          // This avoids 'transition-fighting' where the browser tries to transition 
+          // between values already being smoothed by our Lerp engine.
+          !isInteractive && "transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
         )}
         data-state={isEngaged ? "engaged" : "idle"}
         style={{

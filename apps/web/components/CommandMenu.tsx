@@ -92,13 +92,30 @@ export function CommandMenu() {
 
 	const deferredSearchQuery = useDeferredValue(searchQuery);
 
-	// Reset scroll and index when mode or results change
+	// Reset scroll and index when mode or path change
 	useEffect(() => {
 		setActiveIndex(0);
 		if (containerRef.current) {
-			containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+			containerRef.current.scrollTo({ top: 0, behavior: "instant" });
 		}
-	}, [mode, explorerPath, searchResults]);
+	}, [mode, explorerPath]);
+
+	// INDUSTRIAL SYNC: Scroll to Active Item (决策型注释)
+	// 为什么：解决键盘导航（↑/↓）时，选中项在视口外不可见的问题。
+	// 通过 data-index 定位当前项并使用 scrollIntoView({ block: "nearest" }) 保持可见性。
+	useEffect(() => {
+		if (!open) { return; }
+		const container = containerRef.current;
+		if (!container) { return; }
+
+		const activeItem = container.querySelector(`[data-index="${activeIndex}"]`);
+		if (activeItem) {
+			activeItem.scrollIntoView({
+				block: "nearest",
+				behavior: "smooth"
+			});
+		}
+	}, [activeIndex, mode, open]);
 
 	// Initialize context and history
 	useEffect(() => {
@@ -259,9 +276,19 @@ export function CommandMenu() {
 		if (explorerPath.length >= 8) {
 			return; 
 		}
+		const nextPath = [...explorerPath, name];
+		const pathKey = nextPath.join("/");
+		
+		// INDUSTRIAL OPTIMIZATION: Synchronous State Batching
+		// 解决：如果缓存命中，立即同步更新 Nodes 而不是等待 useEffect 触发。
+		// 这消除了 AnimatePresence 切换时的“旧数据闪烁”和操作滞后感。
 		setExplorerDirection(1);
-		setExplorerPath([...explorerPath, name]);
+		setExplorerPath(nextPath);
 		setActiveIndex(0);
+		
+		if (explorerCache.current[pathKey]) {
+			setExplorerNodes(explorerCache.current[pathKey]);
+		}
 	};
 
 	const navigateToBlogPost = (url: string) => {
@@ -347,11 +374,16 @@ export function CommandMenu() {
 					if (mode === "browse") {
 						e.preventDefault();
 						if (explorerPath.length > 1) {
+							const nextPath = explorerPath.slice(0, -1);
+							const pathKey = nextPath.join("/");
+							
 							setExplorerDirection(-1);
-							setExplorerPath((prev) => {
-								return prev.slice(0, -1);
-							});
+							setExplorerPath(nextPath);
 							setActiveIndex(0);
+							
+							if (explorerCache.current[pathKey]) {
+								setExplorerNodes(explorerCache.current[pathKey]);
+							}
 						}
 					}
 					break;
@@ -370,11 +402,16 @@ export function CommandMenu() {
 						if (mode === "browse") {
 							if (explorerPath.length > 1) {
 								e.preventDefault();
+								const nextPath = explorerPath.slice(0, -1);
+								const pathKey = nextPath.join("/");
+
 								setExplorerDirection(-1);
-								setExplorerPath((prev) => {
-									return prev.slice(0, -1);
-								});
+								setExplorerPath(nextPath);
 								setActiveIndex(0);
+								
+								if (explorerCache.current[pathKey]) {
+									setExplorerNodes(explorerCache.current[pathKey]);
+								}
 							}
 						}
 					}

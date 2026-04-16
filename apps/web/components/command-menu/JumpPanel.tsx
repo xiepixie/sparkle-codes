@@ -68,6 +68,7 @@ export const JumpPanel = React.memo(({
 								<button
 									key={section.id}
 									type="button"
+									data-index={idx}
 									disabled={!!pendingUrl}
 									onClick={() => handleReadingJump(section)}
 									onMouseEnter={() => setActiveIndex(idx)}
@@ -125,6 +126,7 @@ export const JumpPanel = React.memo(({
 								<button
 									key={item.id}
 									type="button"
+									data-index={globalIdx}
 									disabled={!!pendingUrl}
 									onClick={() => navigateToBlogPost(item.url)}
 									onMouseEnter={() => setActiveIndex(globalIdx)}

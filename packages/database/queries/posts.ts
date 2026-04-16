@@ -221,6 +221,7 @@ export async function getPostBySlugQuery(slug: string) {
       isPublished: documents.isPublished,
       area: documents.area,
       html: documents.html,
+      vaultPath: documents.vaultPath,
     // Priority hierarchy for resolution (Obsidian-aligned):
     // 1. Exact Slug Match (WORK) -> Most specific
     // 2. Alias Match (WORK)      -> Explicitly defined intent
@@ -279,6 +280,7 @@ export async function getPostByIdQuery(id: string) {
       isPublished: documents.isPublished,
       area: documents.area,
       html: documents.html,
+      vaultPath: documents.vaultPath,
     })
     .from(documents)
     .where(eq(documents.id, id))

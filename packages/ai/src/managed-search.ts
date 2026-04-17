@@ -1,3 +1,4 @@
+import { db, documents, eq } from "@repo/database";
 import os from "node:os";
 
 /**
@@ -23,9 +24,9 @@ export interface CloudflareSearchResult {
  * Perform a managed search using Cloudflare AI Search REST API
  */
 export async function managedCloudflareSearch(query: string) {
-	const accountId = process.env.CF_ACCOUNT_ID;
-	const token = process.env.CF_AI_TOKEN;
-	const autoragName = process.env.CF_AI_SEARCH_NAME;
+	const accountId = process.env.CF_ACCOUNT_ID?.replace(/['"]/g, "");
+	const token = process.env.CF_AI_TOKEN?.replace(/['"]/g, "");
+	const autoragName = process.env.CF_AI_SEARCH_NAME?.replace(/['"]/g, "");
 
 	if (!accountId || !token || !autoragName) {
 		console.log(
@@ -55,7 +56,9 @@ export async function managedCloudflareSearch(query: string) {
 
 		if (!response.ok) {
 			const errorText = await response.text();
-			console.error(`❌ [Cloudflare AI Search] API Error: ${response.status} - ${errorText}`);
+			console.error(
+				`❌ [Cloudflare AI Search] API Error: ${response.status} - ${errorText}`,
+			);
 			return [];
 		}
 
@@ -65,29 +68,72 @@ export async function managedCloudflareSearch(query: string) {
 			return [];
 		}
 
-		// Flatten the results into a unified format for the chat context
-		return data.result.data.map((item) => {
-			// Extract slug from URL if it's a sparkle.codes link
-			// Example: https://sparkle.codes/blog/my-post -> my-post
-			let slug = item.filename;
-			try {
-				if (item.filename.startsWith("http")) {
-					const url = new URL(item.filename);
-					const parts = url.pathname.split("/").filter(Boolean);
-					// If it's a blog post, the last part is the slug
-					slug = parts[parts.length - 1] || item.filename;
-				}
-			} catch (_e) {
-				console.warn("[Managed Search] Failed to parse slug from filename:", item.filename);
-			}
+		// Flatten the results into a unified format for the chat context and resolve titles
+		const results = await Promise.all(
+			data.result.data.map(async (item) => {
+				console.log(`📄 [Cloudflare AI Search] Mapping item: ${item.filename}`, {
+					score: item.score,
+					attributes: (item as any).attributes, // Log attributes to see if 'title' exists
+				});
 
-			return {
-				title: item.filename,
-				slug: slug, // Added extracted slug
-				content: item.content.map((c) => c.text).join("\n\n"),
-				score: item.score,
-			};
-		});
+				// Extract slug from URL if it's a sparkle.codes link
+				let slug = item.filename;
+				try {
+					if (item.filename.startsWith("http")) {
+						const url = new URL(item.filename);
+						const parts = url.pathname.split("/").filter(Boolean);
+						slug = parts[parts.length - 1] || item.filename;
+					}
+				} catch (_e) {
+					console.warn(
+						"[Managed Search] Failed to parse slug from filename:",
+						item.filename,
+					);
+				}
+
+				// Attempt to find the real document title and its sections (headings) from Neon DB
+				let docTitle = (item as any).attributes?.file?.title || (item as any).attributes?.title || null;
+				let headings: { id: string; text: string }[] = [];
+
+				try {
+					const doc = await db.query.documents.findFirst({
+						where: eq(documents.slug, slug),
+						columns: { title: true, id: true },
+						with: {
+							sections: {
+								columns: { headingId: true, headingText: true },
+							},
+						},
+					});
+
+					if (doc) {
+						if (!docTitle) docTitle = doc.title;
+						headings = doc.sections
+							.filter((s) => s.headingId)
+							.map((s) => ({
+								id: s.headingId as string,
+								text: s.headingText,
+							}));
+					}
+				} catch (dbError) {
+					console.error(
+						`[Managed Search] Database lookup failed for slug ${slug}:`,
+						dbError,
+					);
+				}
+
+				return {
+					title: docTitle, // Real doc_title from DB or Attributes
+					filename: item.filename, // Original URL/Path
+					slug: slug,
+					content: item.content.map((c) => c.text).join("\n\n"),
+					score: item.score,
+					headings, // List of section IDs and labels
+				};
+			}),
+		);
+
+		return results;
 	} catch (error) {
 		console.error("❌ [Cloudflare AI Search] Request failed:", error);
 		return [];

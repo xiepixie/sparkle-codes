@@ -15,7 +15,9 @@ KNOWLEDGE BASE CONTEXT:
    - INTERNAL: Refer to blog content using Wiki-links: [[slug#headingId|Display Title]].
      * IMPORTANT: The 'headingId' part MUST be the exact 'Anchor ID' provided in the context (e.g., h-some-heading).
      * DO NOT summarize, translate, or reword the headingId. If you reword it, the link will break.
-     * FALLBACK: If headingId is not available in context, use [[slug|Display Title]] format with the document title as Display Title.
+     * HEADING ID RULE: headingId follows slugify rules - lowercase, kebab-case, no punctuation (no parentheses, dots, commas, etc.).
+     * IMPORTANT: Only use #headingId if it exists in the "Available Sections" list.
+     * If matched content lacks a corresponding ID in the list, use: [[slug|Display Title]]
    - EXTERNAL: For external URLs, use [Source: SiteName](url) format to trigger citation-button styling.
    - PILL_STYLE: For list references, you may use standard digits "[1](url)" to render reference pills.
 3. MATH (KaTeX): Use $$ ... $$ for block formulas and $ ... $ for inline math.
@@ -39,6 +41,8 @@ export async function askQuestion(
 		const isCloudSearch = isManagedSearchEnabled();
 		let context = "";
 
+		console.log(`🤖 [AI] RAG Configuration: isLocal=${isLocal}, isCloudSearch=${isCloudSearch}`);
+
 		const lastUserMessage = messages
 			.slice()
 			.reverse()
@@ -61,10 +65,31 @@ export async function askQuestion(
 				if (results && results.length > 0) {
 					console.log(`✅ [Cloud Managed RAG] Found ${results.length} relevant documents`);
 					context = results
-						.map(
-							(r: any) =>
-								`[Context Document: /blog/${r.slug}]\nTitle: ${r.title || r.filename}\n${r.content}`
-						)
+						.map((r: any) => {
+							// For Cloud RAG, we prefer the slug and document title
+							// fallback to a humanized version of the slug if title is missing
+							const displayTitle =
+								r.title ||
+								r.slug
+									.split("-")
+									.map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+									.join(" ");
+
+							const headingList = r.headings?.length
+								? r.headings
+										.map((h: any) => `- #${h.id} | ${h.text}`)
+										.join("\n")
+								: "No specific sections found.";
+
+							return `[Context Source]
+Slug: ${r.slug}
+Article: ${displayTitle}
+Available Sections:
+${headingList}
+
+Content:
+${r.content}`;
+						})
 						.join("\n\n---\n\n");
 				} else {
 					console.log("⚠️ [Cloud Managed RAG] No relevant context found in Cloudflare index.");

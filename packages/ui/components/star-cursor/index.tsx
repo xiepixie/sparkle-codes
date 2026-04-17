@@ -67,6 +67,11 @@ export function StarCursor({ pathname }: StarCursorProps) {
 		prevKind: "none" as CursorKind,
 		prevHidden: true,
 		lastMoveTime: 0,
+		// BRIDGING SYSTEM (决策型注释)
+		// 解决：在密集列表（如 CommandMenu）中快速移动时，
+		// 避免光标在元素间隙中反复“收缩-弹出”，造成视觉跳变。
+		lastActiveTime: 0,
+		lastBounds: { w: 32, h: 32, cx: 0, cy: 0 },
 	});
 
 	const activeTarget = useRef<HTMLElement | null>(null);
@@ -85,21 +90,33 @@ export function StarCursor({ pathname }: StarCursorProps) {
 	const kindCache = useRef(new WeakMap<HTMLElement, CursorKind>());
 	const contrastCache = useRef(new WeakMap<HTMLElement, boolean>());
 
-	const updateTargetBounds = () => {
+	const lastBoundsUpdate = useRef(0);
+	const updateTargetBounds = (force = false) => {
 		if (activeTarget.current && bounds.current.isActive) {
+			const now = performance.now();
+			if (!force && lastProcessedTarget.current && now - lastBoundsUpdate.current < 8) {
+				return;
+			}
+			lastBoundsUpdate.current = now;
+
 			if (!activeTarget.current.isConnected) {
 				bounds.current.isActive = false;
 				activeTarget.current = null;
 				return;
 			}
+			
 			const rect = activeTarget.current.getBoundingClientRect();
-			bounds.current = {
+			const newBounds = {
 				w: rect.width,
 				h: rect.height,
 				cx: rect.left + rect.width / 2,
 				cy: rect.top + rect.height / 2,
 				isActive: true,
 			};
+
+			bounds.current = newBounds;
+			state.current.lastBounds = { ...newBounds };
+			state.current.lastActiveTime = now;
 		}
 	};
 
@@ -117,7 +134,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 		syncCapability();
 
 		const resizeObserver = new ResizeObserver(() => {
-			updateTargetBounds();
+			updateTargetBounds(true);
 		});
 
 		// The Single Source of Truth Animation Loop
@@ -177,7 +194,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 				ringLerp = 1.0;
 			} else {
 				switch (strategy) {
-					case "frame-tight":
+					case "frame-tight": {
 						ringLerp = 0.55;
 						if (b.isActive) {
 							targetW = b.w + 12;
@@ -196,7 +213,8 @@ export function StarCursor({ pathname }: StarCursorProps) {
 							targetH = 28;
 						}
 						break;
-					case "frame-soft":
+					}
+					case "frame-soft": {
 						if (s.kind === "explore") {
 							targetW = 64;
 							targetH = 64;
@@ -219,16 +237,32 @@ export function StarCursor({ pathname }: StarCursorProps) {
 							}
 						}
 						break;
+					}
 					case "suppress":
 						targetW = 0;
 						targetH = 0;
 						ringLerp = 1.0;
 						break;
-					default:
-						ringLerp = 0.4;
-						targetW = 28;
-						targetH = 28;
+					default: {
+						// BRIDGING LOGIC: Check if we just left a target
+						const now = performance.now();
+						const isBridging = now - s.lastActiveTime < 150; // 150ms grace period
+
+						if (isBridging && !s.isHidden) {
+							// Sustain the previous framing size and 'elastic' center 
+							// while the mouse is in the gap between list items.
+							targetW = s.lastBounds.w + 12;
+							targetH = s.lastBounds.h + 12;
+							targetX = s.lastBounds.cx + (s.pointer.x - s.lastBounds.cx) * 0.15;
+							targetY = s.lastBounds.cy + (s.pointer.y - s.lastBounds.cy) * 0.15;
+							ringLerp = 0.35; // Softer tracking during bridge
+						} else {
+							ringLerp = 0.4;
+							targetW = 28;
+							targetH = 28;
+						}
 						break;
+					}
 				}
 			}
 
@@ -295,11 +329,12 @@ export function StarCursor({ pathname }: StarCursorProps) {
 			}
 
 			if (ringRef.current) {
-				ringRef.current.style.transform = `translate3d(${s.ring.x}px, ${s.ring.y}px, 0)`;
-				ringRef.current.style.width = `${s.ringSize.w}px`;
-				ringRef.current.style.height = `${s.ringSize.h}px`;
-				ringRef.current.style.marginLeft = `${-s.ringSize.w / 2}px`;
-				ringRef.current.style.marginTop = `${-s.ringSize.h / 2}px`;
+				// INDUSTRIAL OPTIMIZATION: Use translate(-50%, -50%) for centering 
+				// to avoid layout-triggering marginLeft/marginTop updates in the RAF loop.
+				ringRef.current.style.transform = `translate3d(${s.ring.x}px, ${s.ring.y}px, 0) translate(-50%, -50%)`;
+				ringRef.current.style.width = `${Math.round(s.ringSize.w)}px`;
+				ringRef.current.style.height = `${Math.round(s.ringSize.h)}px`;
+				// Margins removed as they are now handled by translate(-50%, -50%)
 				
 				if (ringRef.current.dataset.kind !== s.kind || ringRef.current.dataset.strategy !== strategy || ringRef.current.dataset.snapped !== String(b.isActive) || ringRef.current.dataset.hidden !== String(s.isHidden) || ringRef.current.dataset.pressing !== String(s.isPressing)) {
 					ringRef.current.dataset.kind = s.kind;
@@ -545,7 +580,7 @@ export function StarCursor({ pathname }: StarCursorProps) {
 					activeTarget.current = frameTarget as HTMLElement;
 					if (activeTarget.current) {
 						bounds.current.isActive = true;
-						updateTargetBounds();
+						updateTargetBounds(true); // Force immediate update on target change
 						resizeObserver.observe(activeTarget.current);
 					}
 				}

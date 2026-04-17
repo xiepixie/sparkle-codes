@@ -90,6 +90,7 @@ export interface BlogPost {
 		code: string;
 		html: string;
 	};
+	vaultPath: string;
 }
 
 /**
@@ -707,6 +708,7 @@ async function mapDocumentToPost(doc: any): Promise<BlogPost> {
 			code: "",
 			html: enhancedBodyHtml,
 		},
+		vaultPath: doc.vaultPath || "",
 	};
 }
 

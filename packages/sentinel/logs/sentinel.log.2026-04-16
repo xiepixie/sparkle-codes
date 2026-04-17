@@ -1,0 +1,24 @@
+2026-04-16T14:14:51.716975Z  WARN sqlx_postgres::options::parse: ignoring unrecognized connect parameter key=channel_binding value=require
+2026-04-16T14:14:53.724768Z  WARN sqlx::pool::acquire: acquired connection, but time to acquire exceeded slow threshold aquired_after_secs=2.007570834 slow_acquire_threshold_secs=2.0
+2026-04-16T14:14:53.894717Z  INFO sentinel::app: Sentinel started. Watcher mode enabled. Vault root: "/Users/xpx/Data/xpx/Documents/I.P.A.R.A"
+2026-04-16T14:14:53.894751Z  INFO sentinel::sync: 🚀 [Lifecycle] Starting full vault synchronization...
+2026-04-16T14:14:53.899155Z  INFO sentinel::sync: 📂 Discovered 68 markdown files in vault.
+2026-04-16T14:14:53.899159Z  INFO sentinel::sync: 🔭 [Index] Starting metadata pre-scan for 68 files...
+2026-04-16T14:14:54.489769Z  INFO sentinel::sync: 🧠 [Index] Metadata index built with 232 keys.
+2026-04-16T14:14:55.016843Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/归档/PRD模板与教程.md [Area: Work]
+2026-04-16T14:14:55.965038Z  INFO sentinel::sync: ⏳ Progress:  29% | 20/68 files synced
+2026-04-16T14:14:56.076086Z  INFO sentinel::sync: 🔄 Syncing [UPDATE]: 工作领域/项目/WikiLink 技术规范与实现指南 (v2.0).md [Area: Work]
+2026-04-16T14:14:56.115978Z  INFO sentinel::sync: 🔄 Syncing [UPDATE]: 工作领域/项目/AgentOps/spec-driven-development-in-ai-coding.md [Area: Work]
+2026-04-16T14:14:56.120638Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/AgentOps/spec-first-engineering-manual.md [Area: Work]
+2026-04-16T14:14:56.122185Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/项目/AgentOps/ai-assisted-dev-workflow-by-type.md [Area: Work]
+2026-04-16T14:14:56.460467Z  INFO sentinel::sync: ⏳ Progress:  59% | 40/68 files synced
+2026-04-16T14:14:56.833348Z  INFO sentinel::sync: 🔄 Syncing [UPDATE]: 工作领域/项目/CI-CD/contract-testing-integration-breakdown-pact-cicd.md [Area: Work]
+2026-04-16T14:14:56.862903Z  INFO sentinel::sync: ⏳ Progress:  88% | 60/68 files synced
+2026-04-16T14:14:56.864509Z  INFO sentinel::sync: 🔄 Syncing [CREATE]: 工作领域/归档/文档质量.md [Area: Work]
+2026-04-16T14:15:12.881396Z  WARN sqlx::query: slow statement: execution time exceeded alert threshold summary="INSERT INTO document_chunks (\"id\", …" db.statement="\n\nINSERT INTO document_chunks (\"id\", \"documentId\", \"chunkIndex\", \"headingPath\", \"headingId\", \"chunkText\", \"embedding\", \"tokenCount\", \"hasCode\")  VALUES ($1, $2, $3, $4, $5, $6, $7::halfvec, $8, $9), ($10, $11, $12, $13, $14, $15, $16::halfvec, $17, $18), ($19, $20, $21, $22, $23, $24, $25::halfvec, $26, $27), ($28, $29, $30, $31, $32, $33, $34::halfvec, $35, $36), ($37, $38, $39, $40, $41, $42, $43::halfvec, $44, $45), ($46, $47, $48, $49, $50, $51, $52::halfvec, $53, $54), ($55, $56, $57, $58, $59, $60, $61::halfvec, $62, $63), ($64, $65, $66, $67, $68, $69, $70::halfvec, $71, $72), ($73, $74, $75, $76, $77, $78, $79::halfvec, $80, $81), ($82, $83, $84, $85, $86, $87, $88::halfvec, $89, $90), ($91, $92, $93, $94, $95, $96, $97::halfvec, $98, $99)\n" rows_affected=11 rows_returned=0 elapsed=1.269379666s elapsed_secs=1.269379666 slow_threshold=1s
+2026-04-16T14:15:32.437912Z  INFO sentinel::sync: ⏳ Progress: 100% | 68/68 files synced
+2026-04-16T14:15:32.437964Z  INFO sentinel::sync: ✅ [Lifecycle] Full sync finished in 37.948411458s: 68 files synced.
+2026-04-16T14:15:32.909675Z  INFO sentinel::sync: ✨ [Lifecycle] Initial sync completed successfully.
+2026-04-16T14:15:33.146224Z  INFO sentinel::sync: ⚡ Cache revalidated successfully for: http://localhost:3000/api/revalidate (Tag: posts)
+2026-04-16T14:15:53.925471Z  WARN sentinel::sync: ⚠️ Cache revalidation for https://sparkle.codes/api/revalidate returned status: 522 <unknown status code>
+2026-04-16T14:15:53.940464Z  INFO sentinel::watcher: Watching vault and attachments: /Users/xpx/Data/xpx/Documents/I.P.A.R.A | /Users/xpx/Data/xpx/Extras/附件

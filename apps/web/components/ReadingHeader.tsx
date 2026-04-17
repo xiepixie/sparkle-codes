@@ -83,6 +83,7 @@ interface ReadingHeaderProps {
 	filename?: string;
 	title?: string;
 	slug?: string;
+	vaultPath?: string;
 	suggestedPosts?: { slug: string; title: string }[];
 }
 
@@ -109,6 +110,7 @@ export function ReadingHeader({
 	filename,
 	title,
 	slug,
+	vaultPath,
 	suggestedPosts = [],
 }: ReadingHeaderProps) {
 	const displayTitle = title || filename || "Untitled";
@@ -331,39 +333,52 @@ export function ReadingHeader({
 	const progressSpring = useSpring(progress, { stiffness: 2000, damping: 100 });
 
 	const cleanPath = useMemo(() => {
-		if (!slug) {
+		// Priority 1: vaultPath (Actual hierarchy)
+		// Priority 2: slug (Fallback hierarchy)
+		const targetPath = (vaultPath || slug || "").trim();
+		if (!targetPath) {
 			return "EXPLORER";
 		}
-		// PARA & Area Cleanup Logic: Retain meaningful context like "项目" but strip structural metadata
-		const segments = slug.split(/[-/]/);
-		const filtered = segments.filter((s) => {
-			if (!s) {
-				return false;
-			}
-			const redundant = [
+
+		// 1. Get raw segments, handling both / and - based naming
+		const segments = vaultPath 
+			? targetPath.split("/").filter(Boolean) 
+			: targetPath.split(/[-/]/).filter(Boolean);
+
+		// 2. Breadcrumbs in the header should show the FOLDER CONTEXT, not the file itself.
+		// We always remove the last segment (the filename) first.
+		const directorySegments = segments.slice(0, -1);
+
+		// 3. Area Cleanup Logic: Only strip the top-level area context (e.g., "工作领域")
+		// We want to KEEP the PARA modules (项目, 资源, 归档) and any sub-folders.
+		const filtered = directorySegments.filter((s) => {
+			if (!s) { return false; }
+			const areaLevelRedundant = [
 				"工作领域",
 				"学习领域",
-				"PROJECT",
 				"PARA",
-				"0-收集箱",
-				"收集",
-				"INBOX",
+				"AREAS",
+				"AREA",
 				"NOTES",
 				"BLOG",
-				"ARCHIVE",
-				"归档",
+				"SENTINEL",
+				"OBSIDIAN",
+				"OBSIDIDAN",
 			];
-			return !redundant.some((r) => s.toUpperCase().includes(r.toUpperCase()));
+			const val = s.toUpperCase();
+			return !areaLevelRedundant.some(r => val === r);
 		});
 
-		// If everything is stripped, default to a high-level identifier
-		if (filtered.length <= 1) {
-			return filtered[0] || "ATLAS / CORE";
+		// 4. Resolve Display Strategy
+		// Rule: Show the full folder hierarchy from the PARA category downwards.
+		// Example: 工作领域/项目/Sparkle Codes/Note.md -> 项目 / Sparkle Codes
+		
+		if (filtered.length === 0) {
+			return "ATLAS / CORE";
 		}
 
-		// Show the category path before the filename
-		return filtered.slice(0, -1).join(" / ");
-	}, [slug]);
+		return filtered.join(" / ");
+	}, [slug, vaultPath]);
 
 	const discoverSegments = useMemo(() => {
 		return () => {
